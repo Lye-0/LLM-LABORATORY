@@ -1190,11 +1190,20 @@ pre code {
 }
 .toc a {
   display: block;
-  margin: 12px 0;
+  margin: 6px 0 6px -12px;
+  padding: 6px 10px;
+  border-left: 2px solid transparent;
+  border-radius: 0 4px 4px 0;
   line-height: 1.7;
 }
 .toc a:hover {
   color: var(--accent);
+}
+.toc a[aria-current='location'] {
+  color: var(--accent);
+  border-left-color: var(--accent);
+  background: var(--surface);
+  font-weight: 600;
 }
 .article-extras {
   margin-top: 40px;

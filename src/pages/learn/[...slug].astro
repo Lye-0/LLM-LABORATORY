@@ -121,13 +121,68 @@ const stage = stages.find((s) => s.id === lesson.data.stage);
         </nav>
       </div>
     </article>
-    <aside class="toc" data-pagefind-ignore>
+    <nav class="toc" aria-label="このページの目次" data-pagefind-ignore>
       <p>ON THIS PAGE</p>
       {headings
         .filter((h) => h.depth === 2)
         .map((h) => (
-          <a href={withBase(`#${h.slug}`)}>{h.text}</a>
+          <a href={withBase(`#${h.slug}`)} data-toc-heading={h.slug}>{h.text}</a>
         ))}
-    </aside>
+    </nav>
   </div>
 </SiteLayout>
+
+<script>
+  const toc = document.querySelector<HTMLElement>('.toc');
+  const prose = document.querySelector<HTMLElement>('.prose');
+  const entries = Array.from(document.querySelectorAll<HTMLAnchorElement>('[data-toc-heading]'))
+    .flatMap((link) => {
+      const heading = document.getElementById(link.dataset.tocHeading ?? '');
+      return heading ? [{ link, heading }] : [];
+    });
+
+  if (toc && prose && entries.length) {
+    let current: HTMLAnchorElement | undefined;
+    let frame = 0;
+
+    function updateCurrentSection() {
+      frame = 0;
+      // Match the native anchor landing position below the fixed header.
+      const readingLine =
+        (parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop) || 0) +
+        (parseFloat(getComputedStyle(entries[0].heading).scrollMarginTop) || 0) + 1;
+      let active = entries[0];
+      for (const entry of entries) {
+        if (entry.heading.getBoundingClientRect().top > readingLine) break;
+        active = entry;
+      }
+      if (window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2) {
+        active = entries[entries.length - 1];
+      }
+      if (current !== active.link) {
+        current?.removeAttribute('aria-current');
+        current = active.link;
+        current.setAttribute('aria-current', 'location');
+      }
+
+      // Reveal the marker inside a long TOC without moving the article or focus.
+      if (toc && toc.clientHeight) {
+        const bounds = toc.getBoundingClientRect();
+        const item = active.link.getBoundingClientRect();
+        if (item.top < bounds.top + 8) toc.scrollTop -= bounds.top + 8 - item.top;
+        else if (item.bottom > bounds.bottom - 8) toc.scrollTop += item.bottom - bounds.bottom + 8;
+      }
+    }
+
+    function scheduleUpdate() {
+      if (!frame) frame = requestAnimationFrame(updateCurrentSection);
+    }
+
+    window.addEventListener('scroll', scheduleUpdate, { passive: true });
+    window.addEventListener('resize', scheduleUpdate);
+    window.addEventListener('hashchange', scheduleUpdate);
+    window.addEventListener('pageshow', scheduleUpdate);
+    new ResizeObserver(scheduleUpdate).observe(prose);
+    scheduleUpdate();
+  }
+</script>
