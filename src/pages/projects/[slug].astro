@@ -1,0 +1,72 @@
+---
+import { withBase } from '../../lib/paths';
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import { projects } from '../../data/projects';
+import { getCollection } from 'astro:content';
+import { Code } from 'astro:components';
+export function getStaticPaths() {
+  return projects.map((project) => ({ params: { slug: project.slug }, props: { project } }));
+}
+const { project } = Astro.props;
+const lessons = await getCollection('lessons');
+---
+
+<SiteLayout title={project.title}>
+  <nav class="breadcrumb">
+    <a href={withBase('/projects/')}>改造課題</a>
+    <span>/</span>
+    <span>Project {project.number}</span>
+  </nav>
+  <header class="page-header">
+    <div class="eyebrow">
+      PROJECT {project.number} / {project.level}
+    </div>
+    <h1>{project.title}</h1>
+    <p>{project.description}</p>
+    <div class="prerequisites">
+      <span>前提</span>
+      {project.lessons.map((id) => (
+        <a href={withBase(`/learn/${id}/`)}>{lessons.find((l) => l.id === id)?.data.title ?? id}</a>
+      ))}
+    </div>
+  </header>
+  <div style="max-width:820px">
+    <div class="notice">
+      <strong>到達目標</strong>
+      <br />
+      {project.goal}
+    </div>
+    {project.steps.map(([title, text], i) => (
+      <section class="project-step">
+        <div class="eyebrow">STEP {String(i + 1).padStart(2, '0')}</div>
+        <h2>{title}</h2>
+        <p>{text}</p>
+      </section>
+    ))}
+    <div class="section-title">
+      <h2>実装の起点</h2>
+    </div>
+    <p class="intro-note">
+      前提教材で準備したmodel・tokenizer・inputsを使うコードの抜粋です。コメント部分の評価は自分の実験条件で実装します。新しい保存先を使い、元のモデルと結果を保持してください。
+    </p>
+    <Code code={project.code} lang="python" />
+    <section class="question-box">
+      <div class="eyebrow">REVIEW POINTS</div>
+      <h2>確認すること</h2>
+      <ul>
+        {project.checks.map((check) => (
+          <li>{check}</li>
+        ))}
+      </ul>
+      <p class="muted" style="font-size:12px;margin-top:16px">
+        改善しなかった結果も、条件と限界を説明できれば重要な観察です。
+      </p>
+    </section>
+    <a class="button" href={withBase('/environment/')}>
+      実行環境を確認する
+    </a>
+    <a class="button ghost" style="margin-left:12px" href={withBase('/projects/')}>
+      課題一覧へ
+    </a>
+  </div>
+</SiteLayout>

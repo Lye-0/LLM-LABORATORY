@@ -1,0 +1,80 @@
+---
+import { withBase } from '../../lib/paths';
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import { sources, qwenRevision } from '../../data/catalog';
+---
+
+<SiteLayout title="出典とモデル条件">
+  <header class="page-header">
+    <div class="eyebrow">SOURCES & CONDITIONS</div>
+    <h1>根拠と条件を、たどれるように。</h1>
+    <p>一般的な仕組み、モデル固有の設定、説明用の例を分けて掲載しています。</p>
+  </header>
+  <div class="prose" style="max-width:800px">
+    <h2>教材の参照モデル</h2>
+    <p>
+      Qwen/Qwen3-0.6B、revision <code>{qwenRevision}</code>
+      。このサイトにはTokenizerと設定のみを含み、LLMの重みは配信しません。
+    </p>
+    <p>
+      語彙データ・Tokenizer設定の配布元はQwen、ライセンスはApache-2.0です。
+      <a href={withBase('/data/qwen3/LICENSE')}>同梱ライセンス</a>と
+      <a href={withBase('/data/qwen3/manifest.json')}>ファイルの取得条件・hash</a>を確認できます。
+    </p>
+    <h2>数値の所有者を分ける</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>対象</th>
+          <th>値</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>基本語彙 / 追加分込み</td>
+          <td>151643 / 151669</td>
+        </tr>
+        <tr>
+          <td>モデル側vocab_size</td>
+          <td>151936</td>
+        </tr>
+        <tr>
+          <td>Tokenizer側model_max_length</td>
+          <td>131072</td>
+        </tr>
+        <tr>
+          <td>model configのmax_position_embeddings</td>
+          <td>40960</td>
+        </tr>
+        <tr>
+          <td>モデルカードのContext Length</td>
+          <td>32768</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>
+      最大の値をそのまま実行可能な文脈長と解釈しません。モデル、実行方法、入力と生成の長さ、メモリの条件を確認します。
+    </p>
+    <h2>公式資料</h2>
+    <ul>
+      {Object.values(sources).map((s) => (
+        <li>
+          <a href={withBase(s.url)} target="_blank" rel="noreferrer">
+            {s.title}
+          </a>
+        </li>
+      ))}
+    </ul>
+    <h2>操作教材の実装</h2>
+    <p>
+      Tokenizerは
+      <a href="https://github.com/huggingface/tokenizers.js">Hugging Face Tokenizers.js</a>
+      を使用します。その他の小行列・shape・量子化の実験は教育用のブラウザー計算です。表示丸め、dtype、演算順序などにより実モデルの数値と一致しない場合があります。
+    </p>
+    <h2>掲載範囲</h2>
+    <p>
+      API辞書は学習対象に関連する主要な公開APIの選集です。すべてのPyTorch・Transformers
+      APIを網羅するものではありません。モデルやライブラリの版が変わった場合は、リンク先の対象版を確認してください。
+    </p>
+  </div>
+</SiteLayout>

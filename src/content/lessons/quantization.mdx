@@ -1,0 +1,62 @@
+---
+title: "数値精度と量子化"
+description: "数値の表現を小さくして、メモリと誤差の関係を見る。"
+stage: "modification"
+order: 25
+minutes: 11
+eyebrow: "PRECISION & COMPRESSION"
+prerequisites: ["tensor","linear","inference-memory"]
+labs: ["quantization"]
+sources: ["quantization","tensor"]
+tags: ["量子化","FP16","BF16","INT8","scale","zero point"]
+question: "4bitなら、モデル全体のVRAMは必ずFP16の4分の1ですか？"
+answer: "重みの理論データ量の比に近い考え方です。scale、非量子化層、KV Cache、一時領域、実装の確保量があり、総VRAMは単純に4分の1とはなりません。"
+---
+## dtypeの違いを読む
+
+| 型 | 1要素の基本サイズ | 観点 |
+|---|---:|---|
+| FP32 | 4 byte | 基本的な浮動小数点 |
+| FP16 | 2 byte | 小さな表現、範囲と精度に制約 |
+| BF16 | 2 byte | FP16とは指数部・仮数部の配分が違う |
+| INT8 | 1 byte | 整数。実数へ対応させるscale等が必要 |
+
+トークンIDを小さな整数へ切り詰めることは、重みの量子化ではありません。
+
+## 単純な対称量子化
+
+最大絶対値を整数の最大値へ合わせ、割って丸め、範囲へ収めます。復元時にはscaleを掛けます。
+
+```python
+import torch
+x = torch.tensor([-1., -0.2, 0.3, 1.])
+qmax = 7
+scale = x.abs().max() / qmax
+q = torch.round(x / scale).clamp(-qmax, qmax)
+restored = q * scale
+print(q)
+print(restored)
+```
+
+```text
+tensor([-7., -1.,  2.,  7.])
+tensor([-1.0000, -0.1429,  0.2857,  1.0000])
+```
+
+説明用の計算で、qはこのコードではまだ浮動小数点Tensorです。4bitへ実際にpacked保存したメモリ量を測ったわけではありません。
+
+## 誤差はどこから来るか
+
+連続的な値を有限の段階へ丸めるため、元の値を完全には復元できません。外れ値でscaleが大きくなると、小さい値を細かく表しにくくなります。範囲を固定すると、外側の値は飽和します。
+
+## 粒度を変える
+
+Tensor全体で一つのscaleを使う方式だけでなく、channelやgroupごとにscaleを持つ方式もあります。細かくすると表現が改善する場合がありますが、付加情報や処理が増えます。非対称量子化ではzero pointも関わります。
+
+## PTQとQAT
+
+PTQは学習後の量子化、QATは量子化の影響を学習へ取り込む考え方です。すべての低bit形式が同じ式ではありません。NF4や実製品のカーネルを、この単純例と区別して調べます。
+
+## 品質・容量・速度の三つを見る
+
+保存ファイルだけが小さくなったのか、実VRAMが減ったのか、生成が速くなったのかを別々に測ります。変更前後で入力・生成設定・評価データをそろえ、損失やタスク成績の変化を確認します。

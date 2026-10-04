@@ -1,0 +1,65 @@
+---
+title: "推論時のメモリと速度"
+description: "重み・活性値・キャッシュを分けて、必要な資源を考える。"
+stage: "generation"
+order: 20
+minutes: 8
+eyebrow: "MEMORY & LATENCY"
+prerequisites: ["tensor","kv-cache"]
+sources: ["tensor","qwen"]
+tags: ["VRAM","メモリ","TTFT","tokens/s","dtype"]
+question: "パラメータ数×2byteが、そのモデルのGPUメモリ使用量のすべてですか？"
+answer: "FP16/BF16の重みデータの目安です。活性値、KV Cache、一時領域、管理情報などが別に必要です。"
+---
+## メモリを三つに分ける
+
+| 対象 | 何に依存するか |
+|---|---|
+| 重み | パラメータ数、保存dtype、共有、量子化形式 |
+| 活性値・一時領域 | batch、系列長、hidden size、計算方式 |
+| KV Cache | 層数、batch、系列長、KV head数、dtype |
+
+学習ではさらに勾配やoptimizer state、保存する活性値が必要になります。
+
+## 論理的な容量を計算する
+
+```python
+import torch
+x = torch.zeros(2, 7, 1024, dtype=torch.float32)
+print(x.numel())
+print(x.element_size())
+print(x.numel() * x.element_size())
+```
+
+```text
+14336
+4
+57344
+```
+
+これは数値データの論理容量です。Tensorがviewでデータを共有する場合、複数のTensorの値を足しても実メモリ量とは一致しません。
+
+## GPUの計算は非同期
+
+Pythonが演算を呼び出してから戻る時間だけでは、GPUの処理完了時間を測れない場合があります。測定前後で同期し、warmup後に複数回測ります。
+
+```python
+import time
+torch.cuda.synchronize()
+start = time.perf_counter()
+with torch.inference_mode():
+    result = model.generate(**inputs, max_new_tokens=32, do_sample=False)
+torch.cuda.synchronize()
+elapsed = time.perf_counter() - start
+print(elapsed)
+```
+
+CUDA上のモデルと入力があることが前提です。具体的な秒数は環境依存なので固定値を示しません。
+
+## 指標をそろえる
+
+TTFTは最初の出力まで、tokens/sはある範囲の生成速度です。入力長、実際の生成長、batch、cache有無、dtypeをそろえます。モデル読み込みやダウンロードの時間を含めるかも明示します。
+
+## 量子化へつなぐ
+
+重みを小さくしても、cacheや一時領域が支配的なら全体の削減率は同じになりません。低bit計算に対応するカーネルがなければ、復元処理などで速度が改善しない場合もあります。

@@ -1,0 +1,69 @@
+---
+title: "Transformerブロック"
+description: "Attention・MLP・Residual・Normを、一つの計算としてつなぐ。"
+stage: "representation"
+order: 15
+minutes: 10
+eyebrow: "INSIDE A BLOCK"
+prerequisites: ["attention","position"]
+labs: ["model"]
+sources: ["qwen","module"]
+tags: ["RMSNorm","Residual","SwiGLU","GQA"]
+question: "MLPはAttentionのように、異なるトークン位置を直接混ぜますか？"
+answer: "通常のTransformer MLPは各位置の特徴軸を変換します。位置同士の情報交換は主にAttentionが担当します。"
+---
+## 一つのブロックの基本形
+
+Qwen系のpre-normブロックを模式的に表すと、正規化してAttentionを計算し、元の入力へ足します。その結果を正規化してMLPへ通し、もう一度足します。
+
+```text
+x ────────────────┐
+↓ RMSNorm         │
+Attention         │
+↓                 │
+加算 ←────────────┘
+↓                 ┐
+RMSNorm           │
+MLP               │
+↓                 │
+加算 ←────────────┘
+```
+
+## Residual — 元の表現を足す
+
+```python
+import torch
+x = torch.tensor([[1., 2.]])
+change = torch.tensor([[0.2, -0.3]])
+print(x + change)
+```
+
+```text
+tensor([[1.2000, 1.7000]])
+```
+
+元の情報を保つ経路を作り、変換が加える差分と組み合わせます。加算できるshapeであることが重要です。
+
+## RMSNorm — スケールを整える
+
+特徴軸の二乗平均から得た大きさで割り、学習可能な係数を掛けます。LayerNormのように平均を引く操作とは区別します。epsilonはゼロ除算を避けるための小さな値です。
+
+## MLPとSwiGLU
+
+MLPは各トークン位置のベクトルを広い特徴空間へ写し、非線形変換後に元の次元へ戻します。Qwenではgateとupの二つの投影を使うSwiGLU系の構造を観察できます。
+
+```text
+gate = silu(gate_proj(x))
+up   = up_proj(x)
+output = down_proj(gate * up)
+```
+
+これは構造の模式コードです。実物のbiasやshapeはconfigとmoduleを確認します。
+
+## 重ねることで表現を変える
+
+一つのブロックの入力と出力が同じshapeでも、中の数値は変わります。28層なら同じ構造の計算を28回重ねますが、各層のパラメータが全部同じという意味ではありません。位置ごとのhidden stateが段階的に変換されます。
+
+## 改造の入口
+
+層を外したり、MLPを置換したりするなら、Residualへ戻すshape、dtype、deviceを維持する必要があります。実行できることと、品質が保たれることは別の検証です。

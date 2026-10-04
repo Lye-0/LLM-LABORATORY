@@ -1,0 +1,68 @@
+---
+import { withBase } from '../../lib/paths';
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import { apiLibraries } from '../../data/api-groups';
+import { glossary, comparisons } from '../../data/glossary';
+---
+
+<SiteLayout title="リファレンス">
+  <header class="page-header">
+    <div class="eyebrow">REFERENCE DESK</div>
+    <h1>知りたいことへ、まっすぐ。</h1>
+    <p>
+      クラスから探す。表記から引く。似たものを比べる。説明と実験につながる、LLMのためのリファレンス。
+    </p>
+  </header>
+  <div class="section-title">
+    <h2>ライブラリ・API</h2>
+    <a class="text-link" href={withBase('/reference/api/')}>
+      クラスの一覧
+    </a>
+  </div>
+  <div class="info-grid">
+    {apiLibraries.map((library) => (
+      <a class="info-card" href={withBase(`/reference/libraries/${library.slug}/`)}>
+        <div class="eyebrow">{library.namespace}</div>
+        <h2>{library.title}</h2>
+        <p>{library.description}</p>
+      </a>
+    ))}
+  </div>
+  <div class="section-title">
+    <h2>用語・表記・使い分け</h2>
+  </div>
+  <div class="info-grid">
+    <a class="info-card" href={withBase('/reference/tokens/')}>
+      <div class="eyebrow">26 ADDED TOKENS</div>
+      <h2>特殊・追加トークン</h2>
+      <p>表記・ID・specialフラグ・用途を、Qwenの配布設定から確認する。</p>
+    </a>
+    <a class="info-card" href={withBase('/reference/glossary/')}>
+      <div class="eyebrow">{glossary.length} CONCEPTS</div>
+      <h2>用語集</h2>
+      <p>日本語と英語で引ける、短い定義と具体例。</p>
+    </a>
+    <a class="info-card" href={withBase('/reference/compare/')}>
+      <div class="eyebrow">{comparisons.length} COMPARISONS</div>
+      <h2>似た機能の違い</h2>
+      <p>shapeとnumel、cloneとdetach。どちらを使うかを整理する。</p>
+    </a>
+  </div>
+  <div class="section-title">
+    <h2>周辺技術も、つなげて理解する</h2>
+  </div>
+  <div class="related-labs">
+    <a href={withBase('/topics/')}>
+      <span>ECOSYSTEM</span>
+      <strong>実行基盤・保存形式・RAG・性能測定</strong>
+    </a>
+    <a href={withBase('/environment/')}>
+      <span>GETTING READY</span>
+      <strong>実行環境と、このサイトの使い方</strong>
+    </a>
+    <a href={withBase('/reference/sources/')}>
+      <span>SOURCES</span>
+      <strong>公式資料・配布データ・版の条件</strong>
+    </a>
+  </div>
+</SiteLayout>

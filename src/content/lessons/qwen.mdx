@@ -1,0 +1,69 @@
+---
+title: "実際のQwenを観察する"
+description: "configと実物のmoduleを照合し、モデルの構造を読む。"
+stage: "representation"
+order: 16
+minutes: 10
+eyebrow: "MODEL ANATOMY"
+prerequisites: ["first-generation","transformer-block"]
+labs: ["model","embedding"]
+sources: ["qwen","module"]
+tags: ["Qwen3","named_modules","hidden_size","state_dict"]
+question: "Qwen3-0.6Bのhead_dimを1024÷16=64と決めてよいですか？"
+answer: "この参照設定ではhead_dim=128が指定されています。hidden_size÷head数から推測せず、configと実物のweight.shapeを確認します。"
+---
+## 設定は設計図、moduleは実物
+
+モデルには構造を記述するconfigと、その構造を実装したmoduleがあります。設定の意味を把握したら、読み込んだモデルの実際のshapeへ照合します。
+
+## configの主要値
+
+Qwen3-0.6Bの固定revisionについて、配布設定から確認できる値です。重みを実行した測定値ではありません。
+
+| 設定 | 値 |
+|---|---:|
+| hidden_size | 1024 |
+| num_hidden_layers | 28 |
+| num_attention_heads | 16 |
+| num_key_value_heads | 8 |
+| head_dim | 128 |
+| intermediate_size | 3072 |
+| vocab_size | 151936 |
+| tie_word_embeddings | true |
+
+## 入力Embeddingを取得する
+
+先に読み込んだmodelを使います。
+
+```python
+embedding = model.get_input_embeddings()
+print(embedding.weight.shape)
+print(embedding.weight.dtype)
+print(embedding.weight.device)
+```
+
+shapeは参照構造では`[151936,1024]`です。dtypeとdeviceは読み込み方によって変わります。配布configのdtypeが、すべての読み込みで必ずそのまま使われるとは限りません。
+
+## moduleの構成をたどる
+
+```python
+for name, module in model.named_modules():
+    if name.endswith(("q_proj", "k_proj", "v_proj")):
+        print(name, module.weight.shape)
+```
+
+Qの出力成分数は16×128、K/Vは8×128です。実行環境で出る名称とshapeを記録します。各行の表示を教材へ保存するときは、入力とモデルrevisionも残します。
+
+## 重みの共有を確認する
+
+```python
+input_weight = model.get_input_embeddings().weight
+output_weight = model.get_output_embeddings().weight
+print(input_weight.data_ptr() == output_weight.data_ptr())
+```
+
+通常の非量子化・共有設定のモデルで同じ保存先かを確認する例です。量子化や分散配置では表現やアクセス方法が変わることがあります。パラメータ数を数える際も共有を二重に足さないようにします。
+
+## どのデータを保存するか
+
+module名、shape、dtype、device、必要な小範囲の値を記録します。巨大な重みを画面へ全部並べるより、観察したい仮説に合う範囲を選びます。元のモデルを上書きせず、変更用の保存先を分けます。

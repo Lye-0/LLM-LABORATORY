@@ -1,0 +1,69 @@
+---
+title: "バッチと入力の整形"
+description: "複数の入力をそろえ、形・型・配置先を整える。"
+stage: "input"
+order: 10
+minutes: 8
+eyebrow: "BATCH & MASK"
+prerequisites: ["tensor","chat-template"]
+labs: ["tensor"]
+sources: ["tokenizer","tensor","qwen"]
+tags: ["batch_size","sequence_length","attention_mask","padding"]
+question: "shapeが[2,7]なら、元の文章は2件とも必ず7トークンでしたか？"
+answer: "padding後の幅が7の可能性があります。元の有効な長さはattention_maskなどで区別します。"
+---
+## BとTの意味
+
+`[B,T]`は、B件の入力列を、各T個の位置へそろえた形です。1件でも`[1,T]`とすることで、同じモデルの入力形式を使えます。1件は必ずしも一文ではなく、複数文や会話履歴でもかまいません。
+
+## 軸を追加して1件にする
+
+```python
+import torch
+ids = torch.tensor([10, 20, 30])
+batch = ids.unsqueeze(0)
+print(batch)
+print(batch.shape)
+```
+
+```text
+tensor([[10, 20, 30]])
+torch.Size([1, 3])
+```
+
+`unsqueeze(1)`なら`[3,1]`です。要素数が同じでも、モデル入力としての解釈は3件×1位置へ変わります。
+
+## 長さをそろえる
+
+```text
+A: [10, 20, 30]
+B: [40, PAD, PAD]
+
+input_ids shape: [2, 3]
+mask: [[1, 1, 1],
+       [1, 0, 0]]
+```
+
+これは右paddingの模式例です。PADの位置を、情報として参照する位置と区別します。causal maskは未来を見せないための別の制約です。
+
+## Tokenizerでまとめる
+
+```python
+encoded = tokenizer(
+    ["こんにちは", "こんにちは、今日はいい天気ですね"],
+    padding=True,
+    return_tensors="pt",
+)
+print(encoded["input_ids"].shape)
+print(encoded["attention_mask"].shape)
+```
+
+参照Tokenizerでは両方とも`torch.Size([2,7])`になる例です。第1入力の有効なトークンは1個でも、幅は7です。dtypeやpadding sideも合わせて観察します。
+
+## 生成ではpaddingの向きも確認する
+
+decoder-onlyモデルのバッチ生成では、最後の位置を生成の起点として扱う実装に合わせ、左paddingを使うことが多くあります。学習と生成で同じ向きが最適とは限りません。モデルと生成ライブラリの条件に合わせます。
+
+## 型とデバイス
+
+input_idsは索引用の整数です。GPUへ移すときに重みと同じ浮動小数点dtypeへ変える必要はありません。単一デバイスの例では入力をモデルと同じdeviceへそろえます。device_mapで分割配置されたモデルは、単純に一つのdeviceだけで説明せず、その配置戦略を確認します。

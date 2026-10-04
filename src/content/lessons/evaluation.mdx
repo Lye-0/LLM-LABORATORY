@@ -1,0 +1,56 @@
+---
+title: "改造前後を評価する"
+description: "同じ条件で比べ、変化と限界を説明できる実験にする。"
+stage: "modification"
+order: 26
+minutes: 9
+eyebrow: "BASELINE & EVIDENCE"
+prerequisites: ["sampling","data-evaluation","quantization"]
+sources: ["evaluation","generation"]
+tags: ["評価","baseline","ablation","再現性"]
+question: "改造後だけ入力文や生成設定を変えて速度を比べても、公平な比較になりますか？"
+answer: "変更の影響と条件の差が混ざります。入力長・生成長・batch・dtypeなどをそろえ、意図して変えた項目を明示します。"
+---
+## まず仮説を一つにする
+
+「重みを4bitにすると、指定したタスクの品質を保ちつつpeak memoryが減る」など、変更・期待・評価条件が分かる形にします。複数の変更を同時に入れると、何が原因だったかを特定しにくくなります。
+
+## baselineを残す
+
+変更前のモデルrevision、設定、入力、出力、損失、時間、メモリを保存します。変更後も同じ評価コードを使います。
+
+```python
+import json
+record = {
+    "variant": "baseline",
+    "seed": 42,
+    "batch_size": 1,
+    "max_new_tokens": 32,
+    "do_sample": False,
+}
+print(json.dumps(record, ensure_ascii=False, sort_keys=True))
+```
+
+```text
+{"batch_size": 1, "do_sample": false, "max_new_tokens": 32, "seed": 42, "variant": "baseline"}
+```
+
+これは記録形式の例です。測っていない品質や速度の値は入れません。
+
+## 指標を役割で分ける
+
+| 指標 | 分かること | 限界 |
+|---|---|---|
+| loss / perplexity | 正解列への確率 | Tokenizerや評価単位に依存 |
+| タスク成功率 | 対象問題を解けた割合 | データの範囲に依存 |
+| latency / tokens/s | 条件付きの実行性能 | hardwareやwarmupに依存 |
+| peak memory | ピークの確保・使用 | 測定APIの意味に依存 |
+| 出力例 | 具体的な変化 | 少数例から一般化できない |
+
+## 一度の実行で決めない
+
+測定を複数回行い、中央値やばらつきを報告します。ランダム生成ならseedごとの差も見ます。GPUの同期と実際の生成長も記録します。
+
+## 戻して確かめる
+
+変更を取り消してbaselineへ戻したときに、元の挙動を再現できるかを確認します。改善しなかった実験も、原因・観察・条件が明確なら、次の改造を考えるための結果になります。

@@ -1,0 +1,42 @@
+---
+import { withBase } from '../../lib/paths';
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import { getCollection } from 'astro:content';
+import { stages } from '../../data/catalog';
+const lessons = (await getCollection('lessons')).sort((a, b) => a.data.order - b.data.order);
+---
+
+<SiteLayout title="学習マップ">
+  <header class="page-header">
+    <div class="eyebrow">LEARNING PATH</div>
+    <h1>小さな理解を、つないでいく。</h1>
+    <p>
+      入力から内部計算、生成、学習、改造へ。前提を確認しながら進めます。どの単元からでも読み始められます。
+    </p>
+  </header>
+  {stages.map((stage) => (
+    <section id={stage.id} class="stage-section">
+      <div class="stage-heading">
+        <span class="stage-number">{stage.number}</span>
+        <div>
+          <h2>{stage.title}</h2>
+          <p>{stage.description}</p>
+        </div>
+      </div>
+      <div class="lesson-list">
+        {lessons
+          .filter((l) => l.data.stage === stage.id)
+          .map((l) => (
+            <a href={withBase(`/learn/${l.id}/`)} class="lesson-item" data-lesson={l.id}>
+              <span class="mono">{String(l.data.order).padStart(2, '0')}</span>
+              <div>
+                <h3>{l.data.title}</h3>
+                <p>{l.data.description}</p>
+              </div>
+              <span class="minutes">{l.data.minutes} min</span>
+            </a>
+          ))}
+      </div>
+    </section>
+  ))}
+</SiteLayout>

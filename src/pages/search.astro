@@ -1,0 +1,20 @@
+---
+import { withBase } from '../lib/paths';
+import SiteLayout from '../layouts/SiteLayout.astro';
+import Search from '../components/Search';
+---
+
+<SiteLayout title="検索">
+  <header class="page-header">
+    <div class="eyebrow">FIND A CONCEPT</div>
+    <h1>いま知りたいことを、探す。</h1>
+    <p>日本語、英語の名前、コードの式、トークンIDから。教材の本文も検索できます。</p>
+  </header>
+  <Search client:load />
+  <noscript>
+    <p class="notice">
+      検索にはJavaScriptが必要です。<a href={withBase('/learn/')}>学習マップ</a>や
+      <a href={withBase('/reference/')}>辞書の一覧</a>からも探せます。
+    </p>
+  </noscript>
+</SiteLayout>

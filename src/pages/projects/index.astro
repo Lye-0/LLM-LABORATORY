@@ -1,0 +1,30 @@
+---
+import { withBase } from '../../lib/paths';
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import { projects } from '../../data/projects';
+---
+
+<SiteLayout title="モデル改造の課題">
+  <header class="page-header">
+    <div class="eyebrow">FROM UNDERSTANDING TO EXPERIMENT</div>
+    <h1>理解を、改造につなげる。</h1>
+    <p>観察、仮説、変更、評価、復元。小さな変更から始め、何が起きたかを説明できる実験にします。</p>
+  </header>
+  {projects.map((p) => (
+    <a class="project-card" href={withBase(`/projects/${p.slug}/`)}>
+      <span class="mono">
+        PROJECT
+        <br />
+        {p.number}
+      </span>
+      <div>
+        <h2>{p.title}</h2>
+        <p>{p.description}</p>
+        <div class="meta">
+          <span class="pill teal">{p.level}</span>
+          <span>手元のPython環境で実行</span>
+        </div>
+      </div>
+    </a>
+  ))}
+</SiteLayout>

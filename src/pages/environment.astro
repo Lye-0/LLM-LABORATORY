@@ -1,0 +1,60 @@
+---
+import { withBase } from '../lib/paths';
+import SiteLayout from '../layouts/SiteLayout.astro';
+---
+
+<SiteLayout title="実行環境と使い方">
+  <header class="page-header">
+    <div class="eyebrow">HOW TO USE THIS LAB</div>
+    <h1>ブラウザーから、実モデルへ。</h1>
+    <p>まずは小さな例で仕組みを確認し、必要に応じて手元のPython環境へ進みます。</p>
+  </header>
+  <div class="prose" style="max-width:780px">
+    <h2>このサイトだけでできること</h2>
+    <p>
+      すべての本文・辞書は静的HTMLです。操作教材はブラウザーで動き、ログインやGPUを必要としません。Tokenizerと語彙の実験だけは、初回に約11.5MBの配布データをサイトから取得します。
+    </p>
+    <h2>実験の表示を読む</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>表示</th>
+          <th>意味</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>ブラウザー計算</td>
+          <td>数式やshapeの教育用実装。PyTorchの実行ではありません。</td>
+        </tr>
+        <tr>
+          <td>説明用の固定値</td>
+          <td>対応を追いやすくした値。学習済みの意味表現ではありません。</td>
+        </tr>
+        <tr>
+          <td>Tokenizerの実処理</td>
+          <td>Qwenの固定revisionの語彙・結合規則を使った分割。</td>
+        </tr>
+        <tr>
+          <td>公式設定からの構造表示</td>
+          <td>配布configと構造に基づく値。重みをロードした測定ではありません。</td>
+        </tr>
+      </tbody>
+    </table>
+    <h2>Pythonで確かめる</h2>
+    <p>
+      コード例を試すなら、独立したuvプロジェクトを用意します。CPUでTensorや小さな層を確認し、実モデルの推論・学習へ進むときに必要なメモリとGPU条件を確認してください。
+    </p>
+    <a class="button primary" href={withBase('/learn/environment/')}>
+      環境構築の教材を読む
+    </a>
+    <h2>テーマと入力データ</h2>
+    <p>
+      選んだテーマはこのブラウザーに保存されます。実験の自由入力はブラウザー内で処理し、サーバーへ送信しません。
+    </p>
+    <h2>学び方を選ぶ</h2>
+    <p>
+      順に学ぶなら学習マップ、特定の挙動を確かめるなら実験室、名前から引くならリファレンスへ進みます。必要なテーマから自由に読み進められます。
+    </p>
+  </div>
+</SiteLayout>

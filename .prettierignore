@@ -1,0 +1,5 @@
+docs/references/
+public/data/
+dist/
+node_modules/
+pnpm-lock.yaml

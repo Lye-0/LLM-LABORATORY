@@ -1,0 +1,49 @@
+---
+title: "位置情報とRoPE"
+description: "並びのどこにあるかを、Attentionの計算へ反映する。"
+stage: "representation"
+order: 14
+minutes: 8
+eyebrow: "POSITION & ROTATION"
+prerequisites: ["attention"]
+sources: ["qwen"]
+tags: ["RoPE","位置埋め込み","position_ids"]
+question: "QwenのRoPEは、Embeddingへ位置ベクトルを足すことと同じですか？"
+answer: "同じではありません。RoPEは主にAttention内のQ/Kの成分へ位置に応じた回転を適用します。"
+---
+## 語の順序を区別する
+
+「犬が人を追う」と「人が犬を追う」では、同じ語が出ても順序が意味へ影響します。Self-Attentionの内積だけでは、位置に関する手掛かりが不足します。そこで位置情報を計算へ組み込みます。
+
+## 足す方式と、回す方式
+
+| 方法 | 位置情報を加える場所 | 例 |
+|---|---|---|
+| 学習可能な位置Embedding | token embeddingへ加える | GPT-2系 |
+| 正弦波などの位置表現 | 入力表現へ加える | 元のTransformerの例 |
+| RoPE | Q/Kの成分を位置で回転 | Qwenなど |
+
+方式の違いを保ち、GPT-2の図をすべてのモデルに当てはめません。
+
+## 二つの成分を回す小例
+
+```python
+import torch
+angle = torch.tensor(torch.pi / 2)
+x = torch.tensor([1., 0.])
+rotation = torch.stack([
+    torch.stack([torch.cos(angle), -torch.sin(angle)]),
+    torch.stack([torch.sin(angle),  torch.cos(angle)])
+])
+print(torch.round(rotation @ x, decimals=4))
+```
+
+出力は丸めると`[0.,1.]`に対応します。これは2成分を90度回す説明例で、実モデルの全RoPEを実装したものではありません。
+
+## RoPEと相対位置
+
+Q/Kへ位置に応じた回転を適用すると、その内積に位置の差が関わる形になります。成分の組ごとに異なる周波数を使い、複数の位置スケールを表現します。実装ではrope_theta、head_dim、position_idsなどを確認します。
+
+## 長さ設定を変える前に
+
+Tokenizerのmodel_max_length、モデルのmax_position_embeddings、モデルカードの文脈長は同じ意味の値とは限りません。RoPEの設定を書き換えただけで、長い文脈での品質が保証されるわけではありません。長文の評価とメモリ条件が必要です。

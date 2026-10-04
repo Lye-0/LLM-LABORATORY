@@ -1,0 +1,70 @@
+---
+title: "ベクトル・行列・Linear"
+description: "入力と重みを掛けると、どの軸が変わるのか。"
+stage: "representation"
+order: 12
+minutes: 9
+eyebrow: "LINEAR ALGEBRA"
+prerequisites: ["embedding"]
+labs: ["linear"]
+sources: ["tensor","module"]
+tags: ["行列積","内積","nn.Linear","broadcast"]
+question: "nn.Linear(2,3)のweight.shapeは[2,3]ですか？"
+answer: "PyTorchのweightは[out_features,in_features]なので[3,2]です。入力の末尾2成分を3成分へ写します。"
+---
+## 内積は対応する要素を掛けて足す
+
+```python
+import torch
+x = torch.tensor([1., 2.])
+w = torch.tensor([0.5, -1.])
+print(torch.dot(x, w))
+```
+
+```text
+tensor(-1.5000)
+```
+
+1×0.5 + 2×(−1) = −1.5です。Embeddingが行を「選ぶ」のに対し、内積では値を掛け合わせます。
+
+## 行列積のshape
+
+`[M,K] @ [K,N] → [M,N]`。内側のKが一致する必要があります。行列積と要素ごとの積は違います。PyTorchでは`@`が行列積、`*`が要素ごとの積です。
+
+```python
+x = torch.tensor([[1., 2.]])
+weight = torch.tensor([[1., 0.], [0.5, -1.]])
+y = x @ weight.T
+print(y)
+print(y.shape)
+```
+
+```text
+tensor([[ 1.0000, -1.5000]])
+torch.Size([1, 2])
+```
+
+## Linearは末尾の軸を変換する
+
+```python
+from torch import nn
+layer = nn.Linear(2, 3)
+inputs = torch.zeros(1, 4, 2)
+print(layer.weight.shape)
+print(layer(inputs).shape)
+```
+
+```text
+torch.Size([3, 2])
+torch.Size([1, 4, 3])
+```
+
+batchとsequenceの位置は保ち、各位置の2成分を3成分へ変換します。出力は`x @ weight.T + bias`です。出力の数値は初期乱数で変わるので、ここではshapeを観察します。
+
+## broadcastは軸を合わせて計算する規則
+
+biasが`[3]`でも、`[1,4,3]`の各位置へ加えられます。これはbroadcastによるものです。小さいTensorを実際に何度もコピーするという意味とは限りません。末尾から、同じ長さか長さ1の軸であるかを確認します。
+
+## 重みと活性値を分ける
+
+重みは学習で更新するパラメータです。活性値は入力を処理して得る中間結果です。両方Tensorですが、役割・寿命・保存の必要性が違います。この区別はメモリ量や量子化を考える基礎になります。

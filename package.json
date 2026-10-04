@@ -1,0 +1,46 @@
+{
+  "name": "llm-laboratory",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.19.0",
+  "engines": {
+    "node": ">=24.19.0"
+  },
+  "scripts": {
+    "dev": "astro dev --host 127.0.0.1",
+    "check": "astro check",
+    "build": "astro build && pagefind --site dist",
+    "preview": "astro preview --host 127.0.0.1",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "format": "prettier --write src scripts tests *.ts *.mjs *.json",
+    "prepare:data": "node scripts/prepare-data.mjs",
+    "validate": "pnpm check && pnpm test && pnpm build && node scripts/check-output.mjs"
+  },
+  "dependencies": {
+    "@astrojs/markdown-remark": "7.3.0",
+    "@astrojs/markdown-satteri": "0.4.0",
+    "@astrojs/mdx": "8.0.2",
+    "@astrojs/react": "7.0.0",
+    "@huggingface/tokenizers": "0.2.0",
+    "@radix-ui/react-select": "2.3.7",
+    "astro": "7.3.5",
+    "oxc-transform-react": "0.145.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@astrojs/check": "0.9.10",
+    "@axe-core/playwright": "4.13.0",
+    "@playwright/test": "1.63.0",
+    "@types/node": "24.19.1",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "pagefind": "1.5.2",
+    "prettier": "3.9.9",
+    "prettier-plugin-astro": "1.1.0",
+    "typescript": "6.0.3",
+    "vitest": "5.0.3"
+  }
+}

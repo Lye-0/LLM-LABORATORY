@@ -1,0 +1,109 @@
+---
+title: "Tokenizer"
+description: "人間が読む文字列を、モデルが扱うトークンIDへ。"
+stage: "input"
+order: 5
+minutes: 12
+eyebrow: "TEXT → TOKEN IDS"
+prerequisites: ["overview","python-objects"]
+labs: ["tokenizer"]
+sources: ["tokenizer","qwen","bpe"]
+tags: ["トークナイザー","tokenize","encode","decode","AutoTokenizer"]
+question: "convert_ids_to_tokensとdecodeは同じ文字列を返しますか？"
+answer: "変換の終点が異なります。前者は内部トークン表記、後者はそれらを復元した人間向けの文字列を返します。"
+---
+## 何を担当するか
+
+Tokenizerは文字列を部品へ分け、その部品に対応する整数IDへ変換します。逆方向ではID列を文字列へ戻します。入力を変換するだけで、モデルの推論を実行しているわけではありません。
+
+## tokenizer — 作成と実物の確認
+
+```python
+from transformers import AutoTokenizer
+
+model_id = "Qwen/Qwen3-0.6B"
+tokenizer = AutoTokenizer.from_pretrained(
+    model_id, revision="c1899de289a04d12100db370d81485cdf75e47ca"
+)
+print(type(tokenizer))
+print(tokenizer.name_or_path)
+```
+
+`from_pretrained()`は設定に合ったTokenizerインスタンスを返します。その実物を変数tokenizerが参照します。具体的なクラス名はTransformersの版や設定で変わるため、常にAutoTokenizerのインスタンスになるとは考えません。
+
+## text — 元の入力
+
+```python
+text = "こんにちは、今日はいい天気ですね"
+print(text)
+print(type(text))
+print(len(text))
+```
+
+```text
+こんにちは、今日はいい天気ですね
+<class 'str'>
+16
+```
+
+ここでの16はPython文字列の長さです。トークン数でもUTF-8のバイト数でもありません。
+
+## tokens — 内部表記へ分ける
+
+```python
+tokens = tokenizer.tokenize(text)
+print(tokens)
+print(len(tokens))
+```
+
+```text
+['ãģĵãĤĵãģ«ãģ¡ãģ¯', 'ãĢģ', 'ä»ĬæĹ¥ãģ¯', 'ãģĦãģĦ', 'å¤©', 'æ°Ĺ', 'ãģ§ãģĻãģŃ']
+7
+```
+
+このQwenの語彙では7トークンです。読みにくい表記はbyte-levelの内部表現です。破損した日本語や、意味を表す別言語ではありません。
+
+## ids — 整数の識別番号へ
+
+```python
+ids = tokenizer.encode(text, add_special_tokens=False)
+print(ids)
+print(type(ids))
+print(type(ids[0]))
+```
+
+```text
+[89015, 5373, 133165, 126224, 35727, 94121, 128797]
+<class 'list'>
+<class 'int'>
+```
+
+encodeはtextから変換します。先に作ったtokens変数を自動で読むわけではありません。IDの大きさは意味の強さを表しません。
+
+## decoded — 文字列へ戻す
+
+```python
+decoded = tokenizer.decode(ids)
+print(decoded)
+print(decoded == text)
+```
+
+```text
+こんにちは、今日はいい天気ですね
+True
+```
+
+この入力では一致します。一般には正規化、空白の処理、特殊トークンの除去によって元と完全一致しない場合があります。一文字のUTF-8バイトが複数トークンに分かれると、単独のIDのdecodeで置換文字が出る場合もあります。
+
+## 目的で使い分ける
+
+| 操作 | 入力 | 主な返り値 |
+|---|---|---|
+| tokenize | 文字列 | 内部表記のlist |
+| encode | 文字列 | ID列 |
+| tokenizer(...) | 文字列や複数入力 | input_ids・attention_maskなど |
+| convert_tokens_to_ids | 内部表記 | ID |
+| convert_ids_to_tokens | ID | 内部表記 |
+| decode | ID列 | 文字列 |
+
+文章のtokenizeと、内部トークンを辞書で引く操作は違います。会話のroleや境界を付ける処理はChat Templateで扱います。

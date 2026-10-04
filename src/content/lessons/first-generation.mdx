@@ -1,0 +1,64 @@
+---
+title: "小さなモデルをロードして生成する"
+description: "Tokenizerとモデルを準備し、入力と出力の境界を確認する。"
+stage: "orientation"
+order: 4
+minutes: 10
+eyebrow: "FIRST INFERENCE"
+prerequisites: ["overview","environment"]
+sources: ["qwen","generation","chat"]
+tags: ["from_pretrained","generate","推論"]
+question: "生成結果全体をdecodeすると、なぜ入力文も表示されることがありますか？"
+answer: "decoder-onlyモデルのgenerateが返す列には通常入力も含まれます。入力の長さでsliceして新規生成部分を取り出します。"
+---
+## 二つのオブジェクトを準備する
+
+```python
+import torch
+from transformers import AutoTokenizer, AutoModelForCausalLM
+
+model_id = "Qwen/Qwen3-0.6B"
+revision = "c1899de289a04d12100db370d81485cdf75e47ca"
+tokenizer = AutoTokenizer.from_pretrained(model_id, revision=revision)
+model = AutoModelForCausalLM.from_pretrained(
+    model_id, revision=revision, torch_dtype=torch.float32
+)
+model.eval()
+```
+
+CPUで確認する基本例です。初回は重みの取得とメモリが必要です。Tokenizerは文字列の変換、modelは重みを使う計算を担当します。GPUを使う場合はモデルと入力の配置をそろえます。
+
+## 会話をTensorにする
+
+```python
+messages = [{"role": "user", "content": "空が青く見える理由を短く説明して。"}]
+inputs = tokenizer.apply_chat_template(
+    messages, tokenize=True, add_generation_prompt=True,
+    enable_thinking=False, return_tensors="pt", return_dict=True
+)
+print(inputs["input_ids"].shape)
+```
+
+結果は`[1, T]`の2次元Tensorです。Tには本文だけでなく会話の境界や回答開始部分も含まれます。この節のコードは実行手順であり、特定の生成文の実測記録ではありません。
+
+## 生成して、新しい部分を取り出す
+
+```python
+with torch.inference_mode():
+    result = model.generate(
+        **inputs, max_new_tokens=64, do_sample=False
+    )
+
+new_ids = result[0, inputs["input_ids"].shape[1]:]
+print(tokenizer.decode(new_ids, skip_special_tokens=True))
+```
+
+出力は説明文ですが、具体的な文章はモデル・実装・数値条件に依存します。64は新規生成の上限であり、必ず64トークン作る指定ではありません。終了トークンで先に止まる場合もあります。
+
+## evalとinference_modeは別
+
+`eval()`はDropoutなどの学習・推論時の振る舞いを切り替えます。`inference_mode()`は勾配記録などのオーバーヘッドを減らすための文脈です。どちらも生成の意味を理解するモード切替ではありません。
+
+## この実験で見るもの
+
+読み込みが成功すること、入力shape、新規生成の長さ、model.device、出力を区切ってdecodeできることを確認します。意味の説明に進む前に、入出力の構造を把握するための実験です。

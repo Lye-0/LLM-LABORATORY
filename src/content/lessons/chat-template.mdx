@@ -1,0 +1,73 @@
+---
+title: "会話形式と特殊トークン"
+description: "roleと境界を並べて、モデルが読む一つの列を作る。"
+stage: "input"
+order: 8
+minutes: 10
+eyebrow: "CONVERSATION FORMAT"
+prerequisites: ["tokenizer","vocabulary"]
+labs: ["chat-template"]
+sources: ["chat","qwen"]
+tags: ["special tokens","スペシャルトークン","Thinking","EOS","PAD","151667"]
+question: "skip_special_tokens=Trueにすれば、Thinkingの本文もすべて消えますか？"
+answer: "消えるとは限りません。このQwen設定のthink境界はspecial=Falseで、本文も通常のトークン列です。表示する区間の処理は別に必要です。"
+---
+## role付きの会話も、最後は一つの列
+
+```python
+messages = [{"role": "user", "content": "こんにちは"}]
+formatted = tokenizer.apply_chat_template(
+    messages, tokenize=False, add_generation_prompt=False
+)
+print(formatted, end="")
+```
+
+```text
+<|im_start|>user
+こんにちは<|im_end|>
+```
+
+Qwenの参照テンプレートでの形式例です。生の文章をencodeする操作と、発言者・境界を付ける操作は別です。
+
+## 生成の開始部分を付ける
+
+```python
+formatted = tokenizer.apply_chat_template(
+    messages, tokenize=False, add_generation_prompt=True,
+    enable_thinking=False
+)
+print(formatted, end="")
+```
+
+```text
+<|im_start|>user
+こんにちは<|im_end|>
+<|im_start|>assistant
+<think>
+
+</think>
+
+```
+
+空のthinkブロックは、この例では入力側へ用意されたものです。モデルが新規生成した思考本文ではありません。生成自体はこの後にモデルが行います。
+
+## 四つの分類を分ける
+
+| 観点 | 例 | 意味 |
+|---|---|---|
+| 追加登録 | Added Token | 基本語彙とは別に登録された項目 |
+| 特殊扱い | special=True | decode時の除外などに関わる |
+| 役割 | EOS、PAD | 終了・長さ合わせの用途 |
+| モデルの能力 | Tool、Visionなど | 語彙の存在だけでは保証できない |
+
+参照設定ではID151667の`<think>`は追加トークンですがspecial=Falseです。ID151643の`<|endoftext|>`はPADとして登録されています。
+
+## 二重に境界を追加しない
+
+`apply_chat_template(tokenize=False)`で文字列へ整形した後にencodeするなら、`add_special_tokens=False`を使い、テンプレートに含まれる境界をさらに追加しないようにします。直接tokenize=TrueでID化する方法もあります。
+
+## 入力と生成を数える
+
+max_new_tokensは新しく生成するトークン数の上限です。Thinkingの本文も生成したなら含みます。画面から隠しても、計算やトークン数が減るわけではありません。
+
+Tokenizerのmodel_max_length、モデルの文脈長、生成上限は別の設定です。Tokenizerの数値だけを変更してモデルの長文能力を増やせるとは考えません。

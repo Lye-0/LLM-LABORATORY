@@ -1,0 +1,23 @@
+node_modules/
+dist/
+.astro/
+.pnpm-store/
+.cache/
+.env
+.env.*
+!.env.example
+test-results/
+playwright-report/
+verification/.venv/
+verification/__pycache__/
+*.log
+.DS_Store
+
+# Local planning, source conversations, verification captures, and backups
+/docs/
+/docd/
+/.private/
+/.kilo/
+/.agents/
+/.codex/
+*.bundle

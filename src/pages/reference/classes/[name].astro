@@ -1,0 +1,41 @@
+---
+import { withBase } from '../../../lib/paths';
+import SiteLayout from '../../../layouts/SiteLayout.astro';
+import ReferenceTable from '../../../components/ReferenceTable';
+import { apiLibraries, apiClasses } from '../../../data/api-groups';
+export function getStaticPaths() {
+  return apiClasses.map((item) => ({ params: { name: item.slug }, props: { item } }));
+}
+const { item } = Astro.props;
+const library = apiLibraries.find((l) => l.slug === item.library)!;
+---
+
+<SiteLayout title={item.title}>
+  <nav class="breadcrumb">
+    <a href={withBase('/reference/')}>調べる</a>
+    <span>/</span>
+    <a href={withBase(`/reference/libraries/${library.slug}/`)}>{library.title}</a>
+    <span>/</span>
+    <span>{item.title}</span>
+  </nav>
+  <header class="page-header">
+    <div class="eyebrow">
+      {library.title} / {item.kind}
+    </div>
+    <h1>{item.title}</h1>
+    <p>{item.description}</p>
+  </header>
+  <ReferenceTable kind="api" owner={item.owner} client:load />
+  {['nn.Embedding', 'nn.Linear'].includes(item.owner) && (
+    <p class="notice">
+      共通の保存・配置・観察機能は{' '}
+      <a class="text-link" href={withBase('/reference/classes/module/')}>
+        nn.Moduleの継承API
+      </a>{' '}
+      から確認できます。
+    </p>
+  )}
+  <p class="intro-note" style="margin-top:32px">
+    学習に関連する主要な公開APIを掲載しています。詳細ページで引数・返り値・状態変化・公式仕様を確認できます。
+  </p>
+</SiteLayout>

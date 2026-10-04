@@ -1,0 +1,59 @@
+---
+title: "改造したモデルを保存する"
+description: "重み・構造・Tokenizer・条件をそろえて、再び読み込む。"
+stage: "modification"
+order: 29
+minutes: 8
+eyebrow: "SAVE & REPRODUCE"
+prerequisites: ["model-editing","vocab-extension"]
+sources: ["module","tokenizer","peft"]
+tags: ["safetensors","save_pretrained","state_dict","再読込"]
+question: "state_dictだけあれば、独自の構造へ改造したモデルを誰でも読み込めますか？"
+answer: "構造を作るコードと設定も必要です。state_dictは重みの対応であり、独自モデルの実装を自動で再現するものではありません。"
+---
+## 保存するものを分ける
+
+| 対象 | 内容 |
+|---|---|
+| 重み | パラメータと必要なbuffer |
+| config | 層数・次元・モデル形式など |
+| Tokenizer | 語彙・追加トークン・テンプレート |
+| 実装 | 独自moduleやモデルを構築するコード |
+| 条件 | 依存版・revision・評価入力・seed |
+
+## 対応モデルを保存する
+
+標準のTransformers形式で扱えるモデルとTokenizerの例です。
+
+```python
+destination = "./modified-model"
+model.save_pretrained(destination, safe_serialization=True)
+tokenizer.save_pretrained(destination)
+```
+
+出力は保存先の重み・設定ファイルです。printの出力がなくても、ファイルが生成されたかを確認します。既存の元モデルの保存先とは分けます。
+
+## 再読み込みして比較する
+
+```python
+restored = AutoModelForCausalLM.from_pretrained(destination)
+restored_tokenizer = AutoTokenizer.from_pretrained(destination)
+restored.eval()
+
+assert len(restored_tokenizer) == len(tokenizer)
+assert restored.get_input_embeddings().weight.shape == model.get_input_embeddings().weight.shape
+```
+
+さらに同じ入力でlogitsや生成結果を比較します。dtypeやdeviceの違いによる許容誤差を設定し、完全一致が必要な部分と近似でよい部分を分けます。
+
+## Adapterの場合
+
+LoRA adapterだけを保存した成果物は、通常、元の基盤モデルへ読み込んで使います。基盤モデルのID・revision・対象層・PEFT設定を残します。統合済みモデルとadapter単独を同じファイルとして扱いません。
+
+## 配布形式と実行エンジン
+
+safetensorsは重みの保存形式、GGUFは対応エンジン向けのモデル配布形式です。形式変換だけで独自のPyTorch moduleがすべてのエンジンで動くわけではありません。構造・演算・量子化方式の対応を確認します。
+
+## 完了を確かめる
+
+別プロセスで読み込み、Tokenizer、shape、出力、評価条件を照合します。保存できたことだけでなく、保存した成果物から再現できることまでを、改造課題の完了条件にします。

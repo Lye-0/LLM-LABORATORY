@@ -1,0 +1,68 @@
+---
+title: "損失と重みの更新"
+description: "予測と正解のずれを測り、optimizerで重みを動かす。"
+stage: "training"
+order: 22
+minutes: 10
+eyebrow: "LOSS & OPTIMIZATION"
+prerequisites: ["logits","autograd"]
+labs: ["gradient"]
+sources: ["autograd","generation"]
+tags: ["cross entropy","labels","optimizer","zero_grad"]
+question: "次トークン予測では、入力の各位置とどの正解を対応させますか？"
+answer: "基本的には一つ後ろのトークンです。モデルが内部でshiftするAPIでは、外側で重ねてshiftしないようにします。"
+---
+## 正解の確率を高くする
+
+Cross entropyは、正解として指定した候補にどれだけ確率を割り当てたかを損失として測ります。多クラス分類では、正解の確率pに対する−log(p)と考えられます。
+
+```python
+import torch
+import torch.nn.functional as F
+logits = torch.tensor([[2., 1., 0.]])
+target = torch.tensor([0])
+print(F.cross_entropy(logits, target))
+```
+
+```text
+tensor(0.4076)
+```
+
+このAPIへは通常、softmax後の確率ではなくlogitsを渡します。数値安定性も含めて処理されます。
+
+## LLMでは位置を一つずらす
+
+```text
+入力として見る位置: [a, b, c]
+予測させたい次:     [b, c, d]
+```
+
+Causal LMの学習APIでは、入力と同じ列をlabelsへ渡すと内部でshiftするものがあります。モデルの契約を確認せず二重にずらさないようにします。
+
+## 一回の更新を分ける
+
+```python
+from torch import nn
+
+weight = nn.Parameter(torch.tensor(0.5))
+optimizer = torch.optim.SGD([weight], lr=0.1)
+optimizer.zero_grad()
+loss = (weight * 2 - 3) ** 2
+loss.backward()
+optimizer.step()
+print(weight.detach())
+```
+
+```text
+tensor(1.3000)
+```
+
+初期値0.5から、勾配−8に学習率0.1を掛けた分を引くと1.3になります。この一回で損失が0になるわけではありません。
+
+## 学習したくない位置を除く
+
+paddingやプロンプト部分など、損失を計算しない位置はignore_index（多くの例で−100）で扱います。attention_maskは参照する位置の指定、loss maskは損失へ寄与する位置の指定で、同じ目的ではありません。
+
+## 推論と学習の設定
+
+model.trainは学習時の振る舞いへ切り替えます。勾配が有効で、optimizerが対象パラメータを持っていることも別に確認します。lossが下がっても、未知の入力で改善したかは別の評価が必要です。

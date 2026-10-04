@@ -1,0 +1,60 @@
+---
+import { withBase } from '../../lib/paths';
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import Lab from '../../components/labs/Lab';
+import { labs } from '../../data/catalog';
+export function getStaticPaths() {
+  return labs.map((lab) => ({ params: { slug: lab.slug }, props: { lab } }));
+}
+const { lab } = Astro.props;
+---
+
+<SiteLayout title={lab.title} description={lab.summary} wide>
+  <nav class="breadcrumb">
+    <a href={withBase('/labs/')}>実験室</a>
+    <span>/</span>
+    <span>{lab.title}</span>
+  </nav>
+  <header class="page-header">
+    <div class="eyebrow">
+      EXPERIMENT {lab.number} / {lab.title}
+    </div>
+    <h1>{lab.ja}</h1>
+    <p>{lab.summary}</p>
+    <div class="meta" style="margin-top:18px">
+      <span class="pill teal">{lab.mode}</span>
+      <a class="text-link" href={withBase(`/learn/${lab.lesson}/`)}>
+        仕組みを読む
+      </a>
+    </div>
+  </header>
+  <section class="lab-surface">
+    <div class="lab-topline">
+      <h2>{lab.title}</h2>
+      <span class="mono">{lab.tag}</span>
+    </div>
+    <Lab slug={lab.slug} client:load />
+  </section>
+  <noscript>
+    <p class="notice">
+      操作実験にはJavaScriptが必要です。上の「仕組みを読む」から、コードと結果を静的な本文で確認できます。
+    </p>
+  </noscript>
+  <div class="section-title">
+    <h2>別の実験へ</h2>
+    <a class="text-link" href={withBase('/labs/')}>
+      実験一覧
+    </a>
+  </div>
+  <div class="related-labs">
+    {labs
+      .filter((l) => l.category === lab.category && l.slug !== lab.slug)
+      .slice(0, 3)
+      .map((l) => (
+        <a href={withBase(`/labs/${l.slug}/`)}>
+          <span>{l.title}</span>
+          <strong>{l.ja}</strong>
+        </a>
+      ))}
+  </div>
+</SiteLayout>

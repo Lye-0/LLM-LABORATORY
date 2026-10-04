@@ -1,0 +1,47 @@
+---
+title: "TokenizerとEmbeddingを拡張する"
+description: "語彙を追加したあとに必要な、モデル側の整合と学習。"
+stage: "modification"
+order: 28
+minutes: 9
+eyebrow: "EXTENDING THE VOCABULARY"
+prerequisites: ["vocabulary","chat-template","qwen","loss"]
+sources: ["tokenizer","qwen","module"]
+tags: ["add_tokens","resize_token_embeddings","語彙追加"]
+question: "add_tokensを呼べば、新しい語の意味をモデルが理解しますか？"
+answer: "登録されるのは表記とIDの対応です。対応するEmbeddingや出力側を整合させ、必要な学習と評価を行う必要があります。"
+---
+## Tokenizer側を変える
+
+```python
+added = tokenizer.add_tokens(["<lab_term>"])
+new_id = tokenizer.convert_tokens_to_ids("<lab_term>")
+print(added)
+print(new_id)
+```
+
+未登録なら追加数は1になります。具体的なIDは元の語彙に依存します。すでに存在するなら新たな追加数は0です。文字列を特別な役割に登録するadd_special_tokensとは区別します。
+
+## 必要な行が存在するか確認する
+
+```python
+old_rows = model.get_input_embeddings().num_embeddings
+required_rows = max(old_rows, len(tokenizer))
+if required_rows > old_rows:
+    model.resize_token_embeddings(required_rows)
+print(model.get_input_embeddings().num_embeddings)
+```
+
+Qwenのようにモデル側の行数がTokenizerの件数より多い場合があります。安易にlen(tokenizer)へ縮めず、既存の行数と最大IDが範囲内かを確認します。resizeの詳細や初期化方法は対象版を確認します。
+
+## 出力側と重み共有
+
+入力Embeddingだけでなく、lm_headやconfigとの整合が必要です。tie_word_embeddingsがある場合は共有関係を保つか、明示的に変更するかを決めます。resize後にshapeと共有状態を照合します。
+
+## 追加した行を学習する
+
+新しい行が存在しても、その表現は新しい用途に適応していません。対象文字列が現れるデータ、前後の文脈、損失を取る位置を設計します。既存の語を新トークンへ分割し直すと入力分布も変わるため、元の性能も確認します。
+
+## 小さな回帰テスト
+
+追加前の文章、追加語を含む文章、境界が似た文字列をencode/decodeします。新IDの範囲、Embeddingへの入力成功、生成出力の扱いを確認します。Tokenizerとモデルを必ず同じ組として保存します。

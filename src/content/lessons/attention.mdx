@@ -1,0 +1,63 @@
+---
+title: "Self-Attention"
+description: "位置同士のスコアから、集める情報の重みを決める。"
+stage: "representation"
+order: 13
+minutes: 12
+eyebrow: "QUERY / KEY / VALUE"
+prerequisites: ["linear"]
+labs: ["attention"]
+sources: ["qwen","tensor"]
+tags: ["Attention","Q","K","V","causal mask","softmax"]
+question: "causal maskがなければ、次トークン予測の学習で何が起こりますか？"
+answer: "未来の正解を含む位置を参照できてしまいます。過去だけから予測する生成時の条件と合わなくなります。"
+---
+## 入力から三つの表現を作る
+
+各位置の表現Xを異なる重みへ通し、Q（Query）、K（Key）、V（Value）を作ります。QとKで位置同士のスコアを計算し、そのスコアから得た重みでVを混ぜます。名前は役割の比喩で、辞書のキー・値とは別です。
+
+## 1. スコアを作る
+
+`scores = Q @ K.T / sqrt(d_k)`。Qのある行と、Kの各行の内積を取ります。d_kはhead内の成分数です。成分数によるスコアの大きさの変化を調整します。
+
+## 2. 参照できない位置を隠す
+
+次トークン予測では、未来の位置に大きな負値（理想化すると−∞）を置きます。softmax後にその確率が0になるようにする処理です。paddingの位置を除くmaskとは目的を分けます。
+
+## 3. softmaxで行ごとに正規化する
+
+各Query位置について、参照するKey位置の重みの合計を1にします。softmaxは各要素の指数を取り、全体の和で割ります。実装では最大値を引いてから指数を計算すると、数値のオーバーフローを抑えられます。
+
+## 4. Vの加重和を作る
+
+```python
+import torch
+import math
+
+q = torch.tensor([[1., 0.], [1., 1.]])
+k = torch.tensor([[1., 0.], [0., 1.]])
+v = torch.tensor([[2., 0.], [0., 4.]])
+scores = q @ k.T / math.sqrt(2)
+mask = torch.triu(torch.ones(2, 2, dtype=torch.bool), diagonal=1)
+scores = scores.masked_fill(mask, float("-inf"))
+weights = torch.softmax(scores, dim=-1)
+print(weights)
+print(weights @ v)
+```
+
+```text
+tensor([[1.0000, 0.0000],
+        [0.5000, 0.5000]])
+tensor([[2., 0.],
+        [1., 2.]])
+```
+
+位置0は自分だけを参照できます。位置1ではQと両方のKの内積が同じなので、Vを半分ずつ混ぜます。
+
+## Attention mapの読み方
+
+マップの値は、この層・head・入力における重みです。「モデルがその単語を人間の意味で重視した」「これが回答の唯一の原因」とは断定できません。複数のhead、層、Residualなどを通して最終出力が決まります。
+
+## 複数headとGQA
+
+headごとに別の表現で情報を集め、結合して出力へ写します。GQAでは複数のQuery headがKey/Value headを共有します。QとKVのhead数を同じと決めつけず、モデル設定から各shapeを読みます。

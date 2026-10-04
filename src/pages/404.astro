@@ -1,0 +1,18 @@
+---
+import { withBase } from '../lib/paths';
+import SiteLayout from '../layouts/SiteLayout.astro';
+---
+
+<SiteLayout title="ページが見つかりません">
+  <header class="page-header">
+    <div class="eyebrow">404 / PAGE NOT FOUND</div>
+    <h1>このページは見つかりませんでした。</h1>
+    <p>学習マップか検索から、探している内容を見つけられます。</p>
+  </header>
+  <a class="button primary" href={withBase('/learn/')}>
+    学習マップ
+  </a>
+  <a class="button" style="margin-left:12px" href={withBase('/search/')}>
+    サイト内を検索
+  </a>
+</SiteLayout>

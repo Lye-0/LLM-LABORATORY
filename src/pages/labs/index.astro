@@ -1,0 +1,29 @@
+---
+import { withBase } from '../../lib/paths';
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import { labs } from '../../data/catalog';
+---
+
+<SiteLayout title="実験室">
+  <header class="page-header">
+    <div class="eyebrow">INTERACTIVE LABORATORY</div>
+    <h1>ひとつ変えて、確かめる。</h1>
+    <p>
+      入力と結果を並べて、仕組みを観察する12の実験。小さな計算と実際の配布データを、それぞれの目的に合わせて使います。
+    </p>
+  </header>
+  <div class="lab-grid">
+    {labs.map((lab) => (
+      <a href={withBase(`/labs/${lab.slug}/`)} class="lab-card">
+        <span class="lab-number">EXPERIMENT {lab.number}</span>
+        <div class="formula">{lab.tag}</div>
+        <h2>{lab.ja}</h2>
+        <p>{lab.summary}</p>
+        <div class="meta">
+          <span class="pill">{lab.mode}</span>
+          <span class="tag">{lab.title}</span>
+        </div>
+      </a>
+    ))}
+  </div>
+</SiteLayout>

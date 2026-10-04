@@ -1,0 +1,167 @@
+---
+import { withBase } from '../lib/paths';
+import SiteLayout from '../layouts/SiteLayout.astro';
+import { stages } from '../data/catalog';
+import { getCollection } from 'astro:content';
+const lessons = await getCollection('lessons');
+const pipeline = [
+  ['01', 'Tokenizer', '文字列 → ID', 'tokenizer'],
+  ['02', 'Tensor', '[B, T]', 'tensor'],
+  ['03', 'Embedding', '[B, T, D]', 'embedding'],
+  ['04', 'Transformer', '文脈を反映', 'attention'],
+  ['05', 'Logits', '候補のスコア', 'logits'],
+  ['06', 'Sampling', '次のトークン', 'sampling'],
+];
+---
+
+<SiteLayout title="Home">
+  <section class="hero">
+    <div>
+      <div class="eyebrow">A FIELD GUIDE TO LANGUAGE MODELS</div>
+      <h1>
+        LLMを、
+        <br />
+        <span class="soft">内側から</span>理解する。
+      </h1>
+      <p>
+        文章が数値になり、次の言葉が生まれるまで。
+        <br />
+        コードを読み、形を変え、計算を追う。
+        <br />
+        小さな観察から、モデルの改造へ。
+      </p>
+      <div class="actions">
+        <a class="button primary" href={withBase('/learn/')}>
+          学習マップを開く
+        </a>
+        <a class="button ghost" href={withBase('/labs/embedding/')}>
+          実験から始める
+        </a>
+      </div>
+      <div class="hero-footnote">PYTHON / PYTORCH / TRANSFORMERS</div>
+    </div>
+    <a
+      class="hero-visual"
+      href={withBase('/labs/embedding/')}
+      aria-label="Embedding Lookupの実験を開く"
+    >
+      <div class="visual-head">
+        <span>INSIDE THE MODEL</span>
+        <span>01 / EMBEDDING</span>
+      </div>
+      <div class="embedding-diagram">
+        <div class="diagram-id">
+          <small>TOKEN ID</small>
+          <strong>2</strong>
+        </div>
+        <div class="diagram-matrix">
+          {[
+            [0.6, -0.7, 0.1],
+            [0, 0.3, -0.2],
+            [-0.1, -0.5, 1.4],
+            [-1.7, -1.6, -1],
+            [-1.8, 0.1, 0.7],
+          ].map((row, i) => (
+            <div class:list={['diagram-row', { selected: i === 2 }]}>
+              {row.map((v) => (
+                <span>{v.toFixed(1)}</span>
+              ))}
+            </div>
+          ))}
+        </div>
+        <div class="diagram-vector">
+          <span>−0.1</span>
+          <span>−0.5</span>
+          <span>1.4</span>
+        </div>
+      </div>
+      <div class="visual-caption">
+        IDは、表のどの行を選ぶかを示す。
+        <br />
+        <code>[1] → [1, 3]</code>
+      </div>
+      <div class="visual-bottom">
+        <span>説明用の固定値 · 5 × 3</span>
+        <span>行を選んで確かめる ↗</span>
+      </div>
+    </a>
+  </section>
+  <div class="pipeline" aria-label="LLMの処理の流れ">
+    {pipeline.map(([num, title, shape, slug]) => (
+      <a href={withBase(`/learn/${slug}/`)}>
+        <small>{num}</small>
+        <strong>{title}</strong>
+        <code>{shape}</code>
+      </a>
+    ))}
+  </div>
+  <div class="home-columns">
+    <section>
+      <div class="section-title">
+        <div>
+          <h2>
+            <span class="section-number">01</span>理解を積み重ねる
+          </h2>
+          <p>前提から順に。必要なところから自由に。</p>
+        </div>
+        <a class="text-link" href={withBase('/learn/')}>
+          学習マップ
+        </a>
+      </div>
+      {stages.map((stage) => (
+        <a class="learning-row" href={withBase(`/learn/#${stage.id}`)}>
+          <span class="mono">{stage.number}</span>
+          <div>
+            <h3>{stage.title}</h3>
+            <p>{stage.description}</p>
+          </div>
+          <span class="count">
+            {lessons.filter((l) => l.data.stage === stage.id).length} lessons
+          </span>
+        </a>
+      ))}
+    </section>
+    <section>
+      <div class="section-title">
+        <div>
+          <h2>
+            <span class="section-number">02</span>動かして確かめる
+          </h2>
+          <p>ひとつ変えて、違いを観察する。</p>
+        </div>
+      </div>
+      <a class="feature-lab" href={withBase('/labs/tensor/')}>
+        <span class="eyebrow">TENSOR SHAPE LAB</span>
+        <div class="mini-shape">[ 7 ] → [ 1, 7 ]</div>
+        <h3>軸が増えると、何が変わる？</h3>
+        <p>
+          値・shape・次元数を並べて、
+          <br />
+          unsqueezeの働きを見る。
+        </p>
+      </a>
+      <a class="feature-lab" href={withBase('/labs/sampling/')}>
+        <span class="eyebrow">SAMPLING LAB</span>
+        <div class="mini-shape">0.7　 1.0　 1.5</div>
+        <h3>次の言葉の、選び方。</h3>
+        <p>
+          temperatureを変えて、
+          <br />
+          候補の確率が変わる様子を確かめる。
+        </p>
+      </a>
+      <a class="text-link" href={withBase('/labs/')}>
+        すべての実験を見る
+      </a>
+    </section>
+  </div>
+  <section class="dictionary-strip">
+    <h2>必要なときに、引く。</h2>
+    <div class="links">
+      <a href={withBase('/reference/api/')}>クラス・API</a>
+      <a href={withBase('/reference/tokens/')}>特殊トークン</a>
+      <a href={withBase('/reference/glossary/')}>用語集</a>
+      <a href={withBase('/reference/compare/')}>似た機能の違い</a>
+    </div>
+  </section>
+</SiteLayout>

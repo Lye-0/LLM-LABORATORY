@@ -1,0 +1,63 @@
+---
+title: "学習環境を用意する"
+description: "ブラウザー、CPU、GPU。目的に合わせて実行環境を選ぶ。"
+stage: "orientation"
+order: 3
+minutes: 8
+eyebrow: "WORKSPACE"
+prerequisites: ["python-objects"]
+sources: ["uv","tensor"]
+tags: ["WSL","uv","CUDA","環境構築"]
+question: "GPUがないと、このサイトの実験は使えませんか？"
+answer: "ブラウザーの操作教材はGPUを必要としません。実モデルの推論・学習は別のPython環境で行い、CPUでも小さな確認から始められます。"
+---
+## どこで動くかを選ぶ
+
+| 環境 | 得意なこと | 必要なもの |
+|---|---|---|
+| ブラウザー | 小行列、shape、語彙の観察 | このサイト |
+| Python + CPU | PyTorchの基本、参照値の検証 | Python、uv |
+| Python + CUDA | 実モデルの推論・学習 | 対応GPU、ドライバー、対応版のPyTorch |
+
+## uvで実験を分離する
+
+新しいフォルダーで、依存関係を管理するプロジェクトを作ります。
+
+```bash
+uv init --python 3.13
+uv add torch transformers accelerate
+uv run python -c "import torch; print(torch.__version__)"
+```
+
+表示される版は導入時の解決結果によります。再現する実験ではpyproject.tomlとuv.lockを保存します。CUDA用のインストール方法はOS・ドライバー・PyTorch版に依存するので、PyTorch公式の対応表に合わせます。
+
+## CPUとCUDAを確認する
+
+```python
+import torch
+
+x = torch.tensor([1, 2, 3])
+print(x.device)
+print(torch.cuda.is_available())
+```
+
+```text
+cpu
+False
+```
+
+これはCUDAを利用できない環境の出力例です。TrueならCUDAが使える状態ですが、モデル全体がGPUメモリへ収まることまでは保証しません。
+
+## WSLとエディターの実行先
+
+WindowsのVS CodeからWSL内のPythonを使う場合、Remote WSLでフォルダーを開き、Python interpreterもWSLの仮想環境を選びます。Windows側のPythonとWSL側のPythonでは、導入済みパッケージが異なります。補完が出ないときは、実行に使う環境と解析に使う環境を照合します。
+
+## 保存する情報
+
+Python・torch・transformersの版、モデルrevision、dtype、device、seed、実行コードを記録します。GPUの型やdriverも性能比較に必要です。重みや仮想環境はGitへ入れず、コード・lockfile・小さな結果を管理します。
+
+```bash
+uv sync --frozen
+```
+
+これはlockfileに基づいて環境をそろえる操作です。別のOSやGPUでは、同じ乱数seedでも浮動小数点の結果が完全一致するとは限りません。

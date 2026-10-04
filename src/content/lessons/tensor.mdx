@@ -1,0 +1,147 @@
+---
+title: "Tensor"
+description: "値・形状・数値型・デバイスを、一つの対象として読む。"
+stage: "input"
+order: 9
+minutes: 14
+eyebrow: "SHAPE / DTYPE / DEVICE"
+prerequisites: ["python-objects","tokenizer"]
+labs: ["tensor"]
+sources: ["tensor"]
+tags: ["テンソル","shape","ndim","numel","torch.Tensor","unsqueeze"]
+question: "shapeが[]のTensorは、要素が0個ですか？"
+answer: "スカラーTensorは軸が0本で、要素は1個です。軸の本数と全要素数は別です。"
+---
+## 数値を、計算できる形で保持する
+
+Tensorは、数値とshape・dtype・deviceを持つPyTorchの基本構造です。IDをTensorへ変えても、意味ベクトルにはまだなりません。
+
+## tensor — 作成・確認・結果
+
+```python
+import torch
+
+ids = [89015, 5373, 133165, 126224, 35727, 94121, 128797]
+tensor = torch.tensor(ids)
+print(tensor)
+print(type(tensor))
+print(tensor.dtype)
+print(tensor.shape)
+print(tensor.ndim)
+print(tensor.device)
+print(tensor.numel())
+print(tensor.element_size())
+```
+
+```text
+tensor([ 89015,   5373, 133165, 126224,  35727,  94121, 128797])
+<class 'torch.Tensor'>
+torch.int64
+torch.Size([7])
+1
+cpu
+7
+8
+```
+
+通常のCPU設定での出力例です。`torch.tensor`は関数、`torch.Tensor`はクラス、`tensor`は変数名です。関数が返した実物を、その名前が参照します。
+
+| 確認する式 | 意味 |
+|---|---|
+| type(tensor) | オブジェクトの型 |
+| tensor.dtype | 中の数値の表現形式 |
+| tensor.shape | 各軸の長さ |
+| tensor.ndim | 軸の本数 |
+| tensor.numel() | 全要素数 |
+| tensor.element_size() | 1要素のバイト数 |
+| tensor.device | 数値データの配置先 |
+
+7×8=56バイトは、このTensorの論理的な数値データの量です。管理情報やメモリアロケーターの確保量は含みません。
+
+## 一つの値を取り出す
+
+```python
+scalar = tensor[0]
+print(scalar)
+print(scalar.shape)
+print(scalar.ndim)
+print(scalar.numel())
+```
+
+```text
+tensor(89015)
+torch.Size([])
+0
+1
+```
+
+元が1次元なので、位置を一つ指定すると軸がなくなります。値は1個残り、Tensorのままです。
+
+## 範囲で取り出す
+
+```python
+part = tensor[0:1]
+print(part)
+print(part.shape)
+print(part.ndim)
+```
+
+```text
+tensor([89015])
+torch.Size([1])
+1
+```
+
+スライスは並びとして取り出すため、長さ1の軸が残ります。同じ89015でも、スカラーと長さ1の並びはshapeが異なります。
+
+## Pythonの数値に戻す
+
+```python
+value = scalar.item()
+print(value)
+print(type(value))
+```
+
+```text
+89015
+<class 'int'>
+```
+
+itemは要素が1個であることが条件です。7要素のtensor全体には使えません。複数の値をlistへ戻すならtolistを使います。
+
+## 軸を追加する
+
+```python
+batch = tensor.unsqueeze(0)
+print(batch.shape)
+print(batch.numel())
+print(tensor.shape)
+```
+
+```text
+torch.Size([1, 7])
+7
+torch.Size([7])
+```
+
+0は挿入位置です。数値の0を追加する指定ではありません。元のtensorのshapeは変わらず、返り値が新しいshapeを持ちます。通常、unsqueezeの返り値は元のデータを共有します。
+
+## デバイスを変える
+
+```python
+if torch.cuda.is_available():
+    gpu_tensor = tensor.to("cuda")
+    print(gpu_tensor.device)
+    print(tensor.device)
+```
+
+```text
+cuda:0
+cpu
+```
+
+これはCUDAが利用できる場合の出力例です。CPUからGPUへコピーした結果をgpu_tensorで受け取り、元のtensorはCPUのままです。同じdtype・deviceへtoした場合は、元自身が返る場合もあります。
+
+## 次の処理につなぐ
+
+モデルのID入力は通常`[batch_size, sequence_length]`です。Tensor自体は軸の意味を知りません。使う側が、その軸をbatchやsequenceとして解釈します。

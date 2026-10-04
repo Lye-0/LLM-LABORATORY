@@ -1,0 +1,61 @@
+---
+title: "Fine-tuning・LoRA・QLoRA"
+description: "何を更新するかを選び、モデルを目的へ適応させる。"
+stage: "training"
+order: 24
+minutes: 10
+eyebrow: "PARAMETER-EFFICIENT ADAPTATION"
+prerequisites: ["loss","data-evaluation"]
+sources: ["peft","quantization"]
+tags: ["LoRA","QLoRA","adapter","rank","Fine-tuning"]
+question: "LoRAのrankを大きくすると、必ず評価が改善しますか？"
+answer: "必ずではありません。表現力と更新パラメータ数は増えますが、データ量・過学習・対象層・学習条件にも依存します。"
+---
+## 更新する範囲を選ぶ
+
+Full fine-tuningでは広い範囲の重みを更新します。LoRAでは元の重みを固定し、低rankの行列による差分を学習することで、更新するパラメータ数を減らします。
+
+## 小さな行列で差分を表す
+
+元の重みWが`[out,in]`なら、Bを`[out,r]`、Aを`[r,in]`として`ΔW = B @ A`を作れます。
+
+```python
+in_features = 1024
+out_features = 1024
+rank = 8
+print(in_features * out_features)
+print(rank * (in_features + out_features))
+```
+
+```text
+1048576
+16384
+```
+
+これは行列部分の要素数の比較です。biasや他の対象パラメータ、optimizerのメモリは含みません。
+
+## PEFTで対象を指定する
+
+読み込み済みの対応モデルに対する設定例です。実行時はPEFTとモデルの版を固定し、module名を照合します。
+
+```python
+from peft import LoraConfig, get_peft_model
+
+config = LoraConfig(
+    r=8, lora_alpha=16,
+    target_modules=["q_proj", "v_proj"],
+    task_type="CAUSAL_LM",
+)
+adapted = get_peft_model(model, config)
+adapted.print_trainable_parameters()
+```
+
+結果には学習対象の数と全体に対する割合が表示されます。具体的な数は対象層で変わるので、変更前後で記録します。adapterを付けただけでは学習は始まりません。
+
+## QLoRA
+
+量子化した基盤モデルとLoRAを組み合わせる学習手法です。量子化重みを通常の浮動小数点パラメータと同じように更新するという意味ではありません。先に量子化教材で、保存形式・計算dtype・誤差を確認します。
+
+## 保存と評価
+
+adapterだけを保存する場合、元のモデルとそのrevisionが必要です。対象層、rank、学習データ、テンプレートも一緒に記録します。学習に使わなかったデータで比較し、元の能力が落ちていないかも調べます。

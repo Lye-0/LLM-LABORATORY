@@ -1,0 +1,40 @@
+---
+import { withBase } from '../../lib/paths';
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import { topics } from '../../data/topics';
+export function getStaticPaths() {
+  return topics.map((topic) => ({ params: { slug: topic.slug }, props: { topic } }));
+}
+const { topic } = Astro.props;
+---
+
+<SiteLayout title={topic.title}>
+  <nav class="breadcrumb">
+    <a href={withBase('/topics/')}>周辺技術</a>
+    <span>/</span>
+    <span>{topic.title}</span>
+  </nav>
+  <header class="page-header">
+    <div class="eyebrow">ECOSYSTEM / {topic.slug}</div>
+    <h1>{topic.title}</h1>
+    <p>{topic.summary}</p>
+  </header>
+  <div class="prose" style="max-width:760px">
+    {topic.sections.map(([title, text]) => (
+      <section>
+        <h2>{title}</h2>
+        <p>{text}</p>
+      </section>
+    ))}
+    <h2>関連する教材</h2>
+    <p>
+      <a href={withBase(`/learn/${topic.lesson}/`)}>中心となる仕組みを読む</a>
+    </p>
+    <h2>公式資料</h2>
+    <p>
+      <a href={withBase(topic.url)} target="_blank" rel="noreferrer">
+        詳しい仕様・対応条件を確認する ↗
+      </a>
+    </p>
+  </div>
+</SiteLayout>

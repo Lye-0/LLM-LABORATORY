@@ -1,0 +1,98 @@
+---
+title: "Embedding"
+description: "IDを行番号にして、学習可能な表からベクトルを取り出す。"
+stage: "representation"
+order: 11
+minutes: 12
+eyebrow: "IDENTIFIERS → VECTORS"
+prerequisites: ["vocabulary","tensor","batch"]
+labs: ["embedding"]
+sources: ["embedding","module","qwen"]
+tags: ["埋め込み","nn.Embedding","Parameter","embedding_dim"]
+question: "ID2をfloat32へ変えることは、Embeddingと同じですか？"
+answer: "異なります。dtype変換は数値2の表現形式を変えるだけです。EmbeddingはID2を索引として、重みの行から複数の数値を取り出します。"
+---
+## 整数をベクトルにするとは
+
+Embeddingは、IDを行番号として使い、対応するベクトルを取り出す処理です。数字2を計算して意味へ変換するのではなく、学習可能な表の添字2の行を参照します。
+
+## embedding — 小さな表を作る
+
+```python
+import torch
+from torch import nn
+
+embedding = nn.Embedding(num_embeddings=5, embedding_dim=3)
+print(type(embedding))
+print(embedding)
+print(embedding.weight.shape)
+print(embedding.weight.dtype)
+```
+
+```text
+<class 'torch.nn.modules.sparse.Embedding'>
+Embedding(5, 3)
+torch.Size([5, 3])
+torch.float32
+```
+
+通常の既定dtypeでの例です。5種類のID（0〜4）に、3成分のベクトルを対応させます。重みの要素数は5×3=15です。weightは学習可能なParameterであり、作ったばかりの数値はランダム初期値です。
+
+## 固定した値でlookupを確かめる
+
+ここからは結果を照合しやすくするため、説明用の値を明示的にコピーします。これは学習済みの意味ベクトルではありません。
+
+```python
+with torch.no_grad():
+    embedding.weight.copy_(torch.tensor([
+        [ 0.6, -0.7,  0.1],
+        [ 0.0,  0.3, -0.2],
+        [-0.1, -0.5,  1.4],
+        [-1.7, -1.6, -1.0],
+        [-1.8,  0.1,  0.7],
+    ]))
+
+ids = torch.tensor([2])
+output = embedding(ids)
+print(output.detach())
+print(output.shape)
+```
+
+```text
+tensor([[-0.1000, -0.5000,  1.4000]])
+torch.Size([1, 3])
+```
+
+ID2は添字2、上から3行目です。入力は1個のIDを持つ並びなので、出力も1個のベクトルを持つ並びになります。
+
+## 値は同じでもshapeが違う
+
+```python
+row = embedding.weight[2]
+print(row.detach())
+print(row.shape)
+```
+
+```text
+tensor([-0.1000, -0.5000,  1.4000])
+torch.Size([3])
+```
+
+| 操作 | 入力の形 | 出力の形 |
+|---|---|---|
+| weight[2] | 行を直接指定 | [3] |
+| embedding(tensor([2])) | [1] | [1,3] |
+| embedding(tensor([2,0,2])) | [3] | [3,3] |
+| embedding(tensor([[2,0,2]])) | [1,3] | [1,3,3] |
+
+原則は「入力shapeの末尾にembedding_dimを追加」です。同じIDが複数あれば、同じ表の状態では同じ行を取り出します。
+
+## Parameterと勾配
+
+requires_grad=Trueは、重みに対する勾配を計算できる状態です。それだけで毎回重みが更新されるわけではありません。計算グラフ、損失、backward、optimizerによる更新が別に必要です。grad_fnは出力を作った演算の記録で、数値ベクトルの意味を表示するものではありません。
+
+## 実モデルへつなぐ
+
+Qwen3-0.6Bの参照設定はhidden_size=1024、モデル側vocab_size=151936です。実物は`model.get_input_embeddings().weight.shape`で確認します。Tokenizerの語彙件数とモデルの行数は、必ずしも一致しません。
+
+Embedding直後のベクトルは同じIDに対して同じですが、Transformer層を通ったhidden stateは周囲の文脈で変わります。「意味が似る」という説明を、すべての行の距離や各成分へ機械的に当てはめないことも大切です。

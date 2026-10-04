@@ -1,0 +1,57 @@
+---
+title: "Autograd・Parameter・勾配"
+description: "計算を記録して、損失から重みへの変化率を求める。"
+stage: "training"
+order: 21
+minutes: 10
+eyebrow: "DIFFERENTIATION"
+prerequisites: ["embedding","linear"]
+labs: ["gradient"]
+sources: ["autograd","module"]
+tags: ["自動微分","backward","requires_grad","grad_fn","Parameter"]
+question: "backward()を呼ぶだけで重みは更新されますか？"
+answer: "backwardは勾配を計算して蓄積します。重みの更新はoptimizer.stepなどで別に行います。"
+---
+## 計算と、そのつながりを記録する
+
+AutogradはTensorの演算を記録し、ある値を変えたときに損失がどれだけ変わるかを逆向きに計算します。この変化率が勾配です。
+
+## 小さな式で確かめる
+
+```python
+import torch
+w = torch.tensor(0.5, requires_grad=True)
+x = torch.tensor(2.0)
+target = torch.tensor(3.0)
+prediction = w * x
+loss = (prediction - target) ** 2
+
+print(prediction)
+print(loss.detach())
+loss.backward()
+print(w.grad)
+```
+
+```text
+tensor(1., grad_fn=<MulBackward0>)
+tensor(4.)
+tensor(-8.)
+```
+
+grad_fnの表示名は版による場合があります。数式ではdL/dw=2(wx−target)xなので、w=0.5、x=2、target=3で−8です。
+
+## leafとgrad_fn
+
+自分で作ったwはleaf Tensorです。演算の結果のpredictionには、それを作った計算の情報があります。通常、leafの勾配がgradへ蓄積されます。途中結果のgradを見たい場合はretain_gradなど、別の設定が必要です。
+
+## ParameterはModuleへ登録される重み
+
+`nn.Parameter`をModuleの属性へ代入すると、通常は学習可能なパラメータとして登録されます。単なるTensorとの違いは、Moduleのparametersやstate_dictなどへどう含まれるかにもあります。
+
+## 勾配は蓄積する
+
+同じ重みへbackwardを重ねるとgradは加算されます。各更新で初期化するならoptimizer.zero_gradを使います。勾配蓄積を意図して複数のbatchを足す方法もあるので、「必ず間違い」とは限りません。
+
+## detachとコピー
+
+detachは勾配のつながりを切ったTensorを返しますが、元のデータを共有します。独立した数値コピーが必要ならcloneとの組合せを考えます。保存用の値をうっかり変更して元のTensorへ影響させないよう、共有を把握します。

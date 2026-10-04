@@ -1,0 +1,95 @@
+---
+title: "Vocabulary"
+description: "トークンの内部表記とIDを対応づける語彙表。"
+stage: "input"
+order: 6
+minutes: 10
+eyebrow: "TOKENS ↔ IDENTIFIERS"
+prerequisites: ["tokenizer"]
+labs: ["vocabulary"]
+sources: ["tokenizer","qwen","bpe"]
+tags: ["語彙","get_vocab","vocab_size","89015"]
+question: "ID89014と89015は、意味が近いトークンですか？"
+answer: "IDは識別番号です。数字の差を意味の距離として使うことはできません。"
+---
+## 語彙表が持っているもの
+
+Vocabularyは「単語→意味」の辞書ではなく、内部トークン表記と整数IDの対応表です。Tokenizerが文章を分割するときの部品を識別します。
+
+## vocab — 辞書を取り出す
+
+Tokenizer教材で準備したtokenizerを使います。
+
+```python
+vocab = tokenizer.get_vocab()
+print(type(vocab))
+print(tokenizer.vocab_size)
+print(len(vocab))
+print(len(tokenizer))
+```
+
+```text
+<class 'dict'>
+151643
+151669
+151669
+```
+
+この設定の基本語彙は151643件、追加分は26件です。追加とは配布設定にある登録で、実験中に自分で追加したという意味ではありません。
+
+| 確認式 | 対象 |
+|---|---|
+| tokenizer.vocab_size | 基本語彙の大きさ |
+| len(tokenizer) | 追加分を含むTokenizerの語彙 |
+| model.config.vocab_size | モデル側の入出力サイズに関わる設定 |
+
+Qwen3-0.6Bの参照configではモデル側は151936です。Tokenizerの件数とモデルのEmbedding行数を同じ数と決めつけません。
+
+## なぜ「こんにちは」が直接見つからない？
+
+```python
+print(vocab.get("こんにちは"))
+tokens = tokenizer.tokenize("こんにちは")
+print(tokens)
+print(vocab[tokens[0]])
+```
+
+```text
+None
+['ãģĵãĤĵãģ«ãģ¡ãģ¯']
+89015
+```
+
+生の日本語表記のキーはなくても、その内容に対応する内部トークンは存在します。`vocab.get()`は普通の辞書参照です。文章を分割する処理は行いません。
+
+## ID順に見る
+
+```python
+ordered = sorted(vocab.items(), key=lambda item: item[1])
+for token, token_id in ordered[:5]:
+    print(token_id, token)
+```
+
+```text
+0 !
+1 "
+2 #
+3 $
+4 %
+```
+
+get_vocabの列挙順がID順であるとは保証しないので、番号で明示的に並べ替えます。語彙には単語だけでなく記号やbyteの断片もあります。
+
+## 数字の近さを観察する
+
+```text
+89014 ĠETA
+89015 ãģĵãĤĵãģ«ãģ¡ãģ¯
+89016 Ġqualche
+```
+
+これは参照語彙の隣接項目です。`Ġ`はこのbyte-level表記で空白バイトに対応する表示用文字です。前後に日本語の挨拶が並んでいるわけではありません。
+
+## 語彙を増やすとき
+
+Tokenizerに新しいトークンを追加しても、その意味をモデルが自動で学習することはありません。必要なEmbedding行数、出力層、重み共有、追加行の学習まで整合させる必要があります。

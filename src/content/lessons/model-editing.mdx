@@ -1,0 +1,63 @@
+---
+title: "モデル構造を調べて変更する"
+description: "観察する場所と、置き換える境界を特定する。"
+stage: "modification"
+order: 27
+minutes: 10
+eyebrow: "HOOKS & MODULES"
+prerequisites: ["qwen","autograd","evaluation"]
+sources: ["module","qwen"]
+tags: ["hooks","freeze","ablation","named_parameters","改造"]
+question: "層を置換してエラーなく生成できれば、改造は成功ですか？"
+answer: "実行できることは必要条件の一つです。品質・速度・メモリ・保存再読込など、目的に応じた比較が別に必要です。"
+---
+## 変更する前に、境界を見る
+
+module名、入力と出力のshape、dtype、deviceを調べます。モデル全体を一度に書き換えるより、一つのLinearやMLPなどの境界を選ぶと比較しやすくなります。
+
+## Hookでshapeを観察する
+
+```python
+import torch
+from torch import nn
+
+layer = nn.Linear(3, 2)
+def observe(module, inputs, output):
+    print(inputs[0].shape, output.shape)
+
+handle = layer.register_forward_hook(observe)
+_ = layer(torch.ones(1, 3))
+handle.remove()
+```
+
+```text
+torch.Size([1, 3]) torch.Size([1, 2])
+```
+
+観察が終わったらhandleを外します。巨大な活性値をそのまま保存するとメモリを圧迫するため、shapeや小さな集計から始めます。
+
+## Freezeは学習対象を変える
+
+```python
+for parameter in layer.parameters():
+    parameter.requires_grad_(False)
+print(sum(p.numel() for p in layer.parameters() if p.requires_grad))
+```
+
+```text
+0
+```
+
+これは勾配計算対象を外す操作です。推論でその層の計算がなくなるわけではありません。optimizerへ渡したパラメータとの整合も確認します。
+
+## 小さな置換を試す
+
+同じ入力・出力shapeを持つ層を、別実装に置き換えるところから始めます。Residualへ戻るshapeが合っていても、数値のスケールや役割が違えば品質は変わります。Identityへの置換は、層を無効化するablationとして役立ちますが、改善を保証しません。
+
+## state_dictと構造
+
+state_dictは重みやbufferの対応を持ちますが、Pythonのモデル実装そのものではありません。構造を変えたら、読み込み側も対応する必要があります。missing/unexpected keysを無視して成功としないようにします。
+
+## 元へ戻れる単位で実験する
+
+元の重み・configを保持し、変更箇所・仮説・評価結果を記録します。モデル改造はコード変更だけでなく、前後の比較と復元を含む作業です。

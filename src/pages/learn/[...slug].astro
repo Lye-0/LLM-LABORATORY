@@ -1,0 +1,133 @@
+---
+import { withBase } from '../../lib/paths';
+import { getCollection, render } from 'astro:content';
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import { labs, sources, stages } from '../../data/catalog';
+export async function getStaticPaths() {
+  return (await getCollection('lessons')).map((lesson) => ({
+    params: { slug: lesson.id },
+    props: { lesson },
+  }));
+}
+const { lesson } = Astro.props;
+const { Content, headings } = await render(lesson);
+const all = (await getCollection('lessons')).sort((a, b) => a.data.order - b.data.order);
+const index = all.findIndex((l) => l.id === lesson.id);
+const previous = all[index - 1],
+  next = all[index + 1];
+const stage = stages.find((s) => s.id === lesson.data.stage);
+---
+
+<SiteLayout title={lesson.data.title} description={lesson.data.description}>
+  <nav class="breadcrumb" aria-label="パンくず">
+    <a href={withBase('/learn/')}>学習マップ</a>
+    <span>/</span>
+    <a href={withBase(`/learn/#${stage?.id}`)}>{stage?.title}</a>
+    <span>/</span>
+    <span>{lesson.data.title}</span>
+  </nav>
+  <div class="article-grid">
+    <article>
+      <header class="article-header">
+        <div class="eyebrow">{lesson.data.eyebrow}</div>
+        <h1>{lesson.data.title}</h1>
+        <p class="description">{lesson.data.description}</p>
+        <div class="meta">
+          <span class={`pill ${stage?.color}`}>{stage?.title}</span>
+          <span>{lesson.data.minutes} min read</span>
+          <span>Python / PyTorch</span>
+        </div>
+        {lesson.data.prerequisites.length > 0 && (
+          <div class="prerequisites">
+            <span>前提</span>
+            {lesson.data.prerequisites.map((id) => (
+              <a href={withBase(`/learn/${id}/`)}>
+                {all.find((l) => l.id === id)?.data.title ?? id}
+              </a>
+            ))}
+          </div>
+        )}
+      </header>
+      <div class="prose">
+        <Content />
+      </div>
+      <div class="article-extras">
+        {lesson.data.labs.length > 0 && (
+          <>
+            <div class="section-title">
+              <h2>動かして確かめる</h2>
+            </div>
+            <div class="related-labs">
+              {lesson.data.labs.map((id) => {
+                const lab = labs.find((l) => l.slug === id);
+                return (
+                  lab && (
+                    <a href={withBase(`/labs/${id}/`)}>
+                      <span>{lab.title}</span>
+                      <strong>{lab.ja}</strong>
+                    </a>
+                  )
+                );
+              })}
+            </div>
+          </>
+        )}
+        <section class="question-box">
+          <div class="eyebrow">CHECK YOUR UNDERSTANDING</div>
+          <h2>{lesson.data.question}</h2>
+          <details>
+            <summary>答えと理由を確認する</summary>
+            <p>{lesson.data.answer}</p>
+          </details>
+        </section>
+        <h2 style="font-size:16px;font-weight:500">公式資料で確かめる</h2>
+        <ul class="source-list">
+          {lesson.data.sources.map((id) => {
+            const source = sources[id as keyof typeof sources];
+            return (
+              source && (
+                <li>
+                  <a href={withBase(source.url)} target="_blank" rel="noreferrer">
+                    {source.title} ↗
+                  </a>
+                </li>
+              )
+            );
+          })}
+        </ul>
+        <p class="muted" style="font-size:11px">
+          APIや出力は対象の版・設定で変わります。コードの固定値と模式例は、実モデルの実測値とは区別してください。
+        </p>
+        <nav class="lesson-navigation" aria-label="前後の単元">
+          {previous ? (
+            <a href={withBase(`/learn/${previous.id}/`)}>
+              <small>前の単元</small>
+              <strong>{previous.data.title}</strong>
+            </a>
+          ) : (
+            <span />
+          )}
+          {next ? (
+            <a href={withBase(`/learn/${next.id}/`)}>
+              <small>次の単元</small>
+              <strong>{next.data.title}</strong>
+            </a>
+          ) : (
+            <a href={withBase('/projects/')}>
+              <small>理解を試す</small>
+              <strong>モデル改造の課題へ</strong>
+            </a>
+          )}
+        </nav>
+      </div>
+    </article>
+    <aside class="toc" data-pagefind-ignore>
+      <p>ON THIS PAGE</p>
+      {headings
+        .filter((h) => h.depth === 2)
+        .map((h) => (
+          <a href={withBase(`#${h.slug}`)}>{h.text}</a>
+        ))}
+    </aside>
+  </div>
+</SiteLayout>

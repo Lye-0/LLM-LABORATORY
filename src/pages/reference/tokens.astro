@@ -1,0 +1,37 @@
+---
+import { withBase } from '../../lib/paths';
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import ReferenceTable from '../../components/ReferenceTable';
+import tokens from '../../data/tokens.json';
+---
+
+<SiteLayout title="特殊・追加トークン">
+  <header class="page-header">
+    <div class="eyebrow">SPECIAL & ADDED TOKENS</div>
+    <h1>境界を表す、26のトークン。</h1>
+    <p>Qwen3-0.6Bの追加トークンを用途別に整理。表記を開くと、役割と認識フラグを確認できます。</p>
+    <div class="meta" style="margin-top:16px">
+      <span class="pill">Qwen3-0.6B</span>
+      <span class="mono">revision c1899de</span>
+      <a href={withBase('/learn/chat-template/')} class="text-link">
+        仕組みを読む
+      </a>
+    </div>
+  </header>
+  <ReferenceTable kind="tokens" client:load />
+  <noscript>
+    <ul>
+      {tokens.map((t) => (
+        <li>
+          <code>{t.text}</code> · {t.id} · special={String(t.special)} — {t.description}
+        </li>
+      ))}
+    </ul>
+  </noscript>
+  <div class="notice warning">
+    用途が特別でも、special=Falseの場合があります。VisionやToolの表記があるだけで、モデルが画像を処理したりツールを実行したりできるとは判断しません。
+  </div>
+  <a href={withBase('/labs/vocabulary/')} class="text-link">
+    基本語彙も含めて探索する
+  </a>
+</SiteLayout>

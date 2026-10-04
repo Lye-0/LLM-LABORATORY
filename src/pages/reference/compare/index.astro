@@ -1,0 +1,21 @@
+---
+import { withBase } from '../../../lib/paths';
+import SiteLayout from '../../../layouts/SiteLayout.astro';
+import { comparisons } from '../../../data/glossary';
+---
+
+<SiteLayout title="似た機能の違い">
+  <header class="page-header">
+    <div class="eyebrow">SIDE BY SIDE</div>
+    <h1>似ているものを、並べて読む。</h1>
+    <p>入力・返り値・状態変化の違いから、使うものを選びます。</p>
+  </header>
+  <div class="info-grid">
+    {comparisons.map((c) => (
+      <a class="info-card" href={withBase(`/reference/compare/${c.slug}/`)}>
+        <h2>{c.title}</h2>
+        <p>{c.rule}</p>
+      </a>
+    ))}
+  </div>
+</SiteLayout>

@@ -1,0 +1,62 @@
+---
+title: "Samplingと生成設定"
+description: "同じlogitsでも、候補の絞り方と選び方で結果が変わる。"
+stage: "generation"
+order: 18
+minutes: 9
+eyebrow: "CHOOSING THE NEXT TOKEN"
+prerequisites: ["logits"]
+labs: ["sampling"]
+sources: ["generation"]
+tags: ["temperature","top-k","top-p","greedy","seed"]
+question: "temperature=0をそのままlogitsの割り算へ渡せますか？"
+answer: "0で割れません。greedyは最大値を取る別の操作として扱います。APIによっては温度0を特別扱いしますが、仕様の確認が必要です。"
+---
+## 最大値を選ぶか、分布から引くか
+
+greedyは最大logitの候補を選びます。Samplingは確率分布から乱数で候補を選びます。確率が低い候補も、残っていれば選ばれる可能性があります。
+
+## Temperature
+
+logitsを正のtemperatureで割ってからsoftmaxへ渡します。1より小さいと分布が鋭く、1より大きいと平らになります。知識を増やす設定ではなく、候補の確率分布の変更です。
+
+```python
+import torch
+logits = torch.tensor([2., 1., 0.])
+print(torch.softmax(logits / 0.5, dim=-1))
+print(torch.softmax(logits / 2.0, dim=-1))
+```
+
+```text
+tensor([0.8668, 0.1173, 0.0159])
+tensor([0.5065, 0.3072, 0.1863])
+```
+
+## Top-kとTop-p
+
+| 設定 | 候補の残し方 |
+|---|---|
+| top-k | 上位k個だけを残す |
+| top-p | 確率の高い順に累積し、指定の質量へ達するまで残す |
+| greedy | 最大スコアを一つ選ぶ |
+
+候補を除いた後は確率を再正規化します。複数のフィルターを組み合わせる場合、適用順序も結果へ影響するので、実装の条件を確認します。
+
+## 再現性を観察する
+
+```python
+generator = torch.Generator().manual_seed(42)
+probabilities = torch.tensor([0.7, 0.2, 0.1])
+chosen = torch.multinomial(probabilities, 1, generator=generator)
+print(chosen.shape)
+```
+
+```text
+torch.Size([1])
+```
+
+同じ環境・同じgenerator状態なら再現できます。同じgeneratorを続けて使うと内部状態は進みます。異なるライブラリやGPUで同じseedなら完全一致するとは限りません。
+
+## いつ止めるか
+
+EOSや停止条件に達するか、max_new_tokensなどの上限で停止します。decodeで特殊トークンを非表示にする設定と、生成を停止する設定は別です。Thinkingを含む生成では、その部分も新規トークン数に含まれます。

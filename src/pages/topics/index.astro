@@ -1,0 +1,21 @@
+---
+import { withBase } from '../../lib/paths';
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import { topics } from '../../data/topics';
+---
+
+<SiteLayout title="周辺技術">
+  <header class="page-header">
+    <div class="eyebrow">THE ECOSYSTEM</div>
+    <h1>モデルのまわりも、見渡す。</h1>
+    <p>実行基盤、データ、保存、検索、性能測定。中心の仕組みと、それを支える技術をつなぎます。</p>
+  </header>
+  <div class="info-grid">
+    {topics.map((t) => (
+      <a class="info-card" href={withBase(`/topics/${t.slug}/`)}>
+        <h2>{t.title}</h2>
+        <p>{t.summary}</p>
+      </a>
+    ))}
+  </div>
+</SiteLayout>

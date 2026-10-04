@@ -1,0 +1,56 @@
+---
+title: "自己回帰生成とKV Cache"
+description: "続きを一つずつ作る計算で、何を保存して再利用するのか。"
+stage: "generation"
+order: 19
+minutes: 8
+eyebrow: "PREFILL & DECODE"
+prerequisites: ["sampling","attention"]
+labs: ["generation"]
+sources: ["generation","qwen"]
+tags: ["KV Cache","prefill","decode","自己回帰"]
+question: "KV Cacheがあれば、新しいトークンのAttention計算はすべて不要ですか？"
+answer: "不要にはなりません。過去のK/Vは再利用できますが、新しいQueryと過去のKeyのスコアなどは計算します。"
+---
+## 出力を、次の入力へ追加する
+
+自己回帰生成は、既存の列から次の1トークンを選び、そのトークンを末尾へ追加します。新しい列を文脈として、さらに次を予測します。
+
+```text
+入力:     [a, b, c]
+1回目:    [a, b, c, d]
+2回目:    [a, b, c, d, e]
+```
+
+## Prefill
+
+最初の入力列をまとめて処理する段階です。各層で入力の各位置のK/Vを作り、後で使える形で保持します。最初のトークンが返るまでの時間（TTFT）には、この処理と読み込み・待ち時間などが関係します。
+
+## Decode
+
+新しく追加した位置を処理する段階です。過去の位置のK/Vは保存したものを使えます。新しい位置のQ/K/Vを作り、新しいQが過去も含むK/Vを参照します。位置情報やmaskの整合も必要です。
+
+## 基本の使い方
+
+```python
+with torch.inference_mode():
+    result = model.generate(
+        **inputs,
+        max_new_tokens=32,
+        use_cache=True,
+        do_sample=False,
+    )
+print(result.shape[1] - inputs["input_ids"].shape[1])
+```
+
+表示は新しく生成した個数です。32以下になり、EOSで早く終わることもあります。低レベルにcacheを渡すAPIは版ごとに異なるため、まずgenerateで有無の差を観察します。
+
+## 保存する代わりにメモリを使う
+
+K/Vは層数、KV head数、head_dim、batch、系列長に応じて大きくなります。GQAではKV head数がQより少ない設計により、保存量も変わります。
+
+単純な非圧縮cacheの要素数の目安は`2 × layers × B × T × KV_heads × head_dim`です。2はKとVの分です。実装の確保単位や管理情報はこの式だけでは分かりません。
+
+## 何を比較するか
+
+cache有無の速度だけでなく、同じ入力・生成長・dtypeの条件をそろえ、peak memoryも記録します。高速化とメモリの交換関係を見る実験になります。

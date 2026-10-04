@@ -1,0 +1,24 @@
+---
+import { withBase } from '../../../lib/paths';
+import SiteLayout from '../../../layouts/SiteLayout.astro';
+import { glossary } from '../../../data/glossary';
+---
+
+<SiteLayout title="用語集">
+  <header class="page-header">
+    <div class="eyebrow">GLOSSARY</div>
+    <h1>言葉の輪郭を、はっきりと。</h1>
+    <p>短い定義から、具体例と詳しい教材へ。</p>
+  </header>
+  <div class="lesson-list">
+    {glossary.map((g, i) => (
+      <a class="lesson-item" href={withBase(`/reference/glossary/${g.slug}/`)}>
+        <span class="mono">{String(i + 1).padStart(2, '0')}</span>
+        <div>
+          <h3>{g.title}</h3>
+          <p>{g.definition}</p>
+        </div>
+      </a>
+    ))}
+  </div>
+</SiteLayout>

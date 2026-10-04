@@ -1,0 +1,83 @@
+---
+import { withBase } from '../../../lib/paths';
+import SiteLayout from '../../../layouts/SiteLayout.astro';
+import { apiEntries } from '../../../data/api';
+import { getApiClass, apiLibraries } from '../../../data/api-groups';
+import { sources } from '../../../data/catalog';
+import { Code } from 'astro:components';
+export function getStaticPaths() {
+  return apiEntries.map((entry) => ({ params: { slug: entry.slug }, props: { entry } }));
+}
+const { entry } = Astro.props;
+const apiClass = getApiClass(entry.owner)!;
+const library = apiLibraries.find((l) => l.slug === apiClass.library)!;
+const source = sources[entry.source as keyof typeof sources];
+const preparation =
+  entry.owner === 'Tokenizer' || entry.owner === 'AutoTokenizer'
+    ? 'Tokenizerの教材で、固定revisionのtokenizerを準備してから実行します。'
+    : entry.owner === 'PreTrainedModel' || entry.owner === 'GenerationMixin'
+      ? 'モデルの読み込み教材でmodel・tokenizer・inputsを準備してから実行します。'
+      : 'import torch と from torch import nn を実行してから使います。';
+---
+
+<SiteLayout title={entry.name}>
+  <nav class="breadcrumb">
+    <a href={withBase('/reference/')}>リファレンス</a>
+    <span>/</span>
+    <a href={withBase('/reference/api/')}>API</a>
+    <span>/</span>
+    <a href={withBase(`/reference/libraries/${library.slug}/`)}>{library.title}</a>
+    <span>/</span>
+    <a href={withBase(`/reference/classes/${apiClass.slug}/`)}>{apiClass.title}</a>
+  </nav>
+  <div class="article-grid">
+    <article>
+      <header class="article-header">
+        <div class="eyebrow">
+          {entry.owner} / {entry.kind}
+        </div>
+        <h1 style="font-family:var(--mono);font-size:clamp(20px,2.3vw,32px);overflow-wrap:anywhere">
+          {entry.name}
+        </h1>
+        <p class="description">{entry.summary}</p>
+        <div class="meta">
+          <span class="pill">{entry.category}</span>
+          <a href={withBase(`/learn/${entry.lesson}/`)} class="text-link">
+            対応する教材を読む
+          </a>
+        </div>
+      </header>
+      <div class="prose">
+        <h2>呼び出し・参照の形</h2>
+        <Code code={entry.signature} lang="python" />
+        <h2>返るもの</h2>
+        <p>{entry.returns}</p>
+        <div class="notice warning">{entry.caveat}</div>
+        <h2>小さな例で確かめる</h2>
+        <p style="font-size:13px;color:var(--muted)">{preparation}</p>
+        <Code code={entry.code} lang="python" />
+        <p class="code-caption">対応する結果・出力例（既定設定やモデル条件に依存するものは注記）</p>
+        <pre><code>{entry.output}</code></pre>
+        <h2>同じ目的のAPI</h2>
+        <ul>
+          {apiEntries
+            .filter(
+              (e) =>
+                e.owner === entry.owner && e.category === entry.category && e.slug !== entry.slug,
+            )
+            .slice(0, 5)
+            .map((e) => (
+              <li>
+                <a href={withBase(`/reference/api/${e.slug}/`)}>{e.name}</a> — {e.summary}
+              </li>
+            ))}
+        </ul>
+      </div>
+      <div class="article-extras">
+        <a href={withBase(source.url)} target="_blank" rel="noreferrer" class="text-link">
+          {source.title}で仕様を確認 ↗
+        </a>
+      </div>
+    </article>
+  </div>
+</SiteLayout>

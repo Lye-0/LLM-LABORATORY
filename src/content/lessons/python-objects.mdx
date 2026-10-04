@@ -1,0 +1,71 @@
+---
+title: "Pythonでオブジェクトを読む"
+description: "変数・クラス・返り値を分けると、ライブラリのコードが読める。"
+stage: "orientation"
+order: 2
+minutes: 7
+eyebrow: "PYTHON FOUNDATIONS"
+sources: ["python","module"]
+tags: ["変数","クラス","インスタンス","self"]
+question: "embeddingがvariableと表示されることと、Embeddingのインスタンスであることは矛盾しますか？"
+answer: "矛盾しません。embeddingは変数名で、その参照先がEmbeddingクラスのインスタンスです。"
+---
+## 名前と実物を分ける
+
+```python
+class Counter:
+    def __init__(self, value):
+        self.value = value
+
+    def increment(self):
+        self.value += 1
+        return self.value
+
+counter = Counter(2)
+print(type(counter))
+print(counter.increment())
+print(counter.value)
+```
+
+```text
+<class '__main__.Counter'>
+3
+3
+```
+
+この出力は上のコードを通常のスクリプトとして実行する例です。Counterはクラス、counterは実物を参照する変数です。selfは呼び出された実物を受け取る引数の慣例名です。
+
+## 関数の返り値を変数へ受け取る
+
+```python
+def make_counter():
+    return Counter(10)
+
+other = make_counter()
+print(other.value)
+```
+
+```text
+10
+```
+
+返り値には整数だけでなく、インスタンスも使えます。「返り値を代入する」と「変数がインスタンスを参照する」は同時に成立します。代入自体はprintではないので、作った値を表示したいときは確認式が必要です。
+
+## ライブラリの名前を読む
+
+| 書き方 | 種類 | 読み方 |
+|---|---|---|
+| torch | モジュール | 機能をまとめた名前空間 |
+| torch.tensor(...) | 関数 | データからTensorを作る |
+| torch.Tensor | クラス | Tensorという実物の型 |
+| tensor | 変数 | 自分で付けた参照名 |
+| tensor.shape | 属性 | 実物の形状を調べる |
+| tensor.numel() | メソッド | 実物の要素数を求める |
+
+## 呼べるインスタンス
+
+PyTorchのModuleは呼び出し可能です。`layer(x)` は変数名layerが関数という意味ではなく、参照しているModuleが呼び出しに対応しているという意味です。通常は`layer.forward(x)`を直接呼ばず、`layer(x)`を使い、hooksなどのModule側の処理も通します。
+
+## 同じ実物か、別の実物か
+
+別の変数へ代入してもコピーとは限りません。Tensorのviewは数値データを共有することがあります。「変数名が違う」「shapeが違う」「データの保存先が違う」は、それぞれ別の観点です。

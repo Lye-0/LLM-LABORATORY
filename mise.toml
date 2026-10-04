@@ -1,0 +1,18 @@
+[tools]
+node = "24.19.0"
+pnpm = "11.19.0"
+
+[env]
+ASTRO_TELEMETRY_DISABLED = "1"
+
+[tasks.dev]
+description = "学習サイトの開発サーバー"
+run = "pnpm dev"
+
+[tasks.build]
+description = "静的サイトと検索索引を生成"
+run = "pnpm build"
+
+[tasks.check]
+description = "型・教材・数値の検証"
+run = "pnpm validate"

@@ -1,0 +1,41 @@
+---
+import { withBase } from '../../../lib/paths';
+import SiteLayout from '../../../layouts/SiteLayout.astro';
+import { apiLibraries, apiClasses, getClassEntries } from '../../../data/api-groups';
+---
+
+<SiteLayout title="クラス・API辞書">
+  <header class="page-header">
+    <div class="eyebrow">API REFERENCE</div>
+    <h1>ライブラリから、機能へ。</h1>
+    <p>使うライブラリと対象を選び、メソッド・属性・関数を用途別に調べます。</p>
+  </header>
+  {apiLibraries.map((library) => (
+    <section class="api-library-section">
+      <div class="section-title">
+        <div>
+          <span class="eyebrow">{library.namespace}</span>
+          <h2>{library.title}</h2>
+          <p>{library.description}</p>
+        </div>
+        <a href={withBase(`/reference/libraries/${library.slug}/`)} class="text-link">
+          ライブラリを開く
+        </a>
+      </div>
+      <div class="api-class-grid">
+        {apiClasses
+          .filter((c) => c.library === library.slug)
+          .map((c) => (
+            <a class="api-class-card" href={withBase(`/reference/classes/${c.slug}/`)}>
+              <div class="meta">
+                <span class="pill">{c.kind}</span>
+                <span class="count">{getClassEntries(c.owner).length} 件</span>
+              </div>
+              <h3>{c.title}</h3>
+              <p>{c.description}</p>
+            </a>
+          ))}
+      </div>
+    </section>
+  ))}
+</SiteLayout>

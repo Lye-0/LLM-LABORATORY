@@ -1,0 +1,41 @@
+---
+import { withBase } from '../../../lib/paths';
+import SiteLayout from '../../../layouts/SiteLayout.astro';
+import { glossary } from '../../../data/glossary';
+export function getStaticPaths() {
+  return glossary.map((item) => ({ params: { slug: item.slug }, props: { item } }));
+}
+const { item } = Astro.props;
+---
+
+<SiteLayout title={item.title}>
+  <nav class="breadcrumb">
+    <a href={withBase('/reference/glossary/')}>用語集</a>
+    <span>/</span>
+    <span>{item.title}</span>
+  </nav>
+  <header class="page-header">
+    <div class="eyebrow">GLOSSARY / {item.slug}</div>
+    <h1>{item.title}</h1>
+    <p>{item.definition}</p>
+  </header>
+  <div class="prose" style="max-width:740px">
+    <h2>具体的には</h2>
+    <p>{item.example}</p>
+    <h2>仕組みまで理解する</h2>
+    <p>対応する教材で、準備・コード・出力を一緒に確認できます。</p>
+    <a class="button primary" href={withBase(`/learn/${item.lesson}/`)}>
+      対応する教材を読む
+    </a>
+    <h2>関連する言葉</h2>
+    <ul>
+      {glossary
+        .filter((g) => g.lesson === item.lesson && g.slug !== item.slug)
+        .map((g) => (
+          <li>
+            <a href={withBase(`/reference/glossary/${g.slug}/`)}>{g.title}</a> — {g.definition}
+          </li>
+        ))}
+    </ul>
+  </div>
+</SiteLayout>

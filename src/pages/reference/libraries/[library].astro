@@ -1,0 +1,38 @@
+---
+import { withBase } from '../../../lib/paths';
+import SiteLayout from '../../../layouts/SiteLayout.astro';
+import { apiLibraries, apiClasses, getClassEntries } from '../../../data/api-groups';
+export function getStaticPaths() {
+  return apiLibraries.map((library) => ({ params: { library: library.slug }, props: { library } }));
+}
+const { library } = Astro.props;
+---
+
+<SiteLayout title={`${library.title} API`}>
+  <nav class="breadcrumb">
+    <a href={withBase('/reference/')}>調べる</a>
+    <span>/</span>
+    <a href={withBase('/reference/api/')}>API辞書</a>
+    <span>/</span>
+    <span>{library.title}</span>
+  </nav>
+  <header class="page-header">
+    <div class="eyebrow">LIBRARY / {library.namespace}</div>
+    <h1>{library.title}</h1>
+    <p>{library.description}</p>
+  </header>
+  <div class="api-class-grid">
+    {apiClasses
+      .filter((c) => c.library === library.slug)
+      .map((c) => (
+        <a class="api-class-card" href={withBase(`/reference/classes/${c.slug}/`)}>
+          <div class="meta">
+            <span class="pill">{c.kind}</span>
+            <span class="count">{getClassEntries(c.owner).length} 件</span>
+          </div>
+          <h2>{c.title}</h2>
+          <p>{c.description}</p>
+        </a>
+      ))}
+  </div>
+</SiteLayout>

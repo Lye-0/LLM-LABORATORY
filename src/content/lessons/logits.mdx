@@ -1,0 +1,63 @@
+---
+title: "Logitsと確率"
+description: "モデルの生のスコアを、比較できる確率へ変える。"
+stage: "generation"
+order: 17
+minutes: 8
+eyebrow: "SCORES → PROBABILITIES"
+prerequisites: ["linear","transformer-block"]
+labs: ["sampling"]
+sources: ["generation","tensor"]
+tags: ["logits","softmax","確率","lm_head"]
+question: "logitsの合計は1になりますか？"
+answer: "なりません。logitsは正規化されていないスコアです。softmaxを適用した確率の合計が1になります。"
+---
+## 最後の層から語彙方向へ
+
+Transformerを通った表現をlm_headへ渡すと、各位置について出力候補のスコアが得られます。これをlogitsと呼びます。正にも負にもなり、確率ではありません。
+
+## 小さなスコアを確率にする
+
+```python
+import torch
+logits = torch.tensor([2., 1., 0.])
+probabilities = torch.softmax(logits, dim=-1)
+print(probabilities)
+print(probabilities.sum())
+```
+
+```text
+tensor([0.6652, 0.2447, 0.0900])
+tensor(1.)
+```
+
+最も大きいlogitの候補は最も高い確率になります。ただし、それが常に選ばれるかはSamplingの規則によります。
+
+## 次を作るのは最後の位置
+
+```python
+with torch.inference_mode():
+    outputs = model(**inputs)
+next_logits = outputs.logits[:, -1, :]
+print(next_logits.shape)
+```
+
+通常の全位置を返すforwardの例です。入力が`[B,T]`なら、logitsは`[B,T,V]`、最後の位置を取ると`[B,V]`です。実装の最適化により返される位置を制限する場合は、その条件を確認します。
+
+## 一定の値を足しても確率は同じ
+
+```python
+a = torch.softmax(torch.tensor([2., 1., 0.]), dim=-1)
+b = torch.softmax(torch.tensor([102., 101., 100.]), dim=-1)
+print(torch.allclose(a, b))
+```
+
+```text
+True
+```
+
+softmaxはスコアの絶対値ではなく差に依存します。この性質を使い、最大値を引いてから指数を計算すると数値が安定します。
+
+## 確率と正しさは別
+
+高い確率は「このモデルと文脈で選ばれやすい」ことを表します。内容の事実性や正確さの保証ではありません。モデル改造の評価でも、確率・損失・実際のタスク成績を分けて確認します。
