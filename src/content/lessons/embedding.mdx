@@ -3,11 +3,11 @@ title: "Embedding"
 description: "IDを行番号にして、学習可能な表からベクトルを取り出す。"
 stage: "representation"
 order: 11
-minutes: 12
+minutes: 18
 eyebrow: "IDENTIFIERS → VECTORS"
 prerequisites: ["vocabulary","tensor","batch"]
 labs: ["embedding"]
-sources: ["embedding","module","qwen"]
+sources: ["embedding","module","tensor","autograd","qwen"]
 tags: ["埋め込み","nn.Embedding","Parameter","embedding_dim"]
 question: "ID2をfloat32へ変えることは、Embeddingと同じですか？"
 answer: "異なります。dtype変換は数値2の表現形式を変えるだけです。EmbeddingはID2を索引として、重みの行から複数の数値を取り出します。"
@@ -15,6 +15,13 @@ answer: "異なります。dtype変換は数値2の表現形式を変えるだ�
 ## 整数をベクトルにするとは
 
 Embeddingは、IDを行番号として使い、対応するベクトルを取り出す処理です。数字2を計算して意味へ変換するのではなく、学習可能な表の添字2の行を参照します。
+
+| 対象 | 対応させるもの |
+|---|---|
+| Vocabulary | トークン ↔ ID |
+| Embeddingの重み表 | ID → ベクトル |
+
+IDの大小や差は、言葉の意味の近さを表していません。Tokenizerが文章をID列にし、そのID列をTensorに入れてEmbeddingへ渡すと、後続のTransformerで使うベクトルが得られます。
 
 ## embedding — 小さな表を作る
 
@@ -25,18 +32,33 @@ from torch import nn
 embedding = nn.Embedding(num_embeddings=5, embedding_dim=3)
 print(type(embedding))
 print(embedding)
+print(type(embedding.weight))
 print(embedding.weight.shape)
 print(embedding.weight.dtype)
+print(embedding.weight.requires_grad)
 ```
 
 ```text
 <class 'torch.nn.modules.sparse.Embedding'>
 Embedding(5, 3)
+<class 'torch.nn.parameter.Parameter'>
 torch.Size([5, 3])
 torch.float32
+True
 ```
 
-通常の既定dtypeでの例です。5種類のID（0〜4）に、3成分のベクトルを対応させます。重みの要素数は5×3=15です。weightは学習可能なParameterであり、作ったばかりの数値はランダム初期値です。
+`nn` は `torch.nn` を参照する名前です。`nn.Embedding(...)` で層のインスタンスを作り、変数 `embedding` がそれを参照します。
+
+| 引数 | 今回の値 | 用意するもの |
+|---|---|---|
+| `num_embeddings` | `5` | ID 0〜4に対応する5行 |
+| `embedding_dim` | `3` | 各行に入る3成分のベクトル |
+
+通常の既定dtypeでの例です。`embedding` 自体は `nn.Module` の一種であり、内部の `embedding.weight` が5行・3列の表です。重みの要素数は5×3=15です。
+
+`Parameter` は、層のパラメータとして登録・管理するためのTensorの派生型です。`Parameter` という型と、勾配計算の対象にする `requires_grad=True` は別の性質です。通常のTensorも勾配計算の対象にでき、Parameterの勾配計算を無効にすることもできます。[PyTorchのParameter仕様](https://docs.pytorch.org/docs/2.14/generated/torch.nn.parameter.Parameter.html)
+
+作ったばかりの重みはランダムな初期値で、まだ文章を学習した値ではありません。
 
 ## 固定した値でlookupを確かめる
 
@@ -52,18 +74,98 @@ with torch.no_grad():
         [-1.8,  0.1,  0.7],
     ]))
 
+print(embedding.weight.detach())
+```
+
+```text
+tensor([[ 0.6000, -0.7000,  0.1000],
+        [ 0.0000,  0.3000, -0.2000],
+        [-0.1000, -0.5000,  1.4000],
+        [-1.7000, -1.6000, -1.0000],
+        [-1.8000,  0.1000,  0.7000]])
+```
+
+`copy_` は既存の表へ値をコピーします。ここでは `torch.no_grad()` の範囲でコピー操作の勾配記録を止めています。層そのものを凍結する操作ではありません。
+
+表の行番号がIDに対応します。IDの整数が先頭列に保存されているわけではありません。各列はベクトルの成分で、人間が「動物らしさ」などの意味をあらかじめ割り当てたものでもありません。
+
+以降もこの同じ表を使います。`detach()` は、表示時に勾配の記録情報を付けず数値を見るために使っています。
+
+## idsとoutput — 指定したIDのベクトルを取り出す
+
+### IDを1個指定する
+
+```python
 ids = torch.tensor([2])
+print(ids)
+print(ids.shape)
+print(ids.dtype)
+```
+
+```text
+tensor([2])
+torch.Size([1])
+torch.int64
+```
+
+`ids` は「どの行を取り出すか」を伝える整数Tensorです。`[2]` はID 2を1個含む並びなので、shapeは `[1]` です。PyTorchのEmbedding層は、`int32` または `int64` のTensorを入力として受け取ります。
+
+### 対応するベクトルを取得する
+
+```python
+output = embedding(ids)
+print(output.detach())
+print(output.shape)
+print(output.dtype)
+```
+
+```text
+tensor([[-0.1000, -0.5000,  1.4000]])
+torch.Size([1, 3])
+torch.float32
+```
+
+ID 2は添字2、上から3行目です。入力は1個のIDを持つ並びなので、出力も1個のベクトルを持つ並びになります。`ids` 自体は整数IDを保持したままで、取り出したベクトルが別のTensorとして返ります。
+
+### IDを2個指定する
+
+ここでは `ids` と `output` を更新します。重み表は同じです。
+
+```python
+ids = torch.tensor([2, 3])
 output = embedding(ids)
 print(output.detach())
 print(output.shape)
 ```
 
 ```text
-tensor([[-0.1000, -0.5000,  1.4000]])
-torch.Size([1, 3])
+tensor([[-0.1000, -0.5000,  1.4000],
+        [-1.7000, -1.6000, -1.0000]])
+torch.Size([2, 3])
 ```
 
-ID2は添字2、上から3行目です。入力は1個のIDを持つ並びなので、出力も1個のベクトルを持つ並びになります。
+出力の先頭はID 2のベクトル、次がID 3のベクトルです。入力した順番に並びます。
+
+| 対象 | 保持するもの | shape | dtype |
+|---|---|---|---|
+| `ids` | 今回指定するID 2・3 | `[2]` | `int64` |
+| `embedding.weight` | 全5種類のIDのベクトル | `[5, 3]` | `float32` |
+| `output` | 今回取得した2本のベクトル | `[2, 3]` | `float32` |
+
+**`ids` は指定、`weight` は表全体、`output` は取り出した結果です。** これらを扱う層が `embedding` です。
+
+## IDの値・shape・次元を読み分ける
+
+入力のID列 `[2, 3]` と出力shape `[2, 3]` は、数字が同じでも意味が違います。
+
+| 表記 | `2` の意味 | `3` の意味 |
+|---|---|---|
+| ID列 `[2, 3]` | ID 2 | ID 3 |
+| 出力shape `[2, 3]` | IDが2個 | 各ベクトルが3成分 |
+
+入力を `[0, 4]` に変えても、IDが2個なので出力shapeは `[2, 3]` です。また、この出力は「3次元ベクトルを2本並べた、2次元Tensor」です。**ベクトルの次元は成分の数、Tensorの次元は軸の本数**を指します。
+
+一般には、入力shapeの末尾に `embedding_dim` が加わります。LLMでよく使う入力 `[batch_size, sequence_length]` なら、出力は `[batch_size, sequence_length, embedding_dim]` です。同じ表の状態で同じIDを指定すれば、同じ行が取り出されます。
 
 ## 値は同じでもshapeが違う
 
@@ -78,18 +180,105 @@ tensor([-0.1000, -0.5000,  1.4000])
 torch.Size([3])
 ```
 
-| 操作 | 入力の形 | 出力の形 |
-|---|---|---|
-| weight[2] | 行を直接指定 | [3] |
-| embedding(tensor([2])) | [1] | [1,3] |
-| embedding(tensor([2,0,2])) | [3] | [3,3] |
-| embedding(tensor([[2,0,2]])) | [1,3] | [1,3,3] |
+`weight[2]` は1本のベクトル、先ほどの `embedding(torch.tensor([2]))` は1本のベクトルを含む並びです。この違いは、直接アクセスか層の呼び出しかだけで決まるものではありません。
 
-原則は「入力shapeの末尾にembedding_dimを追加」です。同じIDが複数あれば、同じ表の状態では同じ行を取り出します。
+| 重み表への直接アクセス | Embedding層の呼び出し | 両者の出力shape |
+|---|---|---|
+| `embedding.weight[2]` | `embedding(torch.tensor(2))` | `[3]` |
+| `embedding.weight[[2]]` | `embedding(torch.tensor([2]))` | `[1, 3]` |
+| `embedding.weight[[2, 3]]` | `embedding(torch.tensor([2, 3]))` | `[2, 3]` |
+| `embedding.weight[torch.tensor([[2, 3]])]` | `embedding(torch.tensor([[2, 3]]))` | `[1, 2, 3]` |
+
+単独のIDなら1本のベクトル、IDを含む並びならベクトルを含む並びになります。
+
+## weight[2, 3]とweight[[2, 3]]の違い
+
+### カンマで行と列を指定する
+
+`embedding.weight[2, 3]` は「行番号2・列番号3の要素」を取る指定です。今回の表は5行・3列なので、行番号は0〜4、列番号は0〜2です。列番号3は4番目の列に当たり、範囲外です。
+
+次の例では、エラーの種類を表示して処理を続けます。
+
+```python
+try:
+    print(embedding.weight[2, 3])
+except IndexError as error:
+    print(type(error).__name__)
+```
+
+```text
+IndexError
+```
+
+有効な列番号2を指定すれば、1個の成分を取り出せます。
+
+```python
+element = embedding.weight[2, 2]
+print(element.detach())
+print(element.shape)
+```
+
+```text
+tensor(1.4000)
+torch.Size([])
+```
+
+shape `[]` は1個の値を持つスカラーTensorです。
+
+### 行番号のリストで2行を指定する
+
+```python
+rows = embedding.weight[[2, 3]]
+print(rows.detach())
+print(rows.shape)
+print(torch.equal(rows, output))
+```
+
+```text
+tensor([[-0.1000, -0.5000,  1.4000],
+        [-1.7000, -1.6000, -1.0000]])
+torch.Size([2, 3])
+True
+```
+
+外側の `weight[...]` はTensorへのインデックス指定、内側の `[2, 3]` は行番号のリストです。行番号2と3を丸ごと取り出すため、現在の `output` と同じ形・値になります。
+
+| 同じ2行を取る式 | 指定の読み方 |
+|---|---|
+| `embedding.weight[ids]` | 現在の整数Tensor `ids = [2, 3]` で行を指定 |
+| `embedding.weight[[2, 3], :]` | 行番号2・3と、すべての列を指定 |
+| `embedding.weight[2:4]` | 行番号2から4の直前までを指定 |
+
+スライスの終点4は含みません。離れた行や順番の入れ替えには、`weight[[3, 2]]` のようなリストでの指定が使えます。
+
+### 層の呼び出しと直接アクセスの使い分け
+
+`embedding(ids)` はEmbedding層を呼び出し、`embedding.weight[...]` は重みTensorへ直接アクセスします。モデルの処理には通常、層の呼び出しを使います。
+
+今回の既定設定では取得する値が一致しますが、直接アクセスはEmbedding固有の設定を実行しません。例えば `max_norm` を指定した層は、呼び出し時に参照するベクトルの長さを制限し、重みを変更する場合があります。`padding_idx` は指定行への勾配の扱いに影響します。[PyTorchのEmbedding仕様](https://docs.pytorch.org/docs/2.14/generated/torch.nn.Embedding.html)
 
 ## Parameterと勾配
 
-requires_grad=Trueは、重みに対する勾配を計算できる状態です。それだけで毎回重みが更新されるわけではありません。計算グラフ、損失、backward、optimizerによる更新が別に必要です。grad_fnは出力を作った演算の記録で、数値ベクトルの意味を表示するものではありません。
+`output` を `detach()` せず表示すると、通常は数値とともに `grad_fn=<EmbeddingBackward0>` が表示されます。これは元の重みへ勾配を伝えるための演算の記録です。表示された時点で、勾配計算や学習が完了したわけではありません。
+
+**重み表への直接アクセスも、勾配を伝えられます。** `embedding.weight[2]` にも通常は `grad_fn` があり、「直接アクセスは観察専用で学習に使えない」という区別ではありません。
+
+| 段階 | 処理 | 起こること |
+|---|---|---|
+| ベクトルを取得 | `embedding(ids)` | 指定された行のベクトルを返す |
+| 誤差を求める | 別途、予測と正解から `loss` を作る | モデルの予測を評価する |
+| 勾配を計算 | `loss.backward()` | 損失が重みにどう依存するか計算する |
+| 重みを更新 | 別途用意した `optimizer.step()` | 勾配などを使って対象の重みを調整する |
+
+`requires_grad=True` は勾配計算の対象にできる設定です。今回のコードは取得と観察までで、学習処理は含みません。学習ではIDの番号を変えるのではなく、対応するベクトルの数値を調整します。唯一の正解ベクトルが先にあるのではなく、モデル全体の予測が改善するように調整します。
+
+## 初期値とseed
+
+ランダムな初期値を再現したい場合は、層を作る直前に `torch.manual_seed(123)` のようにseedを設定します。seedは乱数生成器の状態を決める値で、初期重みそのものではありません。
+
+同じ環境・条件で同じ初期値を比較するには、それぞれの層を作る直前に同じseedへ設定し直します。一度だけ設定して層を続けて作ると、その間に乱数生成器の状態が進みます。版やCPU・GPUが異なる条件まで、同じseedだけで完全な再現が保証されるわけではありません。[PyTorchの再現性について](https://docs.pytorch.org/docs/2.14/notes/randomness.html)
+
+このページでは、初期乱数の違いによらず照合できるように、説明用の表を明示的にコピーしました。
 
 ## 実モデルへつなぐ
 
