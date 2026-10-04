@@ -1,16 +1,18 @@
 ---
 title: "Pythonでオブジェクトを読む"
-description: "変数・クラス・返り値を分けると、ライブラリのコードが読める。"
+description: "変数・クラス・属性・呼び出しを分けて、ライブラリのコードへつなぐ。"
 stage: "orientation"
 order: 2
-minutes: 7
+minutes: 15
 eyebrow: "PYTHON FOUNDATIONS"
 sources: ["python","module"]
-tags: ["変数","クラス","インスタンス","self"]
+tags: ["変数","クラス","インスタンス","self","import","inspect","callable"]
 question: "embeddingがvariableと表示されることと、Embeddingのインスタンスであることは矛盾しますか？"
 answer: "矛盾しません。embeddingは変数名で、その参照先がEmbeddingクラスのインスタンスです。"
 ---
 ## 名前と実物を分ける
+
+`tokenizer.tokenize(text)`や`tensor.to("cuda")`を読むには、「名前が何を参照しているか」と「何を呼び出しているか」を分けると見通しがよくなります。まず、数を一つ覚えて増やせる小さなクラスで確かめます。
 
 ```python
 class Counter:
@@ -22,49 +24,210 @@ class Counter:
         return self.value
 
 counter = Counter(2)
-print(type(counter))
-print(counter.increment())
-print(counter.value)
+print("type(counter):", type(counter))
+print("counter.value:", counter.value)
 ```
 
 ```text
-<class '__main__.Counter'>
-3
-3
+type(counter): <class '__main__.Counter'>
+counter.value: 2
 ```
 
-この出力は上のコードを通常のスクリプトとして実行する例です。Counterはクラス、counterは実物を参照する変数です。selfは呼び出された実物を受け取る引数の慣例名です。
+通常のPythonスクリプトとして実行した出力です。`Counter`はクラス、`Counter(2)`で作った実物がインスタンス、`counter`はその実物を参照する変数です。**variable（変数）は名前の側、instance（インスタンス）は参照される実物の側の説明です。**
 
-## 関数の返り値を変数へ受け取る
+### 引数が属性へ保存されるまで
+
+`Counter(2)`を実行すると、新しく作ったインスタンスに対して`__init__`が呼ばれ、初期設定を行います。
+
+| コード上の対象 | この呼び出しで指すもの |
+|---|---|
+| `self` | 新しく作られたCounterの実物 |
+| 引数`value` | 渡した整数`2` |
+| `self.value` | その実物が保持する属性 |
+| `self.value = value` | 引数の値を、その実物の属性へ保存する代入 |
+
+右側の`value`と左側の`self.value`は、同じ名前でも別の場所です。どの属性へ保存するかは、この代入文が決めます。`__init__`が終わっても、実物の属性`value`は残ります。`Counter(2)`という代入だけでは画面に結果は出ず、ここでは`print`で確認しています。
+
+## selfは、今回呼び出した実物を受け取る
+
+先ほどの`counter`は値`2`を持っています。別の実物を作り、片方だけ増やします。
+
+```python
+other = Counter(10)
+result = counter.increment()
+print("result:", result)
+print("counter.value:", counter.value)
+print("other.value:", other.value)
+```
+
+```text
+result: 3
+counter.value: 3
+other.value: 10
+```
+
+`counter.increment()`の中では、`self`に`counter`が参照する実物が渡されます。その`self.value`を増やしたので、`other.value`は変わりません。
+
+| 呼び出し | メソッド内の`self` | 使う属性 |
+|---|---|---|
+| `counter.increment()` | counterの実物 | counter.value |
+| `other.increment()` | otherの実物 | other.value |
+
+このクラスでは、`counter.increment()`は`Counter.increment(counter)`と同じように実物を第1引数へ渡す呼び出しです。保存済みの値は`self.value`から読めるため、毎回`increment(2)`のように渡す必要がありません。
+
+**`self`は予約語ではなく、通常のインスタンスメソッドの第1引数に使う慣例名です。** 実物の中に`self`という変数が常駐するわけではありません。クラスメソッドや静的メソッドには別の呼び出し規則があり、クラス内のすべての関数が同じ形とは限りません。
+
+## 属性を見る、メソッドを受け取る、実行する
+
+ドットは、その対象が持つ名前へアクセスします。その後に`()`を付けると、取り出した呼び出し可能なものを実行します。
+
+| 式 | 何をするか |
+|---|---|
+| `counter.value` | 数値の属性を読む |
+| `counter.increment` | この実物に結びついたメソッドを参照する |
+| `counter.increment()` | メソッドを実行し、増やした値を返してもらう |
+
+メソッドを別の変数で受け取ってから呼ぶこともできます。ここでは`counter.value`が`3`の状態から続けます。
+
+```python
+method = counter.increment
+print("参照した直後:", counter.value)
+result = method()
+print("呼び出しの返り値:", result)
+print("呼び出した後:", counter.value)
+```
+
+```text
+参照した直後: 3
+呼び出しの返り値: 4
+呼び出した後: 4
+```
+
+`method = counter.increment`だけでは数は増えません。`method()`で実行して初めて変わります。メソッドも属性として参照できるので、「ドットの後ろは必ずデータ」「括弧がなければ必ず数値」という判断はできません。
+
+### printした表示と、実物は別
+
+`print(counter.value)`は数値を表示します。`print(counter)`は実物の文字列表現を表示し、このクラスなら`<__main__.Counter object at 0x...>`のようになります。アドレス部分は実行ごとに変わります。
+
+Tokenizerのように設定が詳しく表示されるクラスもあります。これは`__str__`や`__repr__`などで表示方法を用意しているためです。きれいな文字列で表示されても、変数が文字列へ置き換わったわけではありません。
+
+## 返り値としてインスタンスを受け取る
 
 ```python
 def make_counter():
     return Counter(10)
 
-other = make_counter()
-print(other.value)
+created = make_counter()
+print("type(created):", type(created))
+print("created.value:", created.value)
 ```
 
 ```text
-10
+type(created): <class '__main__.Counter'>
+created.value: 10
 ```
 
-返り値には整数だけでなく、インスタンスも使えます。「返り値を代入する」と「変数がインスタンスを参照する」は同時に成立します。代入自体はprintではないので、作った値を表示したいときは確認式が必要です。
+返り値には数値だけでなく、インスタンスも使えます。**「関数の返り値を代入する」と「変数がインスタンスを参照する」は同時に成立します。** ここで返したのは新しく作ったCounterで、すでに存在する`self`を返しているわけではありません。
 
-## ライブラリの名前を読む
+この読み方は、[Tokenizerを読み込む処理](../tokenizer/)にもつながります。`AutoTokenizer.from_pretrained(...)`は設定に合ったTokenizerの実物を返し、呼び出し側の変数がそれを参照します。
 
-| 書き方 | 種類 | 読み方 |
+## importの書き方と、対象の種類を分ける
+
+Pythonのモジュールは、関数・クラス・変数などをまとめ、名前を通じて利用する単位です。`import`はそれらを使える名前として読み込みます。`from ... import ...`で読み込んだからクラスになる、という決まりはありません。
+
+ここからの例にはPyTorchとTransformersを使います。導入は[学習環境](../environment/)で扱います。
+
+```python
+import torch
+from torch import nn
+from transformers import AutoTokenizer
+
+print("nn is torch.nn:", nn is torch.nn)
+print("type(torch):", type(torch))
+print("type(nn):", type(nn))
+print("type(nn.Embedding):", type(nn.Embedding))
+print("type(AutoTokenizer):", type(AutoTokenizer))
+```
+
+```text
+nn is torch.nn: True
+type(torch): <class 'module'>
+type(nn): <class 'module'>
+type(nn.Embedding): <class 'type'>
+type(AutoTokenizer): <class 'type'>
+```
+
+| 対象 | 種類 | 役割 |
 |---|---|---|
-| torch | モジュール | 機能をまとめた名前空間 |
-| torch.tensor(...) | 関数 | データからTensorを作る |
-| torch.Tensor | クラス | Tensorという実物の型 |
-| tensor | 変数 | 自分で付けた参照名 |
-| tensor.shape | 属性 | 実物の形状を調べる |
-| tensor.numel() | メソッド | 実物の要素数を求める |
+| `torch` | Pythonのモジュール | PyTorchの機能をまとめる |
+| `nn`（torch.nn） | Pythonのモジュール | ニューラルネットワークの部品をまとめる |
+| `torch.tensor` | 関数 | データからTensorを作る |
+| `torch.Tensor` | クラス | Tensorの実物の型 |
+| `nn.Embedding` | クラス | Embedding層の実物を作る |
+| `AutoTokenizer` | クラス | 設定に合うTokenizerを選んで読み込む入口 |
 
-## 呼べるインスタンス
+先頭が大文字ならクラスであることが多い、という命名の慣例はありますが、文法上の保証ではありません。初めて見る対象は型・定義・公式資料で確かめられます。
 
-PyTorchのModuleは呼び出し可能です。`layer(x)` は変数名layerが関数という意味ではなく、参照しているModuleが呼び出しに対応しているという意味です。通常は`layer.forward(x)`を直接呼ばず、`layer(x)`を使い、hooksなどのModule側の処理も通します。
+## typeの表示を読み、必要ならinspectで確認する
+
+```python
+values = [1]
+print("type(values):", type(values))
+print("type(list):", type(list))
+```
+
+```text
+type(values): <class 'list'>
+type(list): <class 'type'>
+```
+
+`type(values)`に`class`と表示されるのは、**values自体がクラスだからではなく、valuesの型をクラスとして表示しているから**です。一方、`list`自体を調べると、そのクラスを作る側の型が返ります。ライブラリには専用のメタクラスを持つものもあり、クラスの型が常に`type`という名前になるわけではありません。
+
+「モジュールか」「クラスか」「この型の実物か」を直接確認する方法もあります。先ほどimportした`torch`と`nn`を使います。
+
+```python
+import inspect
+
+tensor = torch.tensor([1, 2, 3])
+print("type(tensor):", type(tensor))
+print("torchはモジュール:", inspect.ismodule(torch))
+print("torch.Tensorはクラス:", inspect.isclass(torch.Tensor))
+print("tensorはクラス:", inspect.isclass(tensor))
+print("tensorはTensorの実物:", isinstance(tensor, torch.Tensor))
+```
+
+```text
+type(tensor): <class 'torch.Tensor'>
+torchはモジュール: True
+torch.Tensorはクラス: True
+tensorはクラス: False
+tensorはTensorの実物: True
+```
+
+`inspect.isfunction`はPythonで定義された関数を判定します。`torch.tensor`のような組み込み関数を調べる場合は`inspect.isbuiltin`なども使います。IDEのホバー表示は解析の結果なので、わからない場合は実行時の確認と[環境の確認手順](../environment/)を併用します。[inspectの公式仕様](https://docs.python.org/3/library/inspect.html)
+
+## Pythonのモジュールと、呼べるnn.Module
+
+`nn`はPythonのモジュールですが、`nn.Module`はニューラルネットワーク部品の基底クラスです。名前は似ていても、分類と役割が異なります。
+
+```python
+layer = nn.Embedding(5, 3)
+print("nnはモジュール:", inspect.ismodule(nn))
+print("nn.Moduleはクラス:", inspect.isclass(nn.Module))
+print("layerはModuleの実物:", isinstance(layer, nn.Module))
+print("layerは呼び出せる:", callable(layer))
+print("layerは関数:", inspect.isfunction(layer))
+```
+
+```text
+nnはモジュール: True
+nn.Moduleはクラス: True
+layerはModuleの実物: True
+layerは呼び出せる: True
+layerは関数: False
+```
+
+関数・クラス・呼び出しに対応したインスタンスは、いずれも`callable=True`になり得ます。`layer(x)`は、参照している実物の計算処理を呼んでいます。通常は`layer.forward(x)`を直接呼ばず、`layer(x)`を使い、hooksなどModule側の仕組みも通します。入力と出力は[Embedding](../embedding/)で具体的に確かめます。
 
 ## 同じ実物か、別の実物か
 

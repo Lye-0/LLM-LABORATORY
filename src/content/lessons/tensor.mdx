@@ -3,7 +3,7 @@ title: "Tensor"
 description: "値・形状・数値型・デバイスを、一つの対象として読む。"
 stage: "input"
 order: 9
-minutes: 14
+minutes: 16
 eyebrow: "SHAPE / DTYPE / DEVICE"
 prerequisites: ["python-objects","tokenizer"]
 labs: ["tensor"]
@@ -94,6 +94,30 @@ torch.Size([1])
 
 スライスは並びとして取り出すため、長さ1の軸が残ります。同じ89015でも、スカラーと長さ1の並びはshapeが異なります。
 
+### 同じ1要素を、異なる形で持つ
+
+```python
+a = torch.tensor(89015)
+b = torch.tensor([89015])
+c = torch.tensor([[89015]])
+for name, value in [("a", a), ("b", b), ("c", c)]:
+    print(name, "shape:", list(value.shape), "ndim:", value.ndim, "numel:", value.numel())
+```
+
+```text
+a shape: [] ndim: 0 numel: 1
+b shape: [1] ndim: 1 numel: 1
+c shape: [1, 1] ndim: 2 numel: 1
+```
+
+| 対象 | 数値の持ち方 | shape | 軸の本数 | 全要素数 |
+|---|---|---|---|---|
+| `a` | 89015という単独の値 | `[]` | 0 | 1 |
+| `b` | 89015を1個含む並び | `[1]` | 1 | 1 |
+| `c` | 1行・1列の表 | `[1, 1]` | 2 | 1 |
+
+**要素が1個だから0次元なのではありません。** shapeは各軸の長さ、ndimは軸の本数、numelは全要素数です。`[]`には軸の長さが一つも並んでいませんが、スカラーの値は1個あります。
+
 ## Pythonの数値に戻す
 
 ```python
@@ -113,18 +137,48 @@ itemは要素が1個であることが条件です。7要素のtensor全体に�
 
 ```python
 batch = tensor.unsqueeze(0)
+column = tensor.unsqueeze(1)
 print(batch.shape)
+print(column.shape)
 print(batch.numel())
 print(tensor.shape)
 ```
 
 ```text
 torch.Size([1, 7])
+torch.Size([7, 1])
 7
 torch.Size([7])
 ```
 
 0は挿入位置です。数値の0を追加する指定ではありません。元のtensorのshapeは変わらず、返り値が新しいshapeを持ちます。通常、unsqueezeの返り値は元のデータを共有します。
+
+| 入力shape | 挿入する位置 | 出力shape |
+|---|---|---|
+| `[7]` | `unsqueeze(0)`：先頭 | `[1, 7]` |
+| `[7]` | `unsqueeze(1)`：末尾 | `[7, 1]` |
+| `[2, 3]` | `unsqueeze(0)`：2の前 | `[1, 2, 3]` |
+| `[2, 3]` | `unsqueeze(1)`：2と3の間 | `[2, 1, 3]` |
+| `[2, 3]` | `unsqueeze(2)`：3の後 | `[2, 3, 1]` |
+
+追加するのは長さ1の軸なので、どの位置を選んでも全要素数は変わりません。モデルが`[batch_size, sequence_length]`として読む場合、`[1, 7]`は1件・各7位置、`[7, 1]`は7件・各1位置という異なる指定です。軸の役割は[バッチと入力の整形](../batch/)で扱います。
+
+### squeezeで長さ1の軸を取り除く
+
+```python
+restored = batch.squeeze(0)
+print("restored.shape:", restored.shape)
+print("元の値と一致:", torch.equal(restored, tensor))
+print("batch.shape:", batch.shape)
+```
+
+```text
+restored.shape: torch.Size([7])
+元の値と一致: True
+batch.shape: torch.Size([1, 7])
+```
+
+`batch`の第0軸は長さ1なので、取り除くと`[7]`へ戻ります。ここでも元の`batch`のshapeは変わりません。`squeeze()`で軸を省略すると、長さ1の軸をまとめて取り除くため、残したいbatch軸まで消さないようにします。長さ1でない軸は、この操作では取り除けません。[squeezeのAPI](../../reference/api/squeeze/)
 
 ## デバイスを変える
 

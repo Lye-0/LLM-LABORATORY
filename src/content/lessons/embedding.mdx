@@ -110,7 +110,11 @@ torch.int64
 
 `ids` は「どの行を取り出すか」を伝える整数Tensorです。`[2]` はID 2を1個含む並びなので、shapeは `[1]` です。PyTorchのEmbedding層は、`int32` または `int64` のTensorを入力として受け取ります。
 
+この`ids`は、整数IDを含む**1個のTensorインスタンス**です。Tensorインスタンスを並べたPythonのリストではありません。整数Tensorという入力形式を使うことで、複数IDや多次元の入力をまとめて扱い、CPU・GPU上の処理へつなげられます。数学的な表の参照すべてにTensorが必須なのではなく、PyTorchが採用しているAPIの形です。
+
 ### 対応するベクトルを取得する
+
+`embedding.weight`は重みの属性を読む式、`embedding(ids)`は呼び出しに対応したEmbedding層を実行する式です。関数以外の実物に`()`を付けられる理由は、[Pythonの呼べるインスタンス](../python-objects/)で確認できます。
 
 ```python
 output = embedding(ids)
@@ -258,6 +262,8 @@ True
 今回の既定設定では取得する値が一致しますが、直接アクセスはEmbedding固有の設定を実行しません。例えば `max_norm` を指定した層は、呼び出し時に参照するベクトルの長さを制限し、重みを変更する場合があります。`padding_idx` は指定行への勾配の扱いに影響します。[PyTorchのEmbedding仕様](https://docs.pytorch.org/docs/2.14/generated/torch.nn.Embedding.html)
 
 ## Parameterと勾配
+
+`grad`はgradient（勾配）の略です。重みを少し変えると損失がどちらへ、どれくらい変化するかに関わる量で、学習時に重みを調整するために使います。ここで勾配を求める対象は浮動小数点の重みであり、行を指定する整数IDそのものではありません。
 
 `output` を `detach()` せず表示すると、通常は数値とともに `grad_fn=<EmbeddingBackward0>` が表示されます。これは元の重みへ勾配を伝えるための演算の記録です。表示された時点で、勾配計算や学習が完了したわけではありません。
 

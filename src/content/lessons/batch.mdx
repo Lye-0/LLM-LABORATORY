@@ -33,6 +33,8 @@ torch.Size([1, 3])
 
 `unsqueeze(1)`なら`[3,1]`です。要素数が同じでも、モデル入力としての解釈は3件×1位置へ変わります。
 
+軸の挿入位置や`squeeze`との対応は、[Tensorのshapeを比べる例](../tensor/)で確認できます。ここでは軸をbatch・sequenceとして読むことと、複数入力の長さ合わせへ進みます。
+
 ## 長さをそろえる
 
 ```text
@@ -48,6 +50,8 @@ mask: [[1, 1, 1],
 
 ## Tokenizerでまとめる
 
+[Tokenizer教材](../tokenizer/)で読み込んだ`tokenizer`を使います。
+
 ```python
 encoded = tokenizer(
     ["こんにちは", "こんにちは、今日はいい天気ですね"],
@@ -58,7 +62,12 @@ print(encoded["input_ids"].shape)
 print(encoded["attention_mask"].shape)
 ```
 
-参照Tokenizerでは両方とも`torch.Size([2,7])`になる例です。第1入力の有効なトークンは1個でも、幅は7です。dtypeやpadding sideも合わせて観察します。
+```text
+torch.Size([2, 7])
+torch.Size([2, 7])
+```
+
+参照Tokenizerでの出力です。第1入力の有効なトークンは1個でも、幅は7です。dtypeやpadding sideも合わせて観察します。
 
 ## 生成ではpaddingの向きも確認する
 

@@ -14,6 +14,8 @@ answer: "消えるとは限りません。このQwen設定のthink境界はspeci
 ---
 ## role付きの会話も、最後は一つの列
 
+[Tokenizer教材](../tokenizer/)で読み込んだ`tokenizer`を使います。
+
 ```python
 messages = [{"role": "user", "content": "こんにちは"}]
 formatted = tokenizer.apply_chat_template(
@@ -69,5 +71,7 @@ print(formatted, end="")
 ## 入力と生成を数える
 
 max_new_tokensは新しく生成するトークン数の上限です。Thinkingの本文も生成したなら含みます。画面から隠しても、計算やトークン数が減るわけではありません。
+
+Thinkingの本文は、モデルが生成した通常のトークン列です。ニューラルネットワークの層を通る数値表現である[hidden state](../../reference/glossary/hidden-state/)そのものではありません。
 
 Tokenizerのmodel_max_length、モデルの文脈長、生成上限は別の設定です。Tokenizerの数値だけを変更してモデルの長文能力を増やせるとは考えません。

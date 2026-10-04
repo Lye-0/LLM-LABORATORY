@@ -3,7 +3,7 @@ title: "Tokenizer"
 description: "人間が読む文字列を、モデルが扱うトークンIDへ。"
 stage: "input"
 order: 5
-minutes: 12
+minutes: 18
 eyebrow: "TEXT → TOKEN IDS"
 prerequisites: ["overview","python-objects"]
 labs: ["tokenizer"]
@@ -16,20 +16,142 @@ answer: "変換の終点が異なります。前者は内部トークン表記�
 
 Tokenizerは文字列を部品へ分け、その部品に対応する整数IDへ変換します。逆方向ではID列を文字列へ戻します。入力を変換するだけで、モデルの推論を実行しているわけではありません。
 
+このページでは、**使える名前を用意する → 設定を読み込んで実物を作る → 同じ実物で文章を変換する**、という順で進みます。クラスと返り値は[Pythonでオブジェクトを読む](../python-objects/)でも小さな例で確認できます。
+
 ## tokenizer — 作成と実物の確認
 
 ```python
 from transformers import AutoTokenizer
 
 model_id = "Qwen/Qwen3-0.6B"
-tokenizer = AutoTokenizer.from_pretrained(
-    model_id, revision="c1899de289a04d12100db370d81485cdf75e47ca"
-)
+revision = "c1899de289a04d12100db370d81485cdf75e47ca"
+tokenizer = AutoTokenizer.from_pretrained(model_id, revision=revision)
 print(type(tokenizer))
 print(tokenizer.name_or_path)
 ```
 
-`from_pretrained()`は設定に合ったTokenizerインスタンスを返します。その実物を変数tokenizerが参照します。具体的なクラス名はTransformersの版や設定で変わるため、常にAutoTokenizerのインスタンスになるとは考えません。
+```text
+<class 'transformers.models.qwen2.tokenization_qwen2.Qwen2Tokenizer'>
+Qwen/Qwen3-0.6B
+```
+
+Python 3.13.15・Transformers 5.18.0と、コードに指定したrevisionで確認した結果です。以下のTokenizerの表示も同じ条件です。
+
+| 段階 | このコードで行うこと |
+|---|---|
+| `from transformers import AutoTokenizer` | AutoTokenizerというクラスを使えるようにする |
+| `model_id = ...` | 配布元のモデルリポジトリIDを文字列として用意する |
+| `AutoTokenizer.from_pretrained(...)` | 設定・語彙などを読み、対応するTokenizerを選んで作る |
+| `tokenizer = ...` | 返されたインスタンスへの参照を変数に保存する |
+
+`from_pretrained()`の**返り値そのものがTokenizerのインスタンス**です。`tokenizer = AutoTokenizer`というクラスへの参照の代入とは異なります。ここでモデル本体の重みを読み込んだり、文章を使って学習したりしているわけではありません。
+
+今回の実物はQwen2Tokenizerでした。Qwen3用の語彙・設定を、Qwen2Tokenizerという実装で扱っています。具体的なクラスはライブラリの版や設定で変わるため、いつでもこのクラスになるとは限りません。
+
+### Autoは、設定から実装を選ぶ入口
+
+次は処理を理解するための模式的な流れです。
+
+```text
+モデルIDまたはローカルの保存先
+  → Tokenizerの設定を読む
+  → 対応する実装を選ぶ
+  → 語彙・分割規則・追加トークンなどを読み込む
+  → 設定済みのTokenizerインスタンスを返す
+```
+
+モデルIDは配布ファイルの場所を指定するもので、全モデルの語彙がライブラリ内の一つの辞書へ組み込まれているわけではありません。初回は関連ファイルを取得し、以後はキャッシュを利用できます。保存済みのローカルディレクトリを渡す方法もあります。
+
+AutoTokenizerは`from_pretrained`を通して使います。`AutoTokenizer(model_id)`を直接呼ぶことや、`Qwen2Tokenizer(model_id)`へ単純に置き換えることは、同じ読み込み手順ではありません。[Auto classesの公式仕様](https://huggingface.co/docs/transformers/model_doc/auto)
+
+### 作った実物を使い回す
+
+以降の`tokenizer.tokenize(text)`は、返された実物が持つ設定とメソッドを使う呼び出しです。同じ`tokenizer`でencode・decodeも行います。
+
+`from_pretrained(...).tokenize(text)`のように返り値を続けて使う書き方もできますが、処理のたびに読み込みと初期化を繰り返す必要はありません。変数で参照しておけば、一度準備した実物を再利用できます。
+
+## tokenizerの設定表示を読む
+
+```python
+print(tokenizer)
+```
+
+出力の主要部分を整形した抜粋です。`...`はこの抜粋で省略した箇所です。
+
+```text
+Qwen2Tokenizer(
+    name_or_path='Qwen/Qwen3-0.6B',
+    vocab_size=151643, model_max_length=131072,
+    padding_side='right', truncation_side='right',
+    special_tokens={'eos_token': '<|im_end|>', 'pad_token': '<|endoftext|>'},
+    added_tokens_decoder={...}
+)
+```
+
+<details>
+<summary>設定表示の全文（参照環境）</summary>
+
+```text
+Qwen2Tokenizer(name_or_path='Qwen/Qwen3-0.6B', vocab_size=151643, model_max_length=131072, padding_side='right', truncation_side='right', special_tokens={'eos_token': '<|im_end|>', 'pad_token': '<|endoftext|>'}, added_tokens_decoder={
+	151643: AddedToken("<|endoftext|>", rstrip=False, lstrip=False, single_word=False, normalized=False, special=True),
+	151644: AddedToken("<|im_start|>", rstrip=False, lstrip=False, single_word=False, normalized=False, special=True),
+	151645: AddedToken("<|im_end|>", rstrip=False, lstrip=False, single_word=False, normalized=False, special=True),
+	151646: AddedToken("<|object_ref_start|>", rstrip=False, lstrip=False, single_word=False, normalized=False, special=True),
+	151647: AddedToken("<|object_ref_end|>", rstrip=False, lstrip=False, single_word=False, normalized=False, special=True),
+	151648: AddedToken("<|box_start|>", rstrip=False, lstrip=False, single_word=False, normalized=False, special=True),
+	151649: AddedToken("<|box_end|>", rstrip=False, lstrip=False, single_word=False, normalized=False, special=True),
+	151650: AddedToken("<|quad_start|>", rstrip=False, lstrip=False, single_word=False, normalized=False, special=True),
+	151651: AddedToken("<|quad_end|>", rstrip=False, lstrip=False, single_word=False, normalized=False, special=True),
+	151652: AddedToken("<|vision_start|>", rstrip=False, lstrip=False, single_word=False, normalized=False, special=True),
+	151653: AddedToken("<|vision_end|>", rstrip=False, lstrip=False, single_word=False, normalized=False, special=True),
+	151654: AddedToken("<|vision_pad|>", rstrip=False, lstrip=False, single_word=False, normalized=False, special=True),
+	151655: AddedToken("<|image_pad|>", rstrip=False, lstrip=False, single_word=False, normalized=False, special=True),
+	151656: AddedToken("<|video_pad|>", rstrip=False, lstrip=False, single_word=False, normalized=False, special=True),
+	151657: AddedToken("<tool_call>", rstrip=False, lstrip=False, single_word=False, normalized=False, special=False),
+	151658: AddedToken("</tool_call>", rstrip=False, lstrip=False, single_word=False, normalized=False, special=False),
+	151659: AddedToken("<|fim_prefix|>", rstrip=False, lstrip=False, single_word=False, normalized=False, special=False),
+	151660: AddedToken("<|fim_middle|>", rstrip=False, lstrip=False, single_word=False, normalized=False, special=False),
+	151661: AddedToken("<|fim_suffix|>", rstrip=False, lstrip=False, single_word=False, normalized=False, special=False),
+	151662: AddedToken("<|fim_pad|>", rstrip=False, lstrip=False, single_word=False, normalized=False, special=False),
+	151663: AddedToken("<|repo_name|>", rstrip=False, lstrip=False, single_word=False, normalized=False, special=False),
+	151664: AddedToken("<|file_sep|>", rstrip=False, lstrip=False, single_word=False, normalized=False, special=False),
+	151665: AddedToken("<tool_response>", rstrip=False, lstrip=False, single_word=False, normalized=False, special=False),
+	151666: AddedToken("</tool_response>", rstrip=False, lstrip=False, single_word=False, normalized=False, special=False),
+	151667: AddedToken("<think>", rstrip=False, lstrip=False, single_word=False, normalized=False, special=False),
+	151668: AddedToken("</think>", rstrip=False, lstrip=False, single_word=False, normalized=False, special=False),
+})
+```
+
+</details>
+
+`print(tokenizer)`は実物が用意した文字列表現を表示します。変数の中身が、この表示文字列へ変わるわけではありません。
+
+| 設定 | 今回の読み取り | 詳しく見る |
+|---|---|---|
+| `name_or_path` | 読み込んだモデルID | [読み込みAPI](../../reference/api/auto-tokenizer/) |
+| `vocab_size` | 基本語彙が151643件 | [Vocabulary](../vocabulary/) |
+| `model_max_length` | Tokenizer側の長さ設定が131072 | [会話形式と長さ](../chat-template/) |
+| `padding_side` | 長さ合わせの埋め草を右側へ追加する設定 | [バッチと入力整形](../batch/) |
+| `truncation_side` | 切り詰めを行う場合に右側を削る設定 | [バッチと入力整形](../batch/) |
+| `special_tokens` | EOS・PADなどの役割の登録 | [会話形式と特殊トークン](../chat-template/) |
+| `added_tokens_decoder` | 追加IDに対応するトークンと、その設定 | [特殊・追加トークン一覧](../../reference/tokens/) |
+
+基本語彙に追加分を含めた`len(tokenizer)`は、この設定では151669です。語彙数は登録した部品の数であり、入力できる文章の種類数ではありません。
+
+### 「最大長」は、どの設定かを確かめる
+
+同じモデルでも、次の数値を区別します。
+
+| 確認元 | 参照revisionの値・例 | 何を表すか |
+|---|---|---|
+| Tokenizerの`model_max_length` | 131072 | Tokenizerの長さ処理に使う設定 |
+| モデルconfigの`max_position_embeddings` | 40960 | モデルの位置に関する構造設定 |
+| モデルカードのContext Length | 32768 | 配布元が記載する文脈長 |
+| 生成時の`max_new_tokens=64` | 64 | その呼び出しで新しく生成するトークン数の上限 |
+
+配布元の[固定revisionのモデルカード](https://huggingface.co/Qwen/Qwen3-0.6B/blob/c1899de289a04d12100db370d81485cdf75e47ca/README.md)では文脈長は32768です。Tokenizerの表示やconfigの一つの値だけから、より長い入力での動作や品質を保証することはできません。
+
+生成中は入力に生成済みのトークンが加わり、次の予測の文脈になります。`max_new_tokens`はその全体の長さとは別です。また、`truncation_side='right'`という設定だけで、すべての入力が自動的に切り詰められるわけではありません。実際に切り詰めるかは`truncation`など呼び出し時の指定も確認します。
 
 ## text — 元の入力
 
@@ -106,4 +228,4 @@ True
 | convert_ids_to_tokens | ID | 内部表記 |
 | decode | ID列 | 文字列 |
 
-文章のtokenizeと、内部トークンを辞書で引く操作は違います。会話のroleや境界を付ける処理はChat Templateで扱います。
+文章のtokenizeと、内部トークンを辞書で引く操作は違います。会話のroleや境界を付ける処理は[会話形式と特殊トークン](../chat-template/)で扱います。TransformersとPyTorchの担当範囲は[実行基盤の役割](../../topics/runtime/)で確認できます。

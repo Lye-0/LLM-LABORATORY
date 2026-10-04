@@ -3,7 +3,7 @@ title: "学習環境を用意する"
 description: "ブラウザー、CPU、GPU。目的に合わせて実行環境を選ぶ。"
 stage: "orientation"
 order: 3
-minutes: 8
+minutes: 11
 eyebrow: "WORKSPACE"
 prerequisites: ["python-objects"]
 sources: ["uv","tensor"]
@@ -51,6 +51,52 @@ False
 ## WSLとエディターの実行先
 
 WindowsのVS CodeからWSL内のPythonを使う場合、Remote WSLでフォルダーを開き、Python interpreterもWSLの仮想環境を選びます。Windows側のPythonとWSL側のPythonでは、導入済みパッケージが異なります。補完が出ないときは、実行に使う環境と解析に使う環境を照合します。
+
+### コードは動くのに、補完や型表示がおかしいとき
+
+次の順に確認します。
+
+1. **VS Codeの接続先**：ウィンドウのリモート接続表示が`WSL: Ubuntu`など対象のディストリビューションになっているか確認します。ターミナルでWSLを開けることだけでは、エディターの接続先まで同じとは限りません。
+2. **拡張機能の実行先**：拡張機能画面のLocalとWSLの区分を確認します。Python/Pylanceなど、WSL側で必要な拡張が使える状態にします。
+3. **選択したPython**：コマンドパレットの`Python: Select Interpreter`で、プロジェクトの`.venv/bin/python`を選びます。
+4. **実際に動いたPython**：次のコードを、VS CodeのPython実行機能と、普段使う`uv run python`の両方で実行し、同じ環境を使っているか比べます。
+
+```python
+import sys
+import torch
+
+print("Python:", sys.executable)
+print("PyTorch:", torch.__version__)
+print("torchの場所:", torch.__file__)
+```
+
+最初の行は実行中のPython、最後の行は読み込んだtorchの場所です。具体的なパスは端末によって変わります。WSLで実行しているつもりなのにWindows側のPythonが表示されたり、想定外の仮想環境が表示されたりしたら、実行方法とinterpreterの選択を見直します。
+
+### WSL側の拡張は、毎回入れ直すものではない
+
+画面のテーマなどはローカル側、言語解析などはWSL側で動く場合があります。必要な拡張は対象のWSL環境へ導入しますが、通常は起動のたびに導入し直す必要はありません。別のディストリビューションでは別途準備が必要になる場合があります。初回接続時にはVS Code Serverのセットアップが行われます。[VS CodeのWSL開発ガイド](https://code.visualstudio.com/docs/remote/wsl)
+
+### Anyという表示と、実行時の型
+
+ホバーに`Any`と出るのは、静的な解析で型を特定できていない場合などの表示です。実物が型を持たないという意味ではありません。環境が正しくても、動的な実装などで解析しきれない箇所はあります。
+
+```python
+import inspect
+from torch import nn
+
+embedding = nn.Embedding(5, 3)
+print("type(embedding):", type(embedding))
+print("nnはモジュール:", inspect.ismodule(nn))
+print("nn.Embeddingはクラス:", inspect.isclass(nn.Embedding))
+```
+
+```text
+type(embedding): <class 'torch.nn.modules.sparse.Embedding'>
+nnはモジュール: True
+nn.Embeddingはクラス: True
+```
+
+これなら、そのPython環境で実際に作られたものを確認できます。`variable`と`instance`、`type`と`inspect`の読み分けは[Pythonでオブジェクトを読む](../python-objects/)へ戻って確認できます。
 
 ## 保存する情報
 
