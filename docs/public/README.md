@@ -11,9 +11,10 @@ LLM LABORATORYの設計・実装・教材編集・公開手順をまとめた、
 | [実装構成](architecture.md)             | ソースの役割、データ、検索、Worker、URL                |
 | [開発・検証・公開](development.md)      | 別端末での準備、テスト、GitHub Pages                   |
 | [公開されている参考資料](references.md) | 公式仕様とモデルの配布元                               |
+| [わかりやすい学習ノートのガイド](notion_learning_notes_guide.md) | 学習ノートの書き方と説明の組み立て方 |
 
 実際の依存バージョンは `package.json`・`pnpm-lock.yaml`、Node.js・pnpmは `mise.toml` を正本とします。ファイルの構造や挙動を変えた場合、この文書群も必要な範囲で更新します。
 
 この文書群は開発用です。Webサイトへ配信する教材は `src/content/lessons/`、静的配布物は `dist/` です。
 
-Gitへ追加できる文書は、上記の7文書とこのREADMEの計8ファイルに限定しています。新規文書は内容をレビューしてから、`.gitignore` と `scripts/check-public-files.mjs` の許可リストへ追加します。
+`docs/public/` 配下の文書をGitで共有します。新規文書はこのフォルダへ置いて通常どおりGitに追加できます。それ以外のdocsはignore対象です。

@@ -13,18 +13,9 @@ verification/__pycache__/
 *.log
 .DS_Store
 
-# Reviewed shared documentation only; all other docs remain local
+# Shared documentation; all other docs remain local
 /docs/*
 !/docs/public/
-/docs/public/*
-!/docs/public/README.md
-!/docs/public/product.md
-!/docs/public/curriculum.md
-!/docs/public/content-guide.md
-!/docs/public/design.md
-!/docs/public/architecture.md
-!/docs/public/development.md
-!/docs/public/references.md
 
 # Local source material, verification captures, and backups
 /docd/

@@ -76,7 +76,7 @@ pnpm exec playwright test --config playwright.pages.config.ts
 
 [開発ドキュメント](docs/public/README.md)に、設計・カリキュラム・教材の編集方針・UI・実装構成・開発手順をまとめています。別の端末ではcloneまたはpullで取得できます。
 
-Git管理するdocsは、レビュー済みの `docs/public/` の8文書だけです。それ以外の原文資料・計画履歴・確認画像と `.private/` はローカルに保持します。追加の文書を共有する場合は、内容を確認して `.gitignore` と `scripts/check-public-files.mjs` の許可リストを同時に更新してください。Git管理する開発文書もPagesの配信対象には含めず、静的サイトには引き続き `dist/` だけを配信します。
+Git管理するdocsは `docs/public/` 配下です。このフォルダに置いた文書は、個別の許可設定なしでGitへ追加できます。それ以外のdocsと `.private/` はローカルに保持します。Git管理する開発文書もPagesの配信対象には含めず、静的サイトには引き続き `dist/` だけを配信します。
 
 CIが必要とする検証データには、公開モデルと数値例だけの `tests/fixtures/` を使います。
 
