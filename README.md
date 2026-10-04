@@ -74,7 +74,11 @@ pnpm exec playwright test --config playwright.pages.config.ts
 
 ## 公開する範囲
 
-`docs/` はローカルの計画・参照資料・確認記録用で、Git管理と静的配信の対象外です。`.private/` はローカルバックアップ専用です。CIが必要とする検証データには、公開モデルと数値例だけの `tests/fixtures/` を使います。
+[開発ドキュメント](docs/public/README.md)に、設計・カリキュラム・教材の編集方針・UI・実装構成・開発手順をまとめています。別の端末ではcloneまたはpullで取得できます。
+
+Git管理するdocsは、レビュー済みの `docs/public/` の8文書だけです。それ以外の原文資料・計画履歴・確認画像と `.private/` はローカルに保持します。追加の文書を共有する場合は、内容を確認して `.gitignore` と `scripts/check-public-files.mjs` の許可リストを同時に更新してください。Git管理する開発文書もPagesの配信対象には含めず、静的サイトには引き続き `dist/` だけを配信します。
+
+CIが必要とする検証データには、公開モデルと数値例だけの `tests/fixtures/` を使います。
 
 `.gitignore` は新しい追跡を防ぐ設定です。資料を誤ってコミットした場合、ignoreへの追加だけで過去の履歴が消えるわけではありません。公開前に `node scripts/check-public-files.mjs` と送信する履歴を確認します。
 
