@@ -43,7 +43,7 @@ A04は先に全体を動かす入口。全内部構造の理解を前提にせ�
 | C03 | Self-Attention — Q・K・Vから出力を作る | C02           | スコア・スケーリング・causal mask・softmax・加重和を小行列で追う         |
 | C04 | 位置情報 — 順序を扱う                  | C03           | 位置埋め込みとRoPEの違い、Q/Kに位置を反映する考え方を説明する            |
 | C05 | Transformerブロックを読む              | C03・C04      | Residual、RMSNorm、MLP/SwiGLU、MHA/GQAを配置とshapeで理解する            |
-| C06 | 実際のQwenの内部を観察する             | A04・C05      | config、named_modules、Embedding、各層のshape、lm_head、重み共有を読む   |
+| C06 | 実際のQwenの内部を観察する             | A04・C01      | モデル名・クラス・実物、学習済みEmbeddingの行参照、1・7トークンの出力、configと重み共有を読む |
 
 基礎のAttentionは小さな標準例とし、QwenのGQAやhead_dimを同一視しない。Embeddingの固定ベクトルと、層を通った文脈依存のhidden stateを区別する。
 

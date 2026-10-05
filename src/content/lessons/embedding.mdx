@@ -288,6 +288,8 @@ True
 
 ## 実モデルへつなぐ
 
+次は[実際のQwenを観察する](../qwen/)で、学習済みの表を取り出し、ID 89015のベクトルと7トークンの出力を照合します。このページの仮のID 0〜4は、QwenのVocabularyと自動的につながっているものではありません。
+
 Qwen3-0.6Bの参照設定はhidden_size=1024、モデル側vocab_size=151936です。実物は`model.get_input_embeddings().weight.shape`で確認します。Tokenizerの語彙件数とモデルの行数は、必ずしも一致しません。
 
 Embedding直後のベクトルは同じIDに対して同じですが、Transformer層を通ったhidden stateは周囲の文脈で変わります。「意味が似る」という説明を、すべての行の距離や各成分へ機械的に当てはめないことも大切です。

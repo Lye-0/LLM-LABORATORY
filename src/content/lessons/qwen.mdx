@@ -1,24 +1,120 @@
 ---
 title: "実際のQwenを観察する"
-description: "configと実物のmoduleを照合し、モデルの構造を読む。"
+description: "学習済みのEmbeddingで、ID・トークン位置・出力ベクトルを結びつける。"
 stage: "representation"
 order: 16
-minutes: 10
+minutes: 22
 eyebrow: "MODEL ANATOMY"
-prerequisites: ["first-generation","transformer-block"]
+prerequisites: ["first-generation","embedding"]
 labs: ["model","embedding"]
-sources: ["qwen","module"]
-tags: ["Qwen3","named_modules","hidden_size","state_dict"]
-question: "Qwen3-0.6Bのhead_dimを1024÷16=64と決めてよいですか？"
-answer: "この参照設定ではhead_dim=128が指定されています。hidden_size÷head数から推測せず、configと実物のweight.shapeを確認します。"
+sources: ["qwen","module","embedding","tokenizer"]
+tags: ["Qwen3","Qwen3ForCausalLM","get_input_embeddings","hidden_size","state_dict","return_tensors"]
+question: "7トークンの入力が[1, 7, 1024]になるとき、7個のIDは1本のベクトルへまとめられますか？"
+answer: "各IDがそれぞれ1024成分のベクトルになります。入力1件・7位置の構造が残り、output[0, i]で位置iのベクトルを取り出せます。"
 ---
-## 設定は設計図、moduleは実物
+## 小さな表から、学習済みの表へ
 
-モデルには構造を記述するconfigと、その構造を実装したmoduleがあります。設定の意味を把握したら、読み込んだモデルの実際のshapeへ照合します。
+[Embeddingの基礎](../embedding/)では、`nn.Embedding(5, 3)`で作った表を参照しました。ここではQwen3-0.6Bが持つ学習済みの表を使い、**「こんにちは」→ ID 89015 → 1024成分のベクトル**までを実物で確かめます。
+
+このページの数値と表示は、2026-10-05にPython 3.13.15・PyTorch 2.14.1+cu130・Transformers 5.18.0、下記の固定revisionを**CPU・bfloat16**で読み込んで確認しました。GPUで読み込んだ場合はdeviceの表示が変わります。入力Embeddingの参照だけを行い、文章生成や学習は実行しません。
+
+## モデル名・クラス・実物を分ける
+
+[最初のモデル読み込み](../first-generation/)で取得したキャッシュを使います。`local_files_only=True`なので、このコード自体は新しくダウンロードしません。キャッシュがない場合は、先にモデルを取得する手順を実行してください。
+
+```python
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+model_id = "Qwen/Qwen3-0.6B"
+revision = "c1899de289a04d12100db370d81485cdf75e47ca"
+tokenizer = AutoTokenizer.from_pretrained(
+    model_id, revision=revision, local_files_only=True
+)
+model = AutoModelForCausalLM.from_pretrained(
+    model_id, revision=revision, dtype=torch.bfloat16,
+    device_map="cpu", local_files_only=True
+)
+model.eval()
+print("type(model):", type(model))
+```
+
+```text
+type(model): <class 'transformers.models.qwen3.modeling_qwen3.Qwen3ForCausalLM'>
+```
+
+読み込み時には進捗表示も出ます。ここでは最後のprintの結果を掲載しています。
+
+| 名前 | 役割 |
+|---|---|
+| `Qwen/Qwen3-0.6B` | どの配布モデルの設定・学習済み重みを使うかを指定するリポジトリID |
+| `AutoModelForCausalLM` | 設定に合う、次トークン予測用のモデルクラスを選ぶ入口 |
+| `Qwen3ForCausalLM` | Qwen3の部品構成と計算方法を実装する具体的なクラス |
+| `model` | その構造に学習済み重みを読み込んだインスタンスを参照する変数 |
+
+クラスはプログラム側の構造・処理、重みは学習で得た数値です。`from_pretrained`の返り値として、その両方を持つ実物を受け取っています。`ForCausalLM`はCausal Language Modeling用、つまり過去のトークンから次を予測する用途を表します。
+
+### model全体の中で、どの部品を見るか
+
+```python
+print(model)
+```
+
+主要な部品の関係だけを抜き出すと、次のようになります。これはprint全文を整理した模式表示です。
+
+```text
+model（Qwen3ForCausalLMの実物）
+├─ model：Qwen3Model
+│  ├─ embed_tokens：Embedding(151936, 1024) ← 今回見る部品
+│  ├─ layers：28個のDecoder Layer
+│  ├─ norm
+│  └─ rotary_emb
+└─ lm_head：内部表現を次トークン候補のスコアへ変換
+```
+
+外側の`model`は変数名、括弧内の`(model): Qwen3Model(...)`はその実物が持つ子部品の名前です。同じつづりでも場所が異なります。
+
+<details>
+<summary>print(model)の全文（参照環境）</summary>
+
+```text
+Qwen3ForCausalLM(
+  (model): Qwen3Model(
+    (embed_tokens): Embedding(151936, 1024)
+    (layers): ModuleList(
+      (0-27): 28 x Qwen3DecoderLayer(
+        (self_attn): Qwen3Attention(
+          (q_proj): Linear(in_features=1024, out_features=2048, bias=False)
+          (k_proj): Linear(in_features=1024, out_features=1024, bias=False)
+          (v_proj): Linear(in_features=1024, out_features=1024, bias=False)
+          (o_proj): Linear(in_features=2048, out_features=1024, bias=False)
+          (q_norm): Qwen3RMSNorm((128,), eps=1e-06)
+          (k_norm): Qwen3RMSNorm((128,), eps=1e-06)
+        )
+        (mlp): Qwen3MLP(
+          (gate_proj): Linear(in_features=1024, out_features=3072, bias=False)
+          (up_proj): Linear(in_features=1024, out_features=3072, bias=False)
+          (down_proj): Linear(in_features=3072, out_features=1024, bias=False)
+          (act_fn): SiLUActivation()
+        )
+        (input_layernorm): Qwen3RMSNorm((1024,), eps=1e-06)
+        (post_attention_layernorm): Qwen3RMSNorm((1024,), eps=1e-06)
+      )
+    )
+    (norm): Qwen3RMSNorm((1024,), eps=1e-06)
+    (rotary_emb): Qwen3RotaryEmbedding()
+  )
+  (lm_head): Linear(in_features=1024, out_features=151936, bias=False)
+)
+```
+
+</details>
+
+`Qwen3Model`はEmbeddingやDecoder Layerなどを持つ本体です。`Qwen3ForCausalLM`は、さらに次トークン予測用の`lm_head`を含みます。今回は入口のEmbeddingまでを動かします。後続の計算は[Transformerブロック](../transformer-block/)で扱います。
 
 ## configの主要値
 
-Qwen3-0.6Bの固定revisionについて、配布設定から確認できる値です。重みを実行した測定値ではありません。
+モデルの構造はconfigにも記述されています。次は固定revisionの配布設定にある値です。後で実物のEmbeddingと照合します。
 
 | 設定 | 値 |
 |---|---:|
@@ -33,16 +129,259 @@ Qwen3-0.6Bの固定revisionについて、配布設定から確認できる値�
 
 ## 入力Embeddingを取得する
 
-先に読み込んだmodelを使います。
+先ほど読み込んだ同じ`model`を使います。`get_input_embeddings()`は、モデル内部にすでにある入力Embedding層を返します。
 
 ```python
 embedding = model.get_input_embeddings()
-print(embedding.weight.shape)
-print(embedding.weight.dtype)
-print(embedding.weight.device)
+print("type(embedding):", type(embedding))
+print("embedding:", embedding)
+print("weight.shape:", embedding.weight.shape)
+print("weight.dtype:", embedding.weight.dtype)
+print("weight.device:", embedding.weight.device)
+print("同じ層か:", embedding is model.get_input_embeddings())
 ```
 
-shapeは参照構造では`[151936,1024]`です。dtypeとdeviceは読み込み方によって変わります。配布configのdtypeが、すべての読み込みで必ずそのまま使われるとは限りません。
+```text
+type(embedding): <class 'torch.nn.modules.sparse.Embedding'>
+embedding: Embedding(151936, 1024)
+weight.shape: torch.Size([151936, 1024])
+weight.dtype: torch.bfloat16
+weight.device: cpu
+同じ層か: True
+```
+
+新しいランダムな表を作ったのではなく、モデルに含まれる同じ層を`embedding`という変数でも参照しています。小さな例と同じPyTorchのEmbeddingクラスですが、今回は151936行・各1024成分で、読み込んだ学習済みの数値が入っています。
+
+### 作る・取得する・参照する・使う
+
+共通して扱っているのは、IDとベクトルを対応させる仕組みです。その仕組みに対する操作と返り値を分けます。
+
+| 操作 | 何をするか | 得られるもの |
+|---|---|---|
+| `nn.Embedding(5, 3)` | サイズを指定して新しく作る | 重み表を持つEmbeddingインスタンス |
+| `model.get_input_embeddings()` | モデルの既存の層を取得する | 今回はEmbeddingインスタンス |
+| `embedding.weight` | 層が持つ表を参照する | ParameterであるTensor |
+| `embedding(ids)` | IDを使って表を引く | 対応するベクトルを並べた新しいTensor |
+
+### 語彙数・dtype・deviceを読む
+
+```python
+print("model.config.vocab_size:", model.config.vocab_size)
+print("tokenizer.vocab_size:", tokenizer.vocab_size)
+print("len(tokenizer):", len(tokenizer))
+print("重みの数値部分のbytes:", embedding.weight.numel() * embedding.weight.element_size())
+```
+
+```text
+model.config.vocab_size: 151936
+tokenizer.vocab_size: 151643
+len(tokenizer): 151669
+重みの数値部分のbytes: 311164928
+```
+
+Tokenizerの追加分を含む件数と、モデルのEmbedding行数は一致していません。差は267行ありますが、この出力だけから追加の行の用途を断定はできません。
+
+bfloat16は1要素2バイトなので、表の数値部分は約311MBです。これはモデル全体や実際の使用メモリの測定値ではありません。dtypeとdeviceは読み込み方によって変わります。この例はCPUへ明示的に配置しています。GPUを使う場合も、入力IDは索引用の整数のまま、参照する層と配置先をそろえます。
+
+## 「こんにちは」をIDのTensorへ
+
+まずlistとTensorの違いを、同じ文章で確認します。
+
+```python
+text = "こんにちは"
+id_list = tokenizer.encode(text, add_special_tokens=False)
+ids = tokenizer.encode(text, add_special_tokens=False, return_tensors="pt")
+print("id_list:", id_list)
+print("ids:", ids)
+print("ids.shape:", ids.shape)
+print("ids.dtype:", ids.dtype)
+```
+
+```text
+id_list: [89015]
+ids: tensor([[89015]])
+ids.shape: torch.Size([1, 1])
+ids.dtype: torch.int64
+```
+
+`pt`はPyTorch形式を指定しています。今回のencodeは、1件の入力をbatch軸付きのTensorとして返すため、`[[89015]]`になります。値は1個でも、外側の入力件数と内側のトークン数の2軸があり、shapeは`[1, 1]`です。
+
+## 重み表の一部分を見る
+
+```python
+print("表の先頭3行・各行の先頭8成分:")
+print(embedding.weight[:3, :8].detach())
+token_id = ids[0, 0].item()
+print("参照するID:", token_id)
+print("そのIDの先頭10成分:")
+print(embedding.weight[token_id, :10].detach())
+```
+
+```text
+表の先頭3行・各行の先頭8成分:
+tensor([[-0.0093,  0.0337, -0.0747, -0.0181, -0.0062, -0.0151, -0.0320,  0.0078],
+        [ 0.0320,  0.0238, -0.0593,  0.0038,  0.0113, -0.0427, -0.0020,  0.0194],
+        [ 0.0267,  0.0339, -0.0198, -0.0275, -0.0137, -0.0234, -0.0260,  0.0356]],
+       dtype=torch.bfloat16)
+参照するID: 89015
+そのIDの先頭10成分:
+tensor([ 0.0140, -0.0510,  0.0308,  0.0250,  0.0118, -0.0352,  0.0242,  0.0557,
+         0.0275,  0.0247], dtype=torch.bfloat16)
+```
+
+| 指定 | 行として選ぶもの | 列として選ぶもの |
+|---|---|---|
+| `weight[:3, :8]` | ID 0・1・2の行 | 各ベクトルの成分0〜7 |
+| `weight[89015, :10]` | ID 89015の行 | そのベクトルの成分0〜9 |
+
+**「表の先頭の行」と「特定IDのベクトルの先頭成分」は、別の場所です。** ID 0の先頭成分とID 89015の先頭成分が違っていても矛盾しません。今回の各ベクトルは1024成分あり、表示したのはその一部だけです。
+
+表示用に`detach()`で勾配の記録から切り離しています。元の重みを変更する操作ではありません。detachせず参照した結果に`SliceBackward0`などが付く場合も、学習が完了したという意味ではなく、重みへの勾配をたどる演算の記録です。
+
+## 層を呼び、同じ行と比較する
+
+```python
+ids = ids.to(embedding.weight.device)
+with torch.no_grad():
+    output = embedding(ids)
+
+direct = embedding.weight[token_id].detach()
+print("output.shape:", output.shape)
+print("output.dtype:", output.dtype)
+print("output.device:", output.device)
+print("outputの先頭10成分:", output[0, 0, :10])
+print("直接取得した先頭10成分:", direct[:10])
+print("全1024成分が近い値か:", torch.allclose(output[0, 0], direct))
+```
+
+```text
+output.shape: torch.Size([1, 1, 1024])
+output.dtype: torch.bfloat16
+output.device: cpu
+outputの先頭10成分: tensor([ 0.0140, -0.0510,  0.0308,  0.0250,  0.0118, -0.0352,  0.0242,  0.0557,
+         0.0275,  0.0247], dtype=torch.bfloat16)
+直接取得した先頭10成分: tensor([ 0.0140, -0.0510,  0.0308,  0.0250,  0.0118, -0.0352,  0.0242,  0.0557,
+         0.0275,  0.0247], dtype=torch.bfloat16)
+全1024成分が近い値か: True
+```
+
+比較するのは、**入力のIDが指した行と、その入力位置の出力ベクトル**です。今回は`output[0, 0]`と`weight[89015]`が対応します。先頭10成分だけを表示していますが、比較は1024成分全体に対して行っています。`allclose`は指定した許容誤差内で近いかを判定する関数です。[allcloseの仕様](https://docs.pytorch.org/docs/2.14/generated/torch.allclose.html)
+
+今回の`no_grad()`は観察時の勾配記録を止めます。`model.eval()`のモード切替とは別です。元の重みを更新する処理は含みません。
+
+## 2次元の表から、なぜ3次元の出力になるか
+
+| 対象 | shape | 何を保持するか |
+|---|---|---|
+| `embedding.weight` | `[151936, 1024]` | 全行のベクトルを持つ表 |
+| `ids` | `[1, 1]` | 1件の入力・1個のID |
+| `output` | `[1, 1, 1024]` | その位置に対応する1024成分のベクトル |
+
+表は2次元のままです。出力は、入力の各位置にベクトルを置いた結果なので、入力の軸を残し、末尾に1024の軸が加わります。
+
+```text
+入力：  [[89015]]
+           ↓ その位置に、ID 89015のベクトルを置く
+出力：  [[[0.0140, -0.0510, 0.0308, …1024成分…]]]
+```
+
+これは構造を説明する模式表示です。**outputに「IDとベクトルの組」が入るわけではありません。** 入っているのは対応するベクトルで、IDは引く行を指定するために使います。元の`ids`も書き換えられず、整数IDを保持したまま残ります。
+
+### 同じIDでも、入力の形は残る
+
+```python
+with torch.no_grad():
+    for value in [token_id, [token_id], [[token_id]]]:
+        shaped_ids = torch.tensor(value, dtype=torch.long, device=embedding.weight.device)
+        shaped_output = embedding(shaped_ids)
+        print(list(shaped_ids.shape), "->", list(shaped_output.shape))
+        print("同じベクトルか:", torch.allclose(shaped_output.reshape(-1, 1024)[0], direct))
+```
+
+```text
+[] -> [1024]
+同じベクトルか: True
+[1] -> [1, 1024]
+同じベクトルか: True
+[1, 1] -> [1, 1, 1024]
+同じベクトルか: True
+```
+
+選ぶ行が同じなのでベクトルの数値は同じですが、それを包む軸の構造が違います。`tensor(89015)`はスカラー、`tensor([89015])`は1個のIDの並び、`tensor([[89015]])`は1件・各1個のIDのまとまりです。
+
+形を残すことで、後続の計算でも「どの入力の、何番目のトークンか」を位置から追えます。Embedding層そのものが文章の意味やbatchの役割を判断しているのではなく、入力の構造を保つAPIをモデル側が利用しています。
+
+## 7トークンを、それぞれのベクトルへ
+
+入力文を更新し、同じEmbedding層へ渡します。
+
+```python
+text = "こんにちは、今日はいい天気ですね"
+ids = tokenizer.encode(text, add_special_tokens=False, return_tensors="pt")
+ids = ids.to(embedding.weight.device)
+with torch.no_grad():
+    output = embedding(ids)
+print("ids:", ids)
+print("ids.shape:", ids.shape)
+print("output.shape:", output.shape)
+```
+
+```text
+ids: tensor([[ 89015,   5373, 133165, 126224,  35727,  94121, 128797]])
+ids.shape: torch.Size([1, 7])
+output.shape: torch.Size([1, 7, 1024])
+```
+
+| 出力の軸 | 長さ | 今回の意味 |
+|---|---|---|
+| 第0軸 | 1 | 入力が1件 |
+| 第1軸 | 7 | その入力に7個のトークン位置 |
+| 第2軸 | 1024 | 各トークンのベクトルの成分数 |
+
+**7個のIDが1本にまとまるのではなく、7個それぞれが1本の1024成分ベクトルになります。**
+
+```python
+for position, token_id in enumerate(ids[0].tolist()):
+    token = tokenizer.convert_ids_to_tokens(token_id)
+    print("位置:", position, "ID:", token_id, "Token:", token)
+    print("先頭3成分:", output[0, position, :3])
+```
+
+<details>
+<summary>7トークン分の対応と出力を読む</summary>
+
+```text
+位置: 0 ID: 89015 Token: ãģĵãĤĵãģ«ãģ¡ãģ¯
+先頭3成分: tensor([ 0.0140, -0.0510,  0.0308], dtype=torch.bfloat16)
+位置: 1 ID: 5373 Token: ãĢģ
+先頭3成分: tensor([ 0.0157, -0.0011, -0.0454], dtype=torch.bfloat16)
+位置: 2 ID: 133165 Token: ä»ĬæĹ¥ãģ¯
+先頭3成分: tensor([-0.0074, -0.0405,  0.0625], dtype=torch.bfloat16)
+位置: 3 ID: 126224 Token: ãģĦãģĦ
+先頭3成分: tensor([ 0.0065, -0.0454,  0.0109], dtype=torch.bfloat16)
+位置: 4 ID: 35727 Token: å¤©
+先頭3成分: tensor([-0.0283, -0.0339, -0.0036], dtype=torch.bfloat16)
+位置: 5 ID: 94121 Token: æ°Ĺ
+先頭3成分: tensor([ 0.0005, -0.0388,  0.0201], dtype=torch.bfloat16)
+位置: 6 ID: 128797 Token: ãģ§ãģĻãģŃ
+先頭3成分: tensor([ 0.0093, -0.0371,  0.0571], dtype=torch.bfloat16)
+```
+
+</details>
+
+`output[0, position, :3]`の0は入力の番号、positionはその入力内の位置、`:3`はベクトルの成分0〜2です。出力の位置0が重み表のID 0を指すのではありません。今回、位置0のIDは89015なので、対応するのは`weight[89015]`です。
+
+| 位置 | ID | 内部トークン | ベクトルの先頭3成分（表示用に丸めた値） |
+|---|---|---|---|
+| 0 | 89015 | `ãģĵãĤĵãģ«ãģ¡ãģ¯` | `[0.0140, -0.0510, 0.0308]` |
+| 1 | 5373 | `ãĢģ` | `[0.0157, -0.0011, -0.0454]` |
+| 2 | 133165 | `ä»ĬæĹ¥ãģ¯` | `[-0.0074, -0.0405, 0.0625]` |
+| 3 | 126224 | `ãģĦãģĦ` | `[0.0065, -0.0454, 0.0109]` |
+| 4 | 35727 | `å¤©` | `[-0.0283, -0.0339, -0.0036]` |
+| 5 | 94121 | `æ°Ĺ` | `[0.0005, -0.0388, 0.0201]` |
+| 6 | 128797 | `ãģ§ãģĻãģŃ` | `[0.0093, -0.0371, 0.0571]` |
+
+内部トークン表記はTokenizerが使う表記で、ベクトルの意味の名前ではありません。各成分に「日本語らしさ」などの意味が一対一で割り当てられているとも限りません。この後は、位置ごとのベクトルがTransformer層を通り、周囲の文脈を反映した表現へ変わっていきます。
 
 ## moduleの構成をたどる
 
@@ -60,6 +399,10 @@ Qの出力成分数は16×128、K/Vは8×128です。実行環境で出る名称
 input_weight = model.get_input_embeddings().weight
 output_weight = model.get_output_embeddings().weight
 print(input_weight.data_ptr() == output_weight.data_ptr())
+```
+
+```text
+True
 ```
 
 通常の非量子化・共有設定のモデルで同じ保存先かを確認する例です。量子化や分散配置では表現やアクセス方法が変わることがあります。パラメータ数を数える際も共有を二重に足さないようにします。

@@ -1,0 +1,168 @@
+{
+  "verifiedAt": "2026-10-05",
+  "python": "3.13.15",
+  "torch": "2.14.1+cu130",
+  "transformers": "5.18.0",
+  "model": "Qwen/Qwen3-0.6B",
+  "revision": "c1899de289a04d12100db370d81485cdf75e47ca",
+  "device": "cpu",
+  "dtype": "torch.bfloat16",
+  "modelClass": "<class 'transformers.models.qwen3.modeling_qwen3.Qwen3ForCausalLM'>",
+  "embeddingClass": "<class 'torch.nn.modules.sparse.Embedding'>",
+  "embedding": "Embedding(151936, 1024)",
+  "weightShape": [
+    151936,
+    1024
+  ],
+  "weightBytes": 311164928,
+  "modelVocabSize": 151936,
+  "baseVocabSize": 151643,
+  "totalVocabSize": 151669,
+  "shapes": [
+    {
+      "input": [],
+      "output": [
+        1024
+      ]
+    },
+    {
+      "input": [
+        1
+      ],
+      "output": [
+        1,
+        1024
+      ]
+    },
+    {
+      "input": [
+        1,
+        1
+      ],
+      "output": [
+        1,
+        1,
+        1024
+      ]
+    }
+  ],
+  "firstRowsFirst8": [
+    [
+      -0.00927734375,
+      0.03369140625,
+      -0.07470703125,
+      -0.01806640625,
+      -0.00616455078125,
+      -0.01513671875,
+      -0.031982421875,
+      0.0078125
+    ],
+    [
+      0.031982421875,
+      0.0238037109375,
+      -0.059326171875,
+      0.003814697265625,
+      0.01129150390625,
+      -0.042724609375,
+      -0.002044677734375,
+      0.0194091796875
+    ],
+    [
+      0.0267333984375,
+      0.033935546875,
+      -0.019775390625,
+      -0.0274658203125,
+      -0.01373291015625,
+      -0.0234375,
+      -0.0260009765625,
+      0.03564453125
+    ]
+  ],
+  "helloFirst10": [
+    0.01397705078125,
+    -0.051025390625,
+    0.03076171875,
+    0.0250244140625,
+    0.01177978515625,
+    -0.03515625,
+    0.024169921875,
+    0.0556640625,
+    0.0274658203125,
+    0.024658203125
+  ],
+  "text": "こんにちは、今日はいい天気ですね",
+  "ids": [
+    [
+      89015,
+      5373,
+      133165,
+      126224,
+      35727,
+      94121,
+      128797
+    ]
+  ],
+  "tokens": [
+    "ãģĵãĤĵãģ«ãģ¡ãģ¯",
+    "ãĢģ",
+    "ä»ĬæĹ¥ãģ¯",
+    "ãģĦãģĦ",
+    "å¤©",
+    "æ°Ĺ",
+    "ãģ§ãģĻãģŃ"
+  ],
+  "outputShape": [
+    1,
+    7,
+    1024
+  ],
+  "eachTokenFirst3": [
+    [
+      0.01397705078125,
+      -0.051025390625,
+      0.03076171875
+    ],
+    [
+      0.0157470703125,
+      -0.00109100341796875,
+      -0.04541015625
+    ],
+    [
+      -0.007415771484375,
+      -0.04052734375,
+      0.0625
+    ],
+    [
+      0.0064697265625,
+      -0.04541015625,
+      0.01092529296875
+    ],
+    [
+      -0.0283203125,
+      -0.033935546875,
+      -0.0036163330078125
+    ],
+    [
+      0.0004520416259765625,
+      -0.038818359375,
+      0.0201416015625
+    ],
+    [
+      0.00933837890625,
+      -0.037109375,
+      0.05712890625
+    ]
+  ],
+  "sameLayer": true,
+  "tiedWeights": true,
+  "modelDisplay": "Qwen3ForCausalLM(\n  (model): Qwen3Model(\n    (embed_tokens): Embedding(151936, 1024)\n    (layers): ModuleList(\n      (0-27): 28 x Qwen3DecoderLayer(\n        (self_attn): Qwen3Attention(\n          (q_proj): Linear(in_features=1024, out_features=2048, bias=False)\n          (k_proj): Linear(in_features=1024, out_features=1024, bias=False)\n          (v_proj): Linear(in_features=1024, out_features=1024, bias=False)\n          (o_proj): Linear(in_features=2048, out_features=1024, bias=False)\n          (q_norm): Qwen3RMSNorm((128,), eps=1e-06)\n          (k_norm): Qwen3RMSNorm((128,), eps=1e-06)\n        )\n        (mlp): Qwen3MLP(\n          (gate_proj): Linear(in_features=1024, out_features=3072, bias=False)\n          (up_proj): Linear(in_features=1024, out_features=3072, bias=False)\n          (down_proj): Linear(in_features=3072, out_features=1024, bias=False)\n          (act_fn): SiLUActivation()\n        )\n        (input_layernorm): Qwen3RMSNorm((1024,), eps=1e-06)\n        (post_attention_layernorm): Qwen3RMSNorm((1024,), eps=1e-06)\n      )\n    )\n    (norm): Qwen3RMSNorm((1024,), eps=1e-06)\n    (rotary_emb): Qwen3RotaryEmbedding()\n  )\n  (lm_head): Linear(in_features=1024, out_features=151936, bias=False)\n)",
+  "checks": [
+    "cached-trained-weights",
+    "layer-identity",
+    "vocabulary",
+    "single-lookup",
+    "shape-preservation",
+    "seven-token-lookup",
+    "input-unchanged"
+  ]
+}

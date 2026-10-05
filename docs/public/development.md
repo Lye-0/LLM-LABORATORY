@@ -50,6 +50,8 @@ Qwenの語彙・設定は固定revisionを使い、`public/data/qwen3/manifest.j
 
 Python参照検証はtorch・transformersのある環境で `python verification/verify_reference.py` を実行する。結果は `tests/fixtures/python-reference.json`。個人のログや環境の絶対パスをfixtureへ追加しない。
 
+学習済みEmbeddingの参照検証は `python verification/verify_qwen_embedding.py`。固定revisionのQwen3-0.6Bが既存キャッシュに必要で、ダウンロードは行わない。CPU・bfloat16でモデルを読み、層の同一性、1トークンと7トークンの参照、shape、入力が変化しないことを確認する。数値・環境・モデル表示は `tests/fixtures/qwen-embedding-reference.json` に保存する。通常のCIにはモデル本体の取得を追加しない。
+
 ## 公開の流れ
 
 `.github/workflows/pages.yml` はmainへのpushで実行する。miseによる環境準備、公開ファイル境界の確認、依存導入、検証・ビルド、distのアップロード、Pagesへの公開を順に行う。
