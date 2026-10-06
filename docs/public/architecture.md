@@ -6,23 +6,23 @@ Astroの静的生成、Reactの操作部品、MDXの教材で構成する。Type
 
 文書主体のページをHTMLへ出力し、入力と結果が連動する箇所だけをhydrateするためにAstroを採用した。SSR・DB・認証を前提にしない。
 
-| 場所                                 | 役割                                 |
-| ------------------------------------ | ------------------------------------ |
-| `src/content/lessons/`               | 29単元のMDX本文                      |
-| `src/content.config.ts`              | 教材のメタデータschema               |
-| `src/data/catalog.ts`                | 段階・実験・出典の情報               |
-| `src/data/api.ts` / `api-groups.ts`  | API詳細とライブラリ・所有者の分類    |
-| `src/data/glossary.ts`               | 用語と比較                           |
-| `src/data/projects.ts` / `topics.ts` | 改造課題と周辺技術                   |
-| `src/layouts/SiteLayout.astro`       | 共通表示、セクション別ナビ、テーマ   |
-| `src/components/labs/`               | 操作実験のUI                         |
-| `src/components/ui/Select.tsx`       | 共通の選択欄と候補一覧               |
-| `src/lib/simulations.ts`             | UIから独立した数式・shapeの計算      |
-| `src/lib/paths.ts`                   | 配信先baseの付与・除去               |
-| `src/workers/tokenizer.ts`           | Tokenizerの実処理と語彙の検索        |
-| `src/data/maps.ts` / `src/pages/learn/maps/` | まとめ6ページと小モデルの実行教材 |
-| `src/components/maps/` / `src/styles/maps.css` | 地点選択・入出力・構造図の共通表示 |
-| `public/data/qwen3/`                 | 固定revisionの語彙・設定・ライセンス |
+| 場所                                           | 役割                                 |
+| ---------------------------------------------- | ------------------------------------ |
+| `src/content/lessons/`                         | 29単元のMDX本文                      |
+| `src/content.config.ts`                        | 教材のメタデータschema               |
+| `src/data/catalog.ts`                          | 段階・実験・出典の情報               |
+| `src/data/api.ts` / `api-groups.ts`            | API詳細とライブラリ・所有者の分類    |
+| `src/data/glossary.ts`                         | 用語と比較                           |
+| `src/data/projects.ts` / `topics.ts`           | 改造課題と周辺技術                   |
+| `src/layouts/SiteLayout.astro`                 | 共通表示、セクション別ナビ、テーマ   |
+| `src/components/labs/`                         | 操作実験のUI                         |
+| `src/components/ui/Select.tsx`                 | 共通の選択欄と候補一覧               |
+| `src/lib/simulations.ts`                       | UIから独立した数式・shapeの計算      |
+| `src/lib/paths.ts`                             | 配信先baseの付与・除去               |
+| `src/workers/tokenizer.ts`                     | Tokenizerの実処理と語彙の検索        |
+| `src/data/maps.ts` / `src/pages/learn/maps/`   | まとめ6ページと小モデルの実行教材    |
+| `src/components/maps/` / `src/styles/maps.css` | 地点選択・入出力・構造図の共通表示   |
+| `public/data/qwen3/`                           | 固定revisionの語彙・設定・ライセンス |
 
 ## 実験の実行方式
 
@@ -36,7 +36,7 @@ Chat Template Builderはsystemと1件のuserを扱う限定例。Model Inspector
 
 全体地図はWorldMapの静的HTMLで、準備・推論・学習・改造を同じ面に表示する。各処理の入力・出力・短い説明はFlowExplorerの初期HTMLにすべて出力し、閲覧のための切替を要求しない。`map-previews.ts`は地図用の短い表記、`maps.ts`は完全なコード・数値・条件の正本。sequenceは番号順の折返し経路、branchesは矢印のない並列一覧として表示する。ResizeObserverで幅に合う列数へ変更し、小画面とJavaScript無効時には縦へ並べる。
 
-詳細ボタンは補足のnative dialogを開く。初期表示は閉じ、queryで明示された地点は読み込み後に開く。Escapeと閉じる操作で地図と元の操作部品へ戻す。長い条件は補足内のdetailsへ置き、図の寸法や読む順序は開閉で変更しない。地図ページでは左ナビをまとめと実行教材に絞り、教材一覧への入口を別に示す。
+詳細ボタンは補足のnative dialogを開く。初期表示は閉じ、queryで明示された地点は読み込み後に開く。Escapeと閉じる操作で地図と元の操作部品へ戻す。長い条件は補足内のdetailsへ置き、図の寸法や読む順序は開閉で変更しない。地図ページの左ナビは「学ぶ」の教材ページと共通にし、図・教材・実行例の所属を同じ一覧で示す。
 
 全ノードの説明は静的なdetailsにも出力し、JavaScriptが無効でも内容へ到達できる。ページは学ぶ内のナビと検索へ登録する。Qwenの構造値と学習済みEmbeddingの実測を、教育用小モデルの値から区別する。
 

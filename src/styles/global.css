@@ -372,6 +372,9 @@ kbd {
   margin-left: auto;
   color: var(--faint);
 }
+.sidebar-home[aria-current='page'] {
+  color: var(--accent);
+}
 .tiny-square {
   width: 9px;
   height: 9px;
@@ -446,6 +449,15 @@ kbd {
   letter-spacing: 0.13em;
   color: var(--faint);
   margin-top: 24px;
+}
+.sidebar-bottom p:first-child {
+  margin: 0 0 12px;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+}
+.sidebar-bottom a[aria-current='page'] {
+  color: var(--accent);
+  font-weight: 600;
 }
 .site-body {
   margin-left: var(--nav);

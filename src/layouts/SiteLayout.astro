@@ -45,7 +45,7 @@ interface SideGroup {
 let sidebarHome = { href: '/', label: 'サイトの案内' };
 let sidebarGroups: SideGroup[] = [];
 if (activeSection === '/learn/') {
-  sidebarHome = { href: '/learn/', label: '学習マップ' };
+  sidebarHome = { href: '/learn/', label: '学ぶ：全体と教材一覧' };
   sidebarGroups = [
     {
       title: '図でつなぐ',
@@ -57,32 +57,16 @@ if (activeSection === '/learn/') {
     ...stages.map((stage) => ({
       title: stage.title,
       number: stage.number,
-      links: lessons
-        .filter((l) => l.data.stage === stage.id)
-        .map((l) => ({ href: `/learn/${l.id}/`, label: l.data.title })),
+      links: [
+        ...lessons
+          .filter((l) => l.data.stage === stage.id)
+          .map((l) => ({ href: `/learn/${l.id}/`, label: l.data.title })),
+        ...(stage.id === 'training'
+          ? [{ href: '/learn/maps/training/small-model/', label: '小さなモデルを作る（実行例）' }]
+          : []),
+      ],
     })),
   ];
-  if (path.startsWith('/learn/maps/')) {
-    sidebarHome = { href: '/learn/maps/', label: 'LLMの全体地図' };
-    sidebarGroups = [
-      {
-        title: '地図を詳しく見る',
-        links: learningMaps.map((map) => ({ href: `/learn/maps/${map.slug}/`, label: map.title })),
-      },
-      {
-        title: '実行して確かめる',
-        links: [{ href: '/learn/maps/training/small-model/', label: '小さなモデルを作る' }],
-      },
-      {
-        title: '教材へ進む',
-        links: [
-          { href: '/learn/', label: '学習マップ' },
-          { href: '/labs/', label: '実験一覧' },
-          { href: '/projects/', label: '改造課題' },
-        ],
-      },
-    ];
-  }
 } else if (activeSection === '/labs/') {
   sidebarHome = { href: '/labs/', label: '実験一覧' };
   sidebarGroups = stages
@@ -141,11 +125,7 @@ if (activeSection === '/learn/') {
   ];
 }
 function isCurrentLink(href: string) {
-  return (
-    path === href ||
-    (path === '/learn/maps/training/small-model/' && href === '/learn/maps/training/') ||
-    (detailClass && href === `/reference/classes/${detailClass.slug}/`)
-  );
+  return path === href || (detailClass && href === `/reference/classes/${detailClass.slug}/`);
 }
 ---
 
@@ -249,7 +229,11 @@ function isCurrentLink(href: string) {
           </a>
         ))}
       </nav>
-      <a href={withBase(sidebarHome.href)} class="sidebar-home">
+      <a
+        href={withBase(sidebarHome.href)}
+        class="sidebar-home"
+        aria-current={path === sidebarHome.href ? 'page' : undefined}
+      >
         <span class="tiny-square"></span>
         {sidebarHome.label}
         <span class="mono">INDEX</span>
@@ -276,8 +260,19 @@ function isCurrentLink(href: string) {
         </section>
       ))}
       <div class="sidebar-bottom">
-        <a href={withBase('/environment/')}>実行環境と使い方</a>
-        <a href={withBase('/reference/sources/')}>参考資料・モデル条件</a>
+        <p>共通ガイド</p>
+        <a
+          href={withBase('/environment/')}
+          aria-current={path === '/environment/' ? 'page' : undefined}
+        >
+          実行環境と使い方
+        </a>
+        <a
+          href={withBase('/reference/sources/')}
+          aria-current={path === '/reference/sources/' ? 'page' : undefined}
+        >
+          参考資料・モデル条件
+        </a>
         <p>READ. OBSERVE. UNDERSTAND.</p>
       </div>
     </aside>
