@@ -62,6 +62,27 @@ if (activeSection === '/learn/') {
         .map((l) => ({ href: `/learn/${l.id}/`, label: l.data.title })),
     })),
   ];
+  if (path.startsWith('/learn/maps/')) {
+    sidebarHome = { href: '/learn/maps/', label: 'LLMの全体地図' };
+    sidebarGroups = [
+      {
+        title: '地図を詳しく見る',
+        links: learningMaps.map((map) => ({ href: `/learn/maps/${map.slug}/`, label: map.title })),
+      },
+      {
+        title: '実行して確かめる',
+        links: [{ href: '/learn/maps/training/small-model/', label: '小さなモデルを作る' }],
+      },
+      {
+        title: '教材へ進む',
+        links: [
+          { href: '/learn/', label: '学習マップ' },
+          { href: '/labs/', label: '実験一覧' },
+          { href: '/projects/', label: '改造課題' },
+        ],
+      },
+    ];
+  }
 } else if (activeSection === '/labs/') {
   sidebarHome = { href: '/labs/', label: '実験一覧' };
   sidebarGroups = stages

@@ -1,52 +1,33 @@
 ---
+const stages = [
+  ['Attention', 'r₁：元の入力を残す', 'Attention出力'],
+  ['MLP / SwiGLU', 'r₂：合流後の入力を残す', 'MLP出力'],
+];
 ---
 
-<figure class="residual-diagram" aria-label="Residualの2本の経路と加算">
-  <figcaption>1層の中で、元の入力と処理した結果が合流する</figcaption>
-  <div class="residual-start">
-    <strong>入力 x</strong>
-    <small>[B,T,1024]</small>
+<figure class="residual-diagram" aria-label="Residualの分岐と合流">
+  <figcaption>Residual：処理する枝と、入力を残す枝が合流する</figcaption>
+  <div class="residual-circuit">
+    {stages.map(([name, residual, output]) => (
+      <div class="residual-stage">
+        <div class="residual-bypass">
+          <span>{residual}</span>
+          <span aria-hidden="true">↘</span>
+        </div>
+        <div class="residual-main">
+          <strong>入力 x</strong>
+          <span aria-hidden="true">→</span>
+          <span>RMSNorm</span>
+          <span aria-hidden="true">→</span>
+          <strong>{name}</strong>
+          <span aria-hidden="true">→</span>
+          <span class="residual-sum">
+            <b>＋</b>
+            <small>入力と{output}</small>
+          </span>
+        </div>
+      </div>
+    ))}
   </div>
-  <div class="residual-lanes">
-    <div class="residual-compute">
-      <span aria-hidden="true">↓</span>
-      <span>RMSNorm</span>
-      <span aria-hidden="true">↓</span>
-      <strong>Attention</strong>
-      <span aria-hidden="true">↓</span>
-    </div>
-    <div class="residual-bypass">
-      <strong>r₁ = 元の x を残す</strong>
-      <small>処理する枝の結果と、あとで足す</small>
-      <span aria-hidden="true">↓</span>
-    </div>
-  </div>
-  <div class="residual-join">
-    <strong>＋ 要素ごとに加算</strong>
-    <small>r₁ + Attentionの出力</small>
-  </div>
-  <div class="residual-lanes">
-    <div class="residual-compute">
-      <span aria-hidden="true">↓</span>
-      <span>RMSNorm</span>
-      <span aria-hidden="true">↓</span>
-      <strong>MLP / SwiGLU</strong>
-      <small>gate と up → 要素積 → down</small>
-      <span aria-hidden="true">↓</span>
-    </div>
-    <div class="residual-bypass">
-      <strong>r₂ = 合流後の x を残す</strong>
-      <small>次の加算のための枝</small>
-      <span aria-hidden="true">↓</span>
-    </div>
-  </div>
-  <div class="residual-join">
-    <strong>＋ 要素ごとに加算</strong>
-    <small>r₂ + MLPの出力</small>
-  </div>
-  <div class="residual-end">
-    <span aria-hidden="true">↓</span>
-    <strong>次のDecoder Layerへ</strong>
-    <small>[B,T,1024]</small>
-  </div>
+  <p>[B,T,1024]の形を保ち、加算後の表現を次の処理へ渡す。</p>
 </figure>

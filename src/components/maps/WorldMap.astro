@@ -1,0 +1,129 @@
+---
+import { withBase } from '../../lib/paths';
+const pipeline = [
+  ['Tokenizer', '文字列をIDにする', '整数ID', '[B, T]', 'ids'],
+  ['Embedding', '表の行を引く', '位置ごとのベクトル', '[B, T, D]', 'embedding'],
+  ['Transformer', '文脈を反映する', '文脈を持つ表現', '[B, T, D]', 'context'],
+  ['LM head', '候補へ投影する', '候補のスコア', '[B, T, V]', 'logits'],
+  ['次のIDを選ぶ', 'greedy / sampling', '次トークンのID', '[B, 1]', 'choose'],
+  ['decode', '文字列へ戻す', '表示する文章', '文字列', 'decode'],
+];
+const training = [
+  ['学習データ', '入力と次の正解', 'forward'],
+  ['予測', '現在の重みで計算', 'forward'],
+  ['損失', '正解とのずれ', 'loss'],
+  ['勾配', '数値をどう変えるか', 'backward'],
+  ['重みの更新', 'optimizerが更新', 'step'],
+];
+---
+
+<div class="world-map" aria-label="LLMの推論・学習・改造の全体地図">
+  <section class="world-preparation">
+    <h2>用意する</h2>
+    <div class="world-assets">
+      <a href={withBase('/learn/maps/runtime/?runtime=objects')}>
+        <span>語彙・分割ルール</span>
+        <b aria-hidden="true">→</b>
+        <strong>Tokenizer</strong>
+      </a>
+      <a href={withBase('/learn/maps/runtime/?runtime=objects')}>
+        <span>実装コード ＋ config ＋ 重み</span>
+        <b aria-hidden="true">→</b>
+        <strong>モデルの実物</strong>
+      </a>
+    </div>
+  </section>
+  <section class="world-inference">
+    <header>
+      <h2>文章を通す</h2>
+      <p>
+        入力：文章・会話 <span aria-hidden="true">→</span> 文字列
+      </p>
+      <a href={withBase('/learn/maps/inference/')}>処理の地図を詳しく →</a>
+    </header>
+    <div class="world-ownership" aria-hidden="true">
+      <span>モデル内部：学習済みの重みを使って計算</span>
+    </div>
+    <ol class="world-pipeline">
+      {pipeline.map(([title, meaning, output, shape, id], index) => (
+        <li class:list={{ 'world-model-node': index >= 1 && index <= 3 }}>
+          <a href={withBase(`/learn/maps/inference/?inference=${id}`)}>
+            <span class="world-number">0{index + 1}</span>
+            <h3>{title}</h3>
+            <p>{meaning}</p>
+            <div class="world-output">
+              <strong>{output}</strong>
+              <code>{shape}</code>
+            </div>
+          </a>
+          {index < pipeline.length - 1 && (
+            <span class="world-arrow" aria-hidden="true">
+              →
+            </span>
+          )}
+        </li>
+      ))}
+    </ol>
+    <div class="world-generation-loop">
+      <span class="world-loop-mark" aria-hidden="true">
+        ↺
+      </span>
+      <p>
+        <strong>次のIDを列へ追加 → モデルの計算へ戻る</strong>
+        <span>終了条件に達したら、生成したID列をdecodeする。</span>
+      </p>
+    </div>
+  </section>
+  <section class="world-training">
+    <header>
+      <h2>重みを育てる</h2>
+      <p>新規初期化・追加学習・LoRA</p>
+      <a href={withBase('/learn/maps/training/')}>作成・学習の地図へ →</a>
+    </header>
+    <ol>
+      {training.map(([title, meaning, id], index) => (
+        <li>
+          <a href={withBase(`/learn/maps/training/?update=${id}`)}>
+            <strong>{title}</strong>
+            <span>{meaning}</span>
+          </a>
+          {index < training.length - 1 && (
+            <span class="world-arrow" aria-hidden="true">
+              →
+            </span>
+          )}
+        </li>
+      ))}
+    </ol>
+    <p class="world-weight-return">
+      <span aria-hidden="true">↑</span>{' '}
+      更新した重みは、上のモデルへ。同じ計算の流れで、次の予測をする。
+    </p>
+  </section>
+  <section class="world-modification">
+    <h2>変える場所</h2>
+    <div>
+      <a href={withBase('/learn/maps/modification/?change=vocab')}>
+        <strong>語彙・ID</strong>
+        <span>Tokenizerと行数をそろえる</span>
+      </a>
+      <a href={withBase('/learn/maps/modification/?change=embedding')}>
+        <strong>Embedding</strong>
+        <span>特定の重みの行</span>
+      </a>
+      <a href={withBase('/learn/maps/modification/?change=replace')}>
+        <strong>層・Linear</strong>
+        <span>構造変更・LoRA</span>
+      </a>
+      <a href={withBase('/learn/maps/modification/?change=quantize')}>
+        <strong>重みの表現</strong>
+        <span>量子化・近似</span>
+      </a>
+      <a href={withBase('/learn/maps/modification/?change=generation')}>
+        <strong>生成設定</strong>
+        <span>候補の選び方</span>
+      </a>
+    </div>
+    <p>変更前の基準 → ひとつの変更 → 同条件で評価 → 保存・再読込／復元</p>
+  </section>
+</div>

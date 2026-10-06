@@ -1,10 +1,84 @@
 ---
 import { Code } from 'astro:components';
 import SiteLayout from '../../../../layouts/SiteLayout.astro';
+import FlowExplorer from '../../../../components/maps/FlowExplorer';
+import type { MapSection } from '../../../../data/maps';
 import { withBase } from '../../../../lib/paths';
 import record from '../../../../../tests/fixtures/tiny-language-model-reference.json';
 import '../../../../styles/maps.css';
 import source from '../../../../../public/examples/tiny-language-model.py?raw';
+const tinyMap: MapSection = {
+  id: 'tiny',
+  title: '小モデルの作成から生成まで',
+  description: '',
+  steps: [
+    {
+      id: 'data',
+      title: '文章と正解を用意',
+      input: '文字列',
+      output: '入力とlabels\n[B,16]',
+      code: 'train_ids, train_labels = windows(train_text)',
+      explanation: '固定した29文字の語彙を使い、入力16文字と、その1文字先の正解を作ります。',
+      note: '学習用の文章と、未使用の検証文を分けます。',
+      links: [],
+    },
+    {
+      id: 'create',
+      title: '新しくモデルを作る',
+      input: '語彙29・幅32・1層',
+      output: '初期重みを持つモデル',
+      code: 'model = TinyCausalLM(**config)',
+      explanation:
+        '文字と位置のEmbedding、causal AttentionとMLP、Norm、LM headを組み立てて初期化します。',
+      note: 'Qwenの重みは読み込みません。',
+      links: [],
+    },
+    {
+      id: 'forward',
+      title: '次の文字を予測',
+      input: '入力ID\n[B,16]',
+      output: '候補のlogits\n[B,16,29]',
+      code: 'logits = model(inputs)',
+      explanation:
+        '文字と位置のベクトルを足し、未来を隠した1層を通して、各位置の次の文字の候補スコアを作ります。',
+      note: '内部のベクトルは[B,16,32]です。',
+      links: [],
+    },
+    {
+      id: 'update',
+      title: '損失から重みを更新',
+      input: 'logitsと正解ID',
+      output: '学習した重み',
+      code: 'optimizer.zero_grad()\nloss = loss_for(model, inputs, labels)\nloss.backward()\noptimizer.step()',
+      explanation:
+        '予測のずれを測り、勾配を計算して重みを更新します。この工程を120回繰り返します。',
+      note: '検証文でのlossは、学習用とは別に測定します。',
+      links: [],
+    },
+    {
+      id: 'save',
+      title: '保存して読み直す',
+      input: '設定・語彙・state_dict',
+      output: '復元したモデル',
+      code: 'torch.save(checkpoint, destination)\nrestored.load_state_dict(saved["state_dict"])',
+      explanation:
+        '設定と同じ構造を作って重みを戻し、保存前と同じ入力のlogitsが一致するか確認します。',
+      note: '別プロセスの--reload-onlyでも照合済み。コードは保存処理の模式抜粋です。',
+      links: [],
+    },
+    {
+      id: 'generate',
+      title: '1文字ずつ生成',
+      input: '文字ID列「sun 」',
+      output: '32文字を追加した文章',
+      code: 'next_id = restored(ids)[0, -1].argmax().item()\ngenerated.append(next_id)',
+      explanation:
+        '最後の位置の最大スコアから次IDを選び、列へ追加します。末尾16文字を使い直し、32回繰り返します。',
+      note: 'この小例はKV Cacheを使わず、毎回モデルを計算します。',
+      links: [],
+    },
+  ],
+};
 ---
 
 <SiteLayout
@@ -18,7 +92,7 @@ import source from '../../../../../public/examples/tiny-language-model.py?raw';
     <span>/ 小さな言語モデル</span>
   </nav>
   <article class="map-code-lesson">
-    <header class="page-header">
+    <header class="page-header map-intro">
       <div class="eyebrow">BUILD A SMALL CAUSAL LM</div>
       <h1>
         小さなモデルで、
@@ -37,12 +111,7 @@ import source from '../../../../../public/examples/tiny-language-model.py?raw';
       この例は1文字を1トークンにします。入力の16文字から、各位置の次の文字を予測します。例えば「sun
       」を入力する途中の位置では、その次の文字を正解にします。
     </p>
-    <Code
-      code={
-        '文字列 → 文字ID [B,16]\n         ↓ token_embedding + position_embedding\nベクトル [B,16,32]\n         ↓ causal Attention + MLP（1層）→ LayerNorm\n内部表現 [B,16,32]\n         ↓ lm_head\nlogits [B,16,29]\n         ↓ 次の文字IDとのcross entropy\nloss（1個の数値） → backward → 勾配 → optimizer.step → 更新した重み'
-      }
-      lang="text"
-    />
+    <FlowExplorer section={tinyMap} client:load />
     <p>
       構造はPyTorchの<code>TransformerEncoderLayer</code>で組み立てます。未来の位置を隠すcausal
       maskを適用するので、過去から次を予測する言語モデルとして使います。QwenのGQA・RoPE・RMSNorm・SwiGLU・重み共有・KV
