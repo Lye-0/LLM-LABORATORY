@@ -3,10 +3,10 @@ title: "Pythonでオブジェクトを読む"
 description: "変数・クラス・属性・呼び出しを分けて、ライブラリのコードへつなぐ。"
 stage: "orientation"
 order: 2
-minutes: 15
+minutes: 20
 eyebrow: "PYTHON FOUNDATIONS"
 sources: ["python","module"]
-tags: ["変数","クラス","インスタンス","self","import","inspect","callable"]
+tags: ["変数","クラス","インスタンス","self","import","inspect","callable","辞書内包表記","items","enumerate"]
 question: "embeddingがvariableと表示されることと、Embeddingのインスタンスであることは矛盾しますか？"
 answer: "矛盾しません。embeddingは変数名で、その参照先がEmbeddingクラスのインスタンスです。"
 ---
@@ -232,3 +232,51 @@ layerは関数: False
 ## 同じ実物か、別の実物か
 
 別の変数へ代入してもコピーとは限りません。Tensorのviewは数値データを共有することがあります。「変数名が違う」「shapeが違う」「データの保存先が違う」は、それぞれ別の観点です。
+
+## 辞書内包表記 — 1組の作り方と、繰り返す材料
+
+モデル入力の各Tensorへ同じ処理をするコードでは、辞書内包表記が使われます。まず数値だけの例で、普通のfor文と照合します。
+
+```python
+data = {"a": 10, "b": 20}
+loop_result = {}
+for key, value in data.items():
+    loop_result[key] = value * 2
+
+compact_result = {key: value * 2 for key, value in data.items()}
+print(list(data.items()))
+print(compact_result)
+print(loop_result == compact_result)
+```
+
+```text
+[('a', 10), ('b', 20)]
+{'a': 20, 'b': 40}
+True
+```
+
+`items()`はキーと値のペアを順に渡し、`key, value`で分けて受け取ります。最初は`key="a"`・`value=10`になり、`key: value * 2`で`"a": 20`を作ります。次は`"b": 40`です。**`key`と`value`は予約語ではなく、受け取りに使った変数名です。**
+
+`{key: value * 2}`だけなら、すでにあるkeyとvalueから1組を作る通常の辞書の式です。全組を処理するには、どこから何を順に取り出すかを`for ... in ...`で指定します。辞書を直接`for key in data`で回すとキーだけを取り出せます。キーと値の両方を使うため、この例では`items()`を選んでいます。
+
+普通のfor文は`:`の後に字下げした処理を書きます。内包表記は全体で一つの式で、「作るもの」がforより前にある専用の文法なので、forの末尾に`:`を付けません。
+
+### 新規作成も、キーの加工もできる
+
+```python
+created = {i: i ** 2 for i in range(3)}
+renamed = {key.upper(): value * 2 for key, value in data.items()}
+print(created)
+print(renamed)
+print(data)
+```
+
+```text
+{0: 0, 1: 1, 2: 4}
+{'A': 20, 'B': 40}
+{'a': 10, 'b': 20}
+```
+
+元データは辞書である必要はありません。`for ... in ...`で繰り返せる材料を指定し、左側でキー、右側で値を作ります。上の例では元のdataは変わりません。新しいキーが重複すると後の値が残るので、キーを加工するときは重複も確認します。[Pythonの辞書と繰り返し](https://docs.python.org/3/tutorial/datastructures.html#dictionaries)
+
+LLMのコードでは、数値を2倍する代わりに`value.to(device)`で各Tensorの配置先を合わせます。[Qwenの観察](../qwen/)で、BatchEncodingから通常のdictを作る例につながります。

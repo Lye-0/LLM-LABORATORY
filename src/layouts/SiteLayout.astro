@@ -349,6 +349,19 @@ function isCurrentLink(href: string) {
           window.location.href = withBase('/search/');
         }
       });
+      // Wide lesson tables need a keyboard scroll target at narrow widths.
+      const scrollTables = document.querySelectorAll<HTMLElement>('.prose table:not([tabindex])');
+      const updateTableFocus = (table: HTMLElement) => {
+        if (table.scrollWidth > table.clientWidth) table.tabIndex = 0;
+        else table.removeAttribute('tabindex');
+      };
+      const tableResize = new ResizeObserver((entries) => {
+        entries.forEach(({ target }) => updateTableFocus(target as HTMLElement));
+      });
+      scrollTables.forEach((table) => {
+        updateTableFocus(table);
+        tableResize.observe(table);
+      });
       document.querySelectorAll('pre').forEach((pre) => {
         if (pre.closest('[data-no-copy], astro-island')) return;
         const button = document.createElement('button');

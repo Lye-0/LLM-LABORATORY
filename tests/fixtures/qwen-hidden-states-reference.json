@@ -479,6 +479,11 @@
     "same-shape-different-values",
     "input-unchanged",
     "no-kv-cache",
-    "first-position-causal-prefix"
+    "first-position-causal-prefix",
+    "batch-encoding-to-dict",
+    "tokenizer-call-ids-and-mask",
+    "same-device-to-identity",
+    "token-axis-vs-feature-axis-slicing",
+    "loop-variable-overwrite-index-error"
   ]
 }

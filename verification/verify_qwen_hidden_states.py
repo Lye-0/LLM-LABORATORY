@@ -7,7 +7,7 @@ from pathlib import Path
 os.environ['HF_HUB_OFFLINE'] = '1'
 import torch
 import transformers
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, BatchEncoding
 
 ROOT = Path(__file__).resolve().parents[1]
 MODEL = 'Qwen/Qwen3-0.6B'
@@ -19,8 +19,14 @@ model = AutoModelForCausalLM.from_pretrained(
 )
 model.eval()
 text = 'こんにちは、今日はいい天気ですね'
-inputs = tokenizer(text, add_special_tokens=False, return_tensors='pt')
-inputs = {key: value.to(model.get_input_embeddings().weight.device) for key, value in inputs.items()}
+encoded_inputs = tokenizer(text, add_special_tokens=False, return_tensors='pt')
+assert isinstance(encoded_inputs, BatchEncoding)
+inputs = {key: value.to(model.get_input_embeddings().weight.device) for key, value in encoded_inputs.items()}
+assert type(inputs) is dict
+assert set(inputs) == {'input_ids', 'attention_mask'}
+assert inputs['input_ids'].tolist() == [[89015, 5373, 133165, 126224, 35727, 94121, 128797]]
+assert inputs['attention_mask'].tolist() == [[1] * 7]
+assert inputs['input_ids'].to('cpu') is inputs['input_ids']
 original_ids = inputs['input_ids'].clone()
 observed = {}
 
@@ -50,6 +56,19 @@ assert not torch.allclose(states[0], states[1])
 assert torch.equal(inputs['input_ids'], original_ids)
 assert outputs.past_key_values is None
 assert tuple(outputs.logits.shape) == (1, 7, 151936)
+assert tuple(states[0][0, 0, :8].shape) == (8,)
+assert tuple(states[0][0, 0:8].shape) == (7, 1024)
+broken_states = states
+for i, broken_states in enumerate(broken_states):
+    pass
+assert isinstance(broken_states, torch.Tensor) and len(broken_states) == 1
+try:
+    broken_states[1]
+except IndexError:
+    pass
+else:
+    raise AssertionError('Expected batch-axis IndexError after variable overwrite')
+assert isinstance(states, tuple) and len(states) == 29
 
 with torch.no_grad():
     one = model(input_ids=inputs['input_ids'][:, :1], output_hidden_states=True, use_cache=False)
@@ -68,7 +87,10 @@ record = {
     'allcloseBeforeAfterLayer0': torch.allclose(states[0], states[1]),
     'checks': ['embedding-equality', 'every-intermediate-layer-hook', 'final-norm-hook',
                'last-state-is-not-raw-layer27', 'same-shape-different-values',
-               'input-unchanged', 'no-kv-cache', 'first-position-causal-prefix'],
+               'input-unchanged', 'no-kv-cache', 'first-position-causal-prefix',
+               'batch-encoding-to-dict', 'tokenizer-call-ids-and-mask',
+               'same-device-to-identity', 'token-axis-vs-feature-axis-slicing',
+               'loop-variable-overwrite-index-error'],
 }
 out = ROOT / 'tests/fixtures/qwen-hidden-states-reference.json'
 out.write_text(json.dumps(record, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')

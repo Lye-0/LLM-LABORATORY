@@ -3,7 +3,7 @@ title: "実際のQwenを観察する"
 description: "学習済みEmbeddingからHidden Stateへ、同じトークン位置の値とshapeを追う。"
 stage: "representation"
 order: 16
-minutes: 30
+minutes: 38
 eyebrow: "MODEL ANATOMY"
 prerequisites: ["first-generation","embedding"]
 labs: ["model","embedding"]
@@ -389,10 +389,10 @@ for position, token_id in enumerate(ids[0].tolist()):
 
 ```python
 text = "こんにちは、今日はいい天気ですね"
-inputs = tokenizer(text, add_special_tokens=False, return_tensors="pt")
+encoded_inputs = tokenizer(text, add_special_tokens=False, return_tensors="pt")
 inputs = {
     key: value.to(model.get_input_embeddings().weight.device)
-    for key, value in inputs.items()
+    for key, value in encoded_inputs.items()
 }
 with torch.no_grad():
     outputs = model(
@@ -415,7 +415,24 @@ Decoder Layer数: 28
 全状態が同じshapeか: True
 ```
 
-`inputs`は`input_ids`と`attention_mask`を持つ辞書に似た`BatchEncoding`です。`**inputs`はそれぞれを名前付き引数として渡します。辞書内の値を配置先へ移した後も、IDは整数のままです。この例はモデル全体をCPUに置いています。複数デバイスへ分散した場合の配置は、[実行環境](../../environment/)の条件も確認します。
+### 入力の容器と、中のTensorを分ける
+
+`encoded_inputs`はTokenizerから受け取った`BatchEncoding`です。`tokenizer(...)`の時点でID変換まで終わっており、この例では`input_ids`と`attention_mask`がすでにTensorになっています。[Tokenizerの返り値](../tokenizer/)で確認できます。
+
+```text
+encoded_inputs：BatchEncoding
+├─ "input_ids"      → 整数IDのTensor [1, 7]
+└─ "attention_mask" → 有効な位置を示すTensor [1, 7]
+                         ↓ 各Tensorを配置先へ合わせる
+inputs：通常のdict（同じキーでTensorを保持）
+                         ↓ model(**inputs)
+outputs：モデルの返り値
+└─ hidden_states → 29個のTensorを並べたtuple
+```
+
+辞書内包表記で作った`inputs`は、通常の`dict`です。`encoded_inputs`の型が、そのまま新しい辞書へ引き継がれるわけではありません。どちらの容器自体にもTensorのような`device`はなく、中の各Tensorに配置先があります。
+
+`**inputs`は、キーを引数名、値を引数の値として渡します。今回なら`model(input_ids=inputs["input_ids"], attention_mask=inputs["attention_mask"], ...)`という呼び出しに相当します。
 
 | 指定・返り値 | 今回の役割 |
 |---|---|
@@ -426,9 +443,57 @@ Decoder Layer数: 28
 
 `model(...)`はここでは1回のforward計算です。`generate(...)`のようにトークンを選んで追加する処理ではなく、学習済み重みを書き換える処理でもありません。
 
+### 辞書の各Tensorを配置先へ合わせる
+
+上の辞書内包表記を普通のfor文で書くと、次のようになります。どちらか一方を使えば十分です。
+
+```python
+device = model.get_input_embeddings().weight.device
+expanded_inputs = {}
+for key, value in encoded_inputs.items():
+    expanded_inputs[key] = value.to(device)
+print("同じキーと値か:", expanded_inputs.keys() == inputs.keys()
+      and all(torch.equal(expanded_inputs[k], inputs[k]) for k in inputs))
+```
+
+```text
+同じキーと値か: True
+```
+
+`encoded_inputs.items()`はキーと値のペアを順に渡します。`key, value`でそのペアを分けて受け取り、同じキーに`value.to(device)`の返り値を入れます。**deviceという表示だけを書き換えるのではなく、必要なら数値データをその配置先へコピーします。** すでに同じdevice・dtypeなら、`to()`は元のTensor自身を返す場合があります。このCPU例ではGPUへの転送は起きません。[Tensor.toの仕様](https://docs.pytorch.org/docs/2.14/generated/torch.Tensor.to.html)
+
+辞書内包表記の`key: ...`は「1組をどう作るか」、`for ... in ...`は「材料をどこから順に取るか」です。普通のfor文とは文法が異なるため、for部分の末尾に`:`を付けません。[Pythonの辞書内包表記](../python-objects/)に、値・キーの変換と新規作成の小さな例があります。
+
+`BatchEncoding`には各Tensorをまとめて移す`.to(device)`もあります。Tokenizerから受け取った直後なら`encoded_inputs.to(device)`を使えますが、通常のdictへ変えた`inputs`にはこのメソッドはありません。この例はモデル全体をCPUに置いています。複数デバイスへ分散した場合の配置は、[実行環境](../../environment/)の条件も確認します。
+
+### withとno_gradは何を変えるか
+
+`with`は、処理の範囲に入るときと抜けるときの管理を行うPython構文です。`with torch.no_grad():`では、字下げした範囲の計算について、逆伝播のための演算記録を止めます。抜けると元の勾配記録の設定へ戻ります。
+
+計算やHidden Stateの取得は実行されます。重みの`requires_grad`を永久に無効化する操作ではなく、`model.eval()`のモード切替とも別です。損失（loss）は予測を評価する値、勾配はその損失が重みなどの変化にどう反応するかを表します。[Autogradと勾配](../autograd/)で小さな式から確認できます。
+
+### tuple全体と、取り出した1個のTensor
+
+`hidden_states`は順序付きの容器であるtuple、`hidden_states[0]`はそこから取り出した1個のTensorです。tupleの要素を別のものへ入れ替えることはできませんが、中のTensorの数値まで変更不能になるわけではありません。ここでは観察だけを行い、数値を書き換えません。
+
+```python
+for i, state in enumerate(hidden_states):
+    print(i, list(state.shape))
+```
+
+`enumerate`は「番号と要素」を組で渡します。最初の周回では`i=0`、`state=hidden_states[0]`、次は`i=1`、`state=hidden_states[1]`です。ここでは全29個のshapeを確認できます。
+
 ### 28層なのに、なぜ29個あるか
 
 **tupleの番号はDecoder Layer番号ではありません。** Embedding後の状態が最初に入り、その後の状態が続きます。以下の各保存地点のshapeはすべて`[1, 7, 1024]`です。
+
+| 式 | 参照するもの |
+|---|---|
+| `model.model.layers[0]` | 計算を行うQwen3DecoderLayerの実物 |
+| `hidden_states[0]` | その層へ入る前のTensor |
+| `hidden_states[1]` | その層を通った後のTensor |
+
+Layer 0は実在しますが、処理する部品と、その部品が扱うデータは別です。Embeddingの出力とLayer 0へ入るTensorの値は一致しても、Layer 0という部品そのものがそのTensorなのではありません。
 
 ```text
 整数ID [1, 7]
@@ -480,6 +545,8 @@ Tensor全体が近い値か: False
 | 次の`0` | 入力内のトークン位置0（今回のIDは89015） |
 | `:8` | 1024成分のうち成分0〜7 |
 
+カンマを一つ減らした`before_layer0[0, 0:8]`は、トークン位置を切り出します。今回の7トークンならshapeは`[7, 1024]`で、先頭トークンの8成分ではありません。`before_layer0[0, 0, :8]`ならshapeは`[8]`です。
+
 `hidden_states[0][0, 0]`は`weight[89015]`を引いたベクトルと一致します。Layerを通った後は、**「ID 89015の重み表の行」ではなく、「こんにちは」がある位置の内部表現**を見ています。shapeと位置の対応は保たれますが、ベクトルの値は更新されます。元のEmbeddingの行を学習で更新した結果ではありません。
 
 Qwen3は未来を見ない因果的なAttentionを使います。この文の位置0には前のトークンもないので、後ろの「今日はいい天気ですね」を参照して値が変わったわけではありません。文脈による変化を観察したい場合は、前のトークンを参照できる後ろの位置も比較します。会話テンプレートを加えると、位置0が「こんにちは」とは限らなくなります。
@@ -508,6 +575,22 @@ for i, state in enumerate(hidden_states):
 ```
 
 各行の8成分はベクトルの一部です。例えば先頭成分が同じでも残り1016成分まで同じとは限らず、bfloat16の丸めで小さな変化が表示へ出ない場合もあります。大きい値だけから計算の故障や意味を断定せず、Layer内の計算や正規化を別に観察します。
+
+</details>
+
+<details>
+<summary>比較時にIndexErrorが出たら、変数の型を確認する</summary>
+
+次のように受け取り側へ同じ名前を使うと、`hidden_states`がtuple全体から1個のTensorへの参照に変わってしまいます。これは問題を説明する例で、観察コードへ追加するものではありません。
+
+```text
+for i, hidden_states in enumerate(hidden_states):
+    print(i, hidden_states.shape)
+```
+
+通常のfor文の受け取り変数は、ループ終了後も残ります。最後には`hidden_states`が`[1,7,1024]`のTensorになるため、`hidden_states[1]`は「状態の1番目」ではなく「batch軸の1番目」を取ろうとして範囲外になります。
+
+受け取り側を`state`や`hidden_state`に分け、必要なら`hidden_states = outputs.hidden_states`でtupleへの参照を戻します。比較直前に`type(hidden_states)`と`len(hidden_states)`を確認し、今回ならtuple・29個であることを確かめます。単数形・複数形のつづりに特別な文法規則があるのではなく、異なる変数名にすることが重要です。
 
 </details>
 

@@ -52,7 +52,7 @@ Python参照検証はtorch・transformersのある環境で `python verification
 
 学習済みEmbeddingの参照検証は `python verification/verify_qwen_embedding.py`。固定revisionのQwen3-0.6Bが既存キャッシュに必要で、ダウンロードは行わない。CPU・bfloat16でモデルを読み、層の同一性、1トークンと7トークンの参照、shape、入力が変化しないことを確認する。数値・環境・モデル表示は `tests/fixtures/qwen-embedding-reference.json` に保存する。通常のCIにはモデル本体の取得を追加しない。
 
-Hidden Stateの参照検証は `python verification/verify_qwen_hidden_states.py`。同じ固定revision・CPU・bfloat16で29状態を取得し、Embeddingと状態0、Layer 0〜26のforward hookと状態1〜27、最終RMSNormと状態28を照合する。最後の状態がLayer 27の生の出力と異なること、入力IDが不変であること、先頭位置が後続トークンを参照しないことも確認する。記録は `tests/fixtures/qwen-hidden-states-reference.json`。キャッシュのみを使い、通常のCIには追加しない。
+Hidden Stateの参照検証は `python verification/verify_qwen_hidden_states.py`。同じ固定revision・CPU・bfloat16で29状態を取得し、Embeddingと状態0、Layer 0〜26のforward hookと状態1〜27、最終RMSNormと状態28を照合する。最後の状態がLayer 27の生の出力と異なること、入力IDが不変であること、先頭位置が後続トークンを参照しないことも確認する。BatchEncodingからdictへの変換、IDとmask、同じdeviceへのto、token軸と成分軸の切り出し、ループ変数の上書きによるIndexErrorも照合する。記録は `tests/fixtures/qwen-hidden-states-reference.json`。キャッシュのみを使い、通常のCIには追加しない。
 
 ## 公開の流れ
 

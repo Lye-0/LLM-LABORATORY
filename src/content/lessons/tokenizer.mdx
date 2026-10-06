@@ -8,7 +8,7 @@ eyebrow: "TEXT → TOKEN IDS"
 prerequisites: ["overview","python-objects"]
 labs: ["tokenizer"]
 sources: ["tokenizer","qwen","bpe"]
-tags: ["トークナイザー","tokenize","encode","decode","AutoTokenizer"]
+tags: ["トークナイザー","tokenize","encode","decode","AutoTokenizer","BatchEncoding","attention_mask"]
 question: "convert_ids_to_tokensとdecodeは同じ文字列を返しますか？"
 answer: "変換の終点が異なります。前者は内部トークン表記、後者はそれらを復元した人間向けの文字列を返します。"
 ---
@@ -201,6 +201,36 @@ print(type(ids[0]))
 ```
 
 encodeはtextから変換します。先に作ったtokens変数を自動で読むわけではありません。IDの大きさは意味の強さを表しません。
+
+## inputs — モデル入力をまとめて作る
+
+`encode`だけがIDへ変換できるわけではありません。**`tokenizer(text)`も内部表記への分割とIDへの変換を行い、モデルへ渡す情報をまとめて返します。** `return_tensors="pt"`は、その返り値をPyTorchのTensorにする指定です。これ自体がID変換を行うのではありません。
+
+```python
+inputs = tokenizer(text, add_special_tokens=False, return_tensors="pt")
+print("返り値の型:", type(inputs))
+for key, value in inputs.items():
+    print(key, value.tolist(), list(value.shape), value.dtype, value.device)
+```
+
+```text
+返り値の型: <class 'transformers.tokenization_utils_base.BatchEncoding'>
+input_ids [[89015, 5373, 133165, 126224, 35727, 94121, 128797]] [1, 7] torch.int64 cpu
+attention_mask [[1, 1, 1, 1, 1, 1, 1]] [1, 7] torch.int64 cpu
+```
+
+この入力と参照環境では、`inputs`は2個のTensorをまとめた`BatchEncoding`です。`inputs`自体がTensorなのではなく、`inputs["input_ids"]`と`inputs["attention_mask"]`がそれぞれTensorです。返す項目はTokenizerや指定によって変わるため、常に2個とは限りません。
+
+| 呼び出し | 返り値で見るもの |
+|---|---|
+| `tokenizer.tokenize(text)` | 内部トークン表記のlist |
+| `tokenizer.encode(text, add_special_tokens=False)` | 整数IDのlist |
+| `tokenizer(text, add_special_tokens=False)` | ID列とmaskなどを持つBatchEncoding |
+| 上記に`return_tensors="pt"`を指定 | ID列とmaskなどをTensorとして持つBatchEncoding |
+
+`attention_mask`の1は有効な入力位置、padding用の0は無視する位置を表します。今回はpaddingがないため全部1です。全部1だから未来のトークンまで見える、という意味ではありません。Qwenのモデル側は、これとは別に未来を見ない因果的な制限も組み合わせます。[Tokenizerの仕様](https://huggingface.co/docs/transformers/main_classes/tokenizer)
+
+得られた入力をモデルへ渡す流れは、[QwenのHidden State観察](../qwen/)で確認します。
 
 ## decoded — 文字列へ戻す
 

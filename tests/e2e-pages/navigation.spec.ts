@@ -2,6 +2,16 @@ import { test, expect } from '@playwright/test';
 
 const base = '/LLM-LABORATORY';
 
+test('狭幅の教材表をキーボードで横へ読める', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 844 });
+  await page.goto(`${base}/learn/tokenizer/`);
+  const table = page.locator('.prose table[tabindex="0"]').first();
+  await expect(table).toBeVisible();
+  await table.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(() => table.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
+});
+
 test('同じ上部セクションでは一覧と詳細の左ナビが変わらない', async ({ page }) => {
   const sections = [
     {
