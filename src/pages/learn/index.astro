@@ -3,6 +3,7 @@ import { withBase } from '../../lib/paths';
 import SiteLayout from '../../layouts/SiteLayout.astro';
 import { getCollection } from 'astro:content';
 import { stages } from '../../data/catalog';
+import '../../styles/maps.css';
 const lessons = (await getCollection('lessons')).sort((a, b) => a.data.order - b.data.order);
 ---
 
@@ -14,6 +15,10 @@ const lessons = (await getCollection('lessons')).sort((a, b) => a.data.order - b
       入力から内部計算、生成、学習、改造へ。前提を確認しながら進めます。どの単元からでも読み始められます。
     </p>
   </header>
+  <a class="map-entry" href={withBase('/learn/maps/')}>
+    <strong>図でつなぐ — LLMの全体地図 →</strong>
+    <span>どのコードを通り、データはどう変わる？ 推論・作成・学習・改造を図で追います。</span>
+  </a>
   {stages.map((stage) => (
     <section id={stage.id} class="stage-section">
       <div class="stage-heading">

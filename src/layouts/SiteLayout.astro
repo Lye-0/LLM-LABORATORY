@@ -4,6 +4,7 @@ import { getCollection } from 'astro:content';
 import { stages, labs } from '../data/catalog';
 import { projects } from '../data/projects';
 import { topics } from '../data/topics';
+import { learningMaps } from '../data/maps';
 import { apiLibraries, apiClasses, getApiClass } from '../data/api-groups';
 import { apiEntries } from '../data/api';
 import '../styles/global.css';
@@ -45,13 +46,22 @@ let sidebarHome = { href: '/', label: 'サイトの案内' };
 let sidebarGroups: SideGroup[] = [];
 if (activeSection === '/learn/') {
   sidebarHome = { href: '/learn/', label: '学習マップ' };
-  sidebarGroups = stages.map((stage) => ({
-    title: stage.title,
-    number: stage.number,
-    links: lessons
-      .filter((l) => l.data.stage === stage.id)
-      .map((l) => ({ href: `/learn/${l.id}/`, label: l.data.title })),
-  }));
+  sidebarGroups = [
+    {
+      title: '図でつなぐ',
+      links: [
+        { href: '/learn/maps/', label: 'LLMの全体地図' },
+        ...learningMaps.map((map) => ({ href: `/learn/maps/${map.slug}/`, label: map.title })),
+      ],
+    },
+    ...stages.map((stage) => ({
+      title: stage.title,
+      number: stage.number,
+      links: lessons
+        .filter((l) => l.data.stage === stage.id)
+        .map((l) => ({ href: `/learn/${l.id}/`, label: l.data.title })),
+    })),
+  ];
 } else if (activeSection === '/labs/') {
   sidebarHome = { href: '/labs/', label: '実験一覧' };
   sidebarGroups = stages
@@ -110,7 +120,11 @@ if (activeSection === '/learn/') {
   ];
 }
 function isCurrentLink(href: string) {
-  return path === href || (detailClass && href === `/reference/classes/${detailClass.slug}/`);
+  return (
+    path === href ||
+    (path === '/learn/maps/training/small-model/' && href === '/learn/maps/training/') ||
+    (detailClass && href === `/reference/classes/${detailClass.slug}/`)
+  );
 }
 ---
 

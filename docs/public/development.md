@@ -54,6 +54,10 @@ Python参照検証はtorch・transformersのある環境で `python verification
 
 ## 公開の流れ
 
+図のまとめは `src/data/maps.ts` と `src/components/maps/` を変更する。新しい地点の入出力・説明・リンクを同じ定義へ置く。PagesのE2Eには地点選択、直リンク復元、複数図の独立性、JavaScriptなしの読み取り、小画面と明暗テーマの検査を含む。
+
+小モデルの例は `public/examples/tiny-language-model.py` が正本。PyTorchのあるCPU環境で実行し、続けて `--reload-only` で別プロセスから照合する。`.cache/tiny-language-model/report.json` の結果に確認日・別プロセス検証・ソースのSHA-256を加え、`tests/fixtures/tiny-language-model-reference.json` を更新する。checkpointは公開しない。PyTorchの取得やモデル学習は通常のサイトCIには追加しない。
+
 `.github/workflows/pages.yml` はmainへのpushで実行する。miseによる環境準備、公開ファイル境界の確認、依存導入、検証・ビルド、distのアップロード、Pagesへの公開を順に行う。
 
 ワークフローが成功したら、実URLでページ移動、Tokenizer、本文検索、検索結果のリンクを確認する。ブラウザー内の処理とネットワーク取得のどちらが失敗したかを分けて調べる。

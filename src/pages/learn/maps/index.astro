@@ -1,0 +1,121 @@
+---
+import SiteLayout from '../../../layouts/SiteLayout.astro';
+import { learningMaps } from '../../../data/maps';
+import { withBase } from '../../../lib/paths';
+import '../../../styles/maps.css';
+const journeys = [
+  {
+    title: '使う',
+    description: '入力の姿を追う',
+    href: 'inference',
+    steps: [
+      ['文章・会話', 'TokenizerでIDへ'],
+      ['整数IDのTensor', 'EmbeddingとTransformerへ'],
+      ['次トークンのスコア', '選択して列に追加、繰り返す'],
+      ['生成したID列', 'decodeして文章へ'],
+    ],
+  },
+  {
+    title: '作る・学習する',
+    description: '重みの変化を追う',
+    href: 'training',
+    steps: [
+      ['目的・データ・Tokenizer', '学習用と評価用を分ける'],
+      ['構造・初期重み', '新規初期化、または既存重みから開始'],
+      ['予測と正解のずれ', 'loss → 勾配 → 重みの更新'],
+      ['評価・保存・再読込', '成果物を読み直して推論へ'],
+    ],
+  },
+  {
+    title: '改造する',
+    description: '変更と影響を追う',
+    href: 'modification',
+    steps: [
+      ['基準のモデルと評価', '元の出力・条件を記録'],
+      ['変更する場所を選ぶ', '重み・構造・表現・生成設定'],
+      ['同条件で比較', '品質・速度・メモリを見る'],
+      ['保存・再読込／復元', '再現できる実験にする'],
+    ],
+  },
+];
+---
+
+<SiteLayout
+  title="図でつなぐ — LLMの全体地図"
+  description="文章・コード・データ・重みを図でつなぎ、LLMの推論・作成・学習・改造を見渡す。"
+  wide
+>
+  <nav class="map-breadcrumb" aria-label="パンくず">
+    <a href={withBase('/learn/')}>学ぶ</a>
+    <span>/ 図でつなぐ</span>
+  </nav>
+  <header class="page-header map-intro">
+    <div class="eyebrow">SEE HOW IT CONNECTS</div>
+    <h1>
+      学んだことを、
+      <br />
+      一本の流れにつなぐ。
+    </h1>
+    <p>
+      文章がどんなデータに変わり、どのプログラムを通るのか。モデルを使う・作る・改造する道筋から、確かめたい場所へ進めます。
+    </p>
+  </header>
+  <section class="map-preparation">
+    <h2>まず、何を用意している？</h2>
+    <p>
+      <strong>実装コード ＋ config ＋ 重み</strong>で、計算するモデルの実物を作ります。
+      <strong>Tokenizerの語彙・ルール</strong>
+      で、文章とIDを対応させます。入力データは、この実物を通って姿を変えます。
+    </p>
+    <div class="flow-links">
+      <a href={withBase('/learn/maps/runtime/')}>プログラムとファイルの関係へ →</a>
+      <a href={withBase('/learn/maps/structure/')}>モデルの部品を拡大する →</a>
+    </div>
+  </section>
+  <div class="map-journeys">
+    {journeys.map((journey) => (
+      <section class="map-journey">
+        <div class="eyebrow">{journey.description}</div>
+        <h2>{journey.title}</h2>
+        <ol>
+          {journey.steps.map(([title, note]) => (
+            <li>
+              <strong>{title}</strong>
+              <small>{note}</small>
+            </li>
+          ))}
+        </ol>
+        <a href={withBase(`/learn/maps/${journey.href}/`)}>この道筋を図で追う →</a>
+      </section>
+    ))}
+  </div>
+  <p class="map-legend">
+    3つは目的に応じた道筋です。推論の後に必ず学習する順番ではありません。学習・改造したモデルも、同じ推論の流れへつながります。
+  </p>
+  <section class="map-section">
+    <h2>どのつながりを見たい？</h2>
+    <div class="map-directory">
+      {learningMaps.map((map, i) => (
+        <a href={withBase(`/learn/maps/${map.slug}/`)}>
+          <span class="mono">0{i + 1}</span>
+          <div>
+            <h2>{map.title}</h2>
+            <p>{map.description}</p>
+          </div>
+          <span aria-hidden="true">↗</span>
+        </a>
+      ))}
+    </div>
+  </section>
+  <a class="map-entry" href={withBase('/learn/maps/inference/?inference=embedding')}>
+    <strong>今学んでいるEmbeddingは、この地点 →</strong>
+    <span>
+      文章 → ID → 学習済みの表の行 → 位置ごとのベクトル。Qwenの7トークンを具体例にして追えます。
+    </span>
+  </a>
+  <div class="flow-links">
+    <a href={withBase('/learn/')}>順番に学ぶ：学習マップ</a>
+    <a href={withBase('/labs/')}>動かす：実験一覧</a>
+    <a href={withBase('/projects/')}>試す：改造課題</a>
+  </div>
+</SiteLayout>

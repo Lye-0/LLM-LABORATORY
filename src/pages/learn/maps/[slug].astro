@@ -1,0 +1,124 @@
+---
+import SiteLayout from '../../../layouts/SiteLayout.astro';
+import FlowExplorer from '../../../components/maps/FlowExplorer';
+import ResidualDiagram from '../../../components/maps/ResidualDiagram.astro';
+import { learningMaps } from '../../../data/maps';
+import { withBase } from '../../../lib/paths';
+import '../../../styles/maps.css';
+export function getStaticPaths() {
+  return learningMaps.map((map) => ({ params: { slug: map.slug }, props: { map } }));
+}
+const { map } = Astro.props;
+---
+
+<SiteLayout title={map.title} description={map.description} wide>
+  <nav class="map-breadcrumb" aria-label="パンくず">
+    <a href={withBase('/learn/')}>学ぶ</a>
+    <span>/</span>
+    <a href={withBase('/learn/maps/')}>図でつなぐ</a>
+    <span>/ {map.title}</span>
+  </nav>
+  <header class="page-header map-intro">
+    <div class="eyebrow">FOLLOW THE DATA</div>
+    <h1>{map.title}</h1>
+    <p>{map.description}</p>
+  </header>
+  <div class="map-question">{map.question}</div>
+  <nav class="map-sections-nav" aria-label="このページの図">
+    {map.sections.map((section) => (
+      <a href={`#${section.id}`}>{section.title}</a>
+    ))}
+  </nav>
+  <p class="map-legend">
+    順序の矢印はデータが進む方向。選択肢は並列の一覧です。コードは実行例・部品名・模式表示を各地点で区別しています。
+  </p>
+  {map.sections.map((section) => (
+    <section class="map-section" id={section.id}>
+      <h2>{section.title}</h2>
+      <p>{section.description}</p>
+      {section.id === 'block' && <ResidualDiagram />}
+      {section.id === 'change' && (
+        <nav class="modification-strip" aria-label="モデル内の変更箇所">
+          <a href="?change=vocab#change">
+            <small>入力の対応</small>
+            <strong>Tokenizer</strong>
+          </a>
+          <span aria-hidden="true">→</span>
+          <a href="?change=embedding#change">
+            <small>表の行</small>
+            <strong>Embedding</strong>
+          </a>
+          <span aria-hidden="true">→</span>
+          <a href="?change=replace#change">
+            <small>層・Linear</small>
+            <strong>Transformer</strong>
+          </a>
+          <span aria-hidden="true">→</span>
+          <a href="?change=quantize#change">
+            <small>重みの表現</small>
+            <strong>LM head等</strong>
+          </a>
+          <span aria-hidden="true">→</span>
+          <a href="?change=generation#change">
+            <small>選び方</small>
+            <strong>次IDの選択</strong>
+          </a>
+        </nav>
+      )}
+      <FlowExplorer section={section} client:load />
+      <details class="map-transcript">
+        <summary>すべての地点を文章とコードで読む</summary>
+        <ol>
+          {section.steps.map((step) => (
+            <li>
+              <h3>{step.title}</h3>
+              <p>
+                <strong>入る：</strong>
+                {step.input}
+              </p>
+              <p>
+                <strong>出る：</strong>
+                {step.output}
+              </p>
+              <pre><code>{step.code}</code></pre>
+              <p>{step.explanation}</p>
+              <p>{step.note}</p>
+              <div class="flow-links">
+                {step.links.map((link) => (
+                  <a href={withBase(link.url)}>{link.title}</a>
+                ))}
+              </div>
+            </li>
+          ))}
+        </ol>
+      </details>
+    </section>
+  ))}
+  {map.slug === 'training' && (
+    <a class="map-entry" href={withBase('/learn/maps/training/small-model/')}>
+      <strong>小さな言語モデルを作り、学習・保存・再読込する →</strong>
+      <span>
+        CPUで動く通し例。構造、初期重み、loss、勾配、更新、生成を一つのプログラムで追います。
+      </span>
+    </a>
+  )}
+  <section class="map-section">
+    <h2>ほかの図とつなぐ</h2>
+    <nav class="map-sections-nav" aria-label="ほかのまとめページ">
+      <a href={withBase('/learn/maps/')}>全体地図</a>
+      {learningMaps
+        .filter((other) => other.slug !== map.slug)
+        .map((other) => (
+          <a href={withBase(`/learn/maps/${other.slug}/`)}>{other.title}</a>
+        ))}
+    </nav>
+    <p>
+      Qwenの数値は固定revision
+      c1899de289a04d12100db370d81485cdf75e47ca。構造図は設定に基づく表示です。Embeddingの掲載値はCPU・bfloat16で確認した実測です。
+    </p>
+    <div class="flow-links">
+      <a href={withBase('/reference/sources/')}>公式資料・モデル条件</a>
+      <a href={withBase('/learn/qwen/')}>実測のコードと条件</a>
+    </div>
+  </section>
+</SiteLayout>

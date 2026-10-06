@@ -1,0 +1,532 @@
+.map-intro {
+  max-width: 800px;
+  margin-bottom: 32px;
+}
+.map-breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  margin-bottom: 24px;
+}
+.map-breadcrumb a:hover {
+  color: var(--accent);
+}
+.map-question {
+  border-left: 3px solid var(--teal);
+  padding: 12px 20px;
+  background: var(--surface);
+  margin: 24px 0;
+}
+.map-legend {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 16px 0;
+}
+.map-section {
+  margin: 52px 0;
+  scroll-margin-top: 100px;
+}
+.map-section > h2 {
+  font-size: 25px;
+  margin-bottom: 12px;
+}
+.map-section > p {
+  max-width: 880px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.flow-caption {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 22px 0 12px;
+}
+.flow-track {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 24px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.flow-track li {
+  min-width: 0;
+  position: relative;
+}
+.flow-track button {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  width: 100%;
+  height: 100%;
+  padding: 16px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.flow-track button:hover {
+  border-color: var(--accent);
+  background: var(--raised);
+}
+.flow-track .is-selected button {
+  border-color: var(--teal);
+  box-shadow: inset 3px 0 var(--teal);
+}
+.flow-node-top {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 11px;
+}
+.is-selected .flow-node-top {
+  color: var(--teal);
+}
+.flow-track strong {
+  font-size: 16px;
+}
+.flow-node-output {
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.flow-connector {
+  display: none;
+}
+.flow-inspection {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface);
+  scroll-margin-top: 96px;
+}
+.flow-inspection-head {
+  padding: 22px 24px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+}
+.flow-inspection-head h3 {
+  font-size: 21px;
+  margin: 6px 0 0;
+}
+.flow-controls {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.flow-controls button {
+  min-width: 64px;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+}
+.flow-controls button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+.flow-data-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) minmax(0, 1fr);
+}
+.flow-data,
+.flow-operation {
+  padding: 20px;
+  min-width: 0;
+}
+.flow-operation {
+  background: var(--code);
+  border-inline: 1px solid var(--line);
+}
+.flow-label {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 14px;
+}
+.flow-result .flow-label {
+  color: var(--teal);
+}
+.flow-inspection pre {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: 13px/1.9 var(--mono);
+}
+.flow-inspection code {
+  white-space: inherit;
+  background: transparent;
+  padding-right: 0;
+}
+.flow-explanation {
+  padding: 22px 24px 0;
+  margin: 0;
+}
+.flow-note {
+  margin: 16px 24px 24px;
+  font-size: 13px;
+  color: var(--muted);
+  border-left: 2px solid var(--amber);
+  padding-left: 14px;
+}
+.flow-links {
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+  padding: 16px 24px;
+}
+.flow-links a {
+  color: var(--accent);
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.map-transcript {
+  margin-top: 20px;
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+}
+.map-transcript summary {
+  cursor: pointer;
+  color: var(--muted);
+  min-height: 44px;
+}
+.map-transcript ol {
+  padding-left: 24px;
+}
+.map-transcript li {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+}
+.map-transcript h3 {
+  font-size: 17px;
+}
+.map-transcript pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.map-sections-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 24px 0;
+}
+.map-sections-nav a {
+  border: 1px solid var(--line);
+  padding: 8px 12px;
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.map-sections-nav a:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.map-directory {
+  border-top: 1px solid var(--line);
+  margin: 48px 0;
+}
+.map-directory > a {
+  display: grid;
+  grid-template-columns: 50px minmax(0, 1fr) 25px;
+  gap: 20px;
+  padding: 24px 4px;
+  border-bottom: 1px solid var(--line);
+  align-items: center;
+}
+.map-directory > a:hover h2 {
+  color: var(--accent);
+}
+.map-directory h2 {
+  font-size: 21px;
+  margin: 0 0 8px;
+}
+.map-directory p {
+  color: var(--muted);
+  margin: 0;
+}
+.map-journeys {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+  margin: 32px 0;
+}
+.map-journey {
+  padding: 24px;
+  border-top: 3px solid var(--accent);
+  background: var(--surface);
+  min-width: 0;
+}
+.map-journey:nth-child(2) {
+  border-color: var(--violet);
+}
+.map-journey:nth-child(3) {
+  border-color: var(--teal);
+}
+.map-journey h2 {
+  font-size: 22px;
+  margin-bottom: 12px;
+}
+.map-journey ol {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.map-journey li {
+  padding: 12px 0;
+}
+.map-journey li:not(:last-child)::after {
+  content: '↓';
+  display: block;
+  color: var(--muted);
+  padding-top: 12px;
+}
+.map-journey small {
+  display: block;
+  color: var(--muted);
+}
+.map-journey a {
+  display: inline-block;
+  color: var(--accent);
+  margin-top: 20px;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.map-preparation {
+  background: var(--surface);
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.map-preparation p {
+  color: var(--muted);
+  margin-bottom: 0;
+}
+.map-entry {
+  margin-bottom: 32px;
+  display: block;
+  padding: 24px;
+  border-left: 3px solid var(--teal);
+  background: var(--surface);
+}
+.map-entry strong {
+  display: block;
+  font-size: 20px;
+  margin-bottom: 8px;
+}
+.map-entry span {
+  color: var(--muted);
+}
+.map-code-lesson {
+  max-width: 900px;
+}
+.map-code-lesson pre {
+  white-space: pre;
+  overflow: auto;
+  max-width: 100%;
+}
+.map-code-lesson h2 {
+  margin: 36px 0 16px;
+}
+.residual-diagram {
+  margin: 28px 0;
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.residual-diagram figcaption {
+  color: var(--muted);
+  font-size: 13px;
+  margin-bottom: 20px;
+}
+.residual-start,
+.residual-end,
+.residual-join {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+}
+.residual-diagram small {
+  font-size: 12px;
+  color: var(--muted);
+}
+.residual-lanes {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 20px;
+  padding: 14px 0;
+}
+.residual-compute {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+}
+.residual-compute strong,
+.residual-compute > span:not([aria-hidden]) {
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  width: 100%;
+  max-width: 300px;
+  border-radius: 6px;
+  background: var(--bg);
+}
+.residual-bypass {
+  border: 2px solid var(--teal);
+  border-left: 0;
+  border-radius: 0 12px 12px 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  text-align: center;
+  gap: 12px;
+}
+.residual-join {
+  border: 1px solid var(--teal);
+  padding: 14px;
+  border-radius: 6px;
+}
+.residual-end {
+  padding-top: 14px;
+}
+.modification-strip {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin: 28px 0;
+}
+.modification-strip a {
+  flex: 1;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 6px;
+  text-align: center;
+}
+.modification-strip small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+}
+.modification-strip strong {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.modification-strip a:hover {
+  border-color: var(--teal);
+}
+@media (max-width: 700px) {
+  .modification-strip {
+    flex-direction: column;
+  }
+  .modification-strip a {
+    width: 100%;
+  }
+  .modification-strip > span {
+    transform: rotate(90deg);
+  }
+  .residual-diagram {
+    padding: 16px;
+  }
+  .residual-lanes {
+    gap: 10px;
+  }
+  .residual-bypass {
+    padding: 12px;
+  }
+}
+@media (min-width: 1000px) {
+  .flow-explorer {
+    display: grid;
+    grid-template-columns: 260px minmax(0, 1fr);
+    gap: 0 24px;
+    align-items: start;
+  }
+  .flow-caption {
+    grid-column: 1 / -1;
+  }
+  .flow-track {
+    grid-template-columns: 1fr;
+  }
+  .flow-inspection {
+    position: sticky;
+    top: 96px;
+  }
+  .flow-track:not(.flow-branches) li:not(:last-child) {
+    padding-bottom: 20px;
+  }
+  .flow-track:not(.flow-branches) .flow-connector {
+    display: block;
+    position: absolute;
+    bottom: -4px;
+    left: 50%;
+    color: var(--faint);
+    font-size: 14px;
+  }
+  .flow-data-row {
+    grid-template-columns: 1fr;
+  }
+  .flow-operation {
+    border-inline: 0;
+    border-block: 1px solid var(--line);
+  }
+}
+@media (max-width: 999px) {
+  .flow-track {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  .flow-track li {
+    padding-bottom: 12px;
+  }
+  .flow-track:not(.flow-branches) .flow-connector {
+    display: block;
+    text-align: center;
+    padding: 4px 0;
+    color: var(--faint);
+  }
+  .flow-data-row {
+    grid-template-columns: 1fr;
+  }
+  .flow-operation {
+    border-inline: 0;
+    border-block: 1px solid var(--line);
+  }
+  .map-journeys {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 540px) {
+  .flow-inspection-head {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 20px;
+  }
+  .flow-explanation {
+    padding-inline: 20px;
+  }
+  .flow-note {
+    margin-inline: 20px;
+  }
+  .flow-links {
+    padding-inline: 20px;
+  }
+  .map-directory > a {
+    grid-template-columns: 30px minmax(0, 1fr) 16px;
+    gap: 10px;
+  }
+}

@@ -1,0 +1,187 @@
+---
+import { Code } from 'astro:components';
+import SiteLayout from '../../../../layouts/SiteLayout.astro';
+import { withBase } from '../../../../lib/paths';
+import record from '../../../../../tests/fixtures/tiny-language-model-reference.json';
+import '../../../../styles/maps.css';
+import source from '../../../../../public/examples/tiny-language-model.py?raw';
+---
+
+<SiteLayout
+  title="小さな言語モデルを作る"
+  description="CPUで動く小さなCausal LMを、新規初期化・学習・生成・保存・再読込まで一つのプログラムで追う。"
+>
+  <nav class="map-breadcrumb" aria-label="パンくず">
+    <a href={withBase('/learn/maps/')}>図でつなぐ</a>
+    <span>/</span>
+    <a href={withBase('/learn/maps/training/')}>作成と学習</a>
+    <span>/ 小さな言語モデル</span>
+  </nav>
+  <article class="map-code-lesson">
+    <header class="page-header">
+      <div class="eyebrow">BUILD A SMALL CAUSAL LM</div>
+      <h1>
+        小さなモデルで、
+        <br />
+        作成の全工程を追う。
+      </h1>
+      <p>
+        初期重みから学習し、次の文字を予測して、保存したモデルを読み直します。CPUとPyTorchだけで動く教育用の例です。
+      </p>
+    </header>
+    <div class="map-question">
+      語彙29文字・内部次元32・Attention 2 heads・1層。Qwenとは別の構造と重みを使います。
+    </div>
+    <h2>文章から、予測と重み更新へ</h2>
+    <p>
+      この例は1文字を1トークンにします。入力の16文字から、各位置の次の文字を予測します。例えば「sun
+      」を入力する途中の位置では、その次の文字を正解にします。
+    </p>
+    <Code
+      code={
+        '文字列 → 文字ID [B,16]\n         ↓ token_embedding + position_embedding\nベクトル [B,16,32]\n         ↓ causal Attention + MLP（1層）→ LayerNorm\n内部表現 [B,16,32]\n         ↓ lm_head\nlogits [B,16,29]\n         ↓ 次の文字IDとのcross entropy\nloss（1個の数値） → backward → 勾配 → optimizer.step → 更新した重み'
+      }
+      lang="text"
+    />
+    <p>
+      構造はPyTorchの<code>TransformerEncoderLayer</code>で組み立てます。未来の位置を隠すcausal
+      maskを適用するので、過去から次を予測する言語モデルとして使います。QwenのGQA・RoPE・RMSNorm・SwiGLU・重み共有・KV
+      Cacheはこの小例には含めていません。
+    </p>
+    <h2>実行の準備</h2>
+    <p>
+      <a
+        class="button ghost"
+        href={withBase('/examples/tiny-language-model.py')}
+        download="tiny-language-model.py"
+      >
+        実行するPythonファイルを保存 ↓
+      </a>
+    </p>
+    <p>
+      保存したファイルを作業フォルダに置き、PyTorchのあるPython環境で実行します。新しく用意する場合のCPU環境の例です。モデル本体のダウンロードはありません。
+    </p>
+    <Code
+      code={
+        'uv venv .venv\nuv pip install --python .venv torch==2.14.1 --index-url https://download.pytorch.org/whl/cpu\nuv run --python .venv --no-project python tiny-language-model.py\nuv run --python .venv --no-project python tiny-language-model.py --reload-only'
+      }
+      lang="sh"
+    />
+    <p>
+      初回はPyTorchとその依存を取得します。最初の実行は学習と保存、2回目の<code>--reload-only</code>
+      は別プロセスでの再読込と照合だけを行います。生成物は作業フォルダ内の
+      <code>.cache/tiny-language-model/</code>に保存され、同じ例を再実行すると更新されます。
+    </p>
+    <h2>プログラムの各部分は、図のどこ？</h2>
+    <div class="map-directory">
+      <a href={withBase('/learn/maps/training/?creation=initialize')}>
+        <span class="mono">01</span>
+        <div>
+          <h2>構造と初期重み</h2>
+          <p>TinyCausalLMの__init__でEmbedding・位置・Attention/MLP・Norm・出力層を作る。</p>
+        </div>
+        <span>↗</span>
+      </a>
+      <a href={withBase('/learn/maps/training/?update=loss')}>
+        <span class="mono">02</span>
+        <div>
+          <h2>次トークンの正解</h2>
+          <p>windowsで入力とlabelsを1文字ずらす。ここで手動shiftし、loss内で重ねてずらさない。</p>
+        </div>
+        <span>↗</span>
+      </a>
+      <a href={withBase('/learn/maps/training/?update=step')}>
+        <span class="mono">03</span>
+        <div>
+          <h2>勾配と更新</h2>
+          <p>120回のループでzero_grad → forwardとloss → backward → stepを実行する。</p>
+        </div>
+        <span>↗</span>
+      </a>
+      <a href={withBase('/learn/maps/runtime/?runtime=reload')}>
+        <span class="mono">04</span>
+        <div>
+          <h2>評価・保存・再読込</h2>
+          <p>未使用文でlossを測り、構造の設定・語彙・state_dictを保存。同じ構造へ読み直す。</p>
+        </div>
+        <span>↗</span>
+      </a>
+      <a href={withBase('/learn/maps/inference/?inference=loop')}>
+        <span class="mono">05</span>
+        <div>
+          <h2>1文字ずつ生成</h2>
+          <p>最後の位置の最大logitから次IDを選び、列へ追加。末尾16文字を使い直して32回繰り返す。</p>
+        </div>
+        <span>↗</span>
+      </a>
+    </div>
+    <h2>確認した結果</h2>
+    <p>
+      実測：{record.verifiedAt}、Python {record.python}、PyTorch {record.torch}、CPU・float32、seed{' '}
+      {record.seed}、{record.iterations}回の更新。
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>確認対象</th>
+          <th>結果</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1件の入力 → logits</td>
+          <td>[1,16] → [1,16,29]</td>
+        </tr>
+        <tr>
+          <td>学習用のloss</td>
+          <td>
+            {record.trainLossBefore.toFixed(4)} → {record.trainLossAfter.toFixed(4)}
+          </td>
+        </tr>
+        <tr>
+          <td>未使用文のloss</td>
+          <td>
+            {record.validationLossBefore.toFixed(4)} → {record.validationLossAfter.toFixed(4)}
+          </td>
+        </tr>
+        <tr>
+          <td>Embeddingに勾配が付き、重みが変わる</td>
+          <td>確認済み</td>
+        </tr>
+        <tr>
+          <td>未来の入力を変えても、過去のlogitsが変わらない</td>
+          <td>確認済み</td>
+        </tr>
+        <tr>
+          <td>別プロセスで読み直したlogits</td>
+          <td>保存前と一致</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>
+      同じデータ・コードでも環境により数値が変わる場合があります。学習用lossと未使用文のlossの差にも注目してください。この数文の結果から、一般的な文章生成の品質を判断することはできません。
+    </p>
+    <h3>「sun 」から32文字追加した例</h3>
+    <Code code={record.generatedText} lang="text" />
+    <p>
+      最初の「sun
+      」は入力です。改行や文の断片も、語彙の文字を1個ずつ選んだ結果です。学習文に似た文が出ることと、広く言語を理解できることを区別します。
+    </p>
+    <details class="map-transcript">
+      <summary>実行するプログラム全文を読む</summary>
+      <Code code={source} lang="python" />
+    </details>
+    <h2>次に変えて確かめる</h2>
+    <p>
+      まず元の結果を残し、更新回数・学習率・内部次元のどれか1つを変更して、同じ未使用文のlossを比べます。構造を変えた場合は、その設定も保存して読み直します。
+    </p>
+    <div class="flow-links">
+      <a href={withBase('/learn/maps/training/')}>作成と学習の図に戻る</a>
+      <a href={withBase('/learn/loss/')}>損失と更新を詳しく読む</a>
+      <a href={withBase('/learn/data-evaluation/')}>データと評価の分離</a>
+      <a href="https://docs.pytorch.org/docs/2.14/generated/torch.nn.TransformerEncoderLayer.html">
+        PyTorchの層の仕様 ↗
+      </a>
+    </div>
+  </article>
+</SiteLayout>

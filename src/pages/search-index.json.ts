@@ -6,10 +6,34 @@ import { glossary, comparisons } from '../data/glossary';
 import { labs } from '../data/catalog';
 import { projects } from '../data/projects';
 import { topics } from '../data/topics';
+import { learningMaps } from '../data/maps';
 import tokens from '../data/tokens.json';
 export async function GET() {
   const lessons = await getCollection('lessons');
   const index = [
+    {
+      title: '図でつなぐ — LLMの全体地図',
+      description: '推論・作成・学習・改造を見渡す',
+      url: '/learn/maps/',
+      kind: 'まとめ',
+      keywords: '全体図 作成 改造 データ プログラム',
+    },
+    ...learningMaps.map((map) => ({
+      title: map.title,
+      description: map.description,
+      url: `/learn/maps/${map.slug}/`,
+      kind: 'まとめ',
+      keywords: map.sections
+        .flatMap((section) => section.steps.map((step) => `${step.title} ${step.explanation}`))
+        .join(' '),
+    })),
+    {
+      title: '小さな言語モデルを作る',
+      description: 'CPUで初期化・学習・生成・保存・再読込を追う',
+      url: '/learn/maps/training/small-model/',
+      kind: '教材',
+      keywords: '新規作成 Transformer 学習 loss 勾配 optimizer 保存',
+    },
     ...apiLibraries.map((l) => ({
       title: l.title,
       description: l.description,

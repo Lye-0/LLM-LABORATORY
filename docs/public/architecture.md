@@ -20,6 +20,8 @@ Astroの静的生成、Reactの操作部品、MDXの教材で構成する。Type
 | `src/lib/simulations.ts`             | UIから独立した数式・shapeの計算      |
 | `src/lib/paths.ts`                   | 配信先baseの付与・除去               |
 | `src/workers/tokenizer.ts`           | Tokenizerの実処理と語彙の検索        |
+| `src/data/maps.ts` / `src/pages/learn/maps/` | まとめ6ページと小モデルの実行教材 |
+| `src/components/maps/` / `src/styles/maps.css` | 地点選択・入出力・構造図の共通表示 |
 | `public/data/qwen3/`                 | 固定revisionの語彙・設定・ライセンス |
 
 ## 実験の実行方式
@@ -30,7 +32,15 @@ Tensor形状、小行列、Embeddingのlookup、確率、勾配、量子化は�
 
 Chat Template Builderはsystemと1件のuserを扱う限定例。Model Inspectorは公式configと構造に基づく表示であり、重みや活性値を実測したビューではない。
 
-## 検索
+## 図でつなぐまとめ
+
+全体地図は静的HTML、詳細の地点選択はReactのFlowExplorerで表示する。データ定義はノードの入力・出力・コード・説明・注意・関連リンクを持ち、sequenceとbranchesで処理順と選択肢を区別する。選択地点をセクションIDのqueryへ保存し、直リンク・再読込から復元する。小画面で地点を選んだ際は対応する説明へ移動し、読み込み時の自動スクロールは行わない。
+
+全ノードの説明は静的なdetailsにも出力し、JavaScriptが無効でも内容へ到達できる。ページは学ぶ内のナビと検索へ登録する。Qwenの構造値と学習済みEmbeddingの実測を、教育用小モデルの値から区別する。
+
+小モデルの正本は `public/examples/tiny-language-model.py`。教材全文はraw importで同じファイルから表示する。実行結果は `tests/fixtures/tiny-language-model-reference.json` に条件とsource hashを残す。学習済みcheckpointは `.cache/` に置き、公開ビルドやGitへ含めない。
+
+## 検索の索引
 
 `src/pages/search-index.json.ts` が教材・API・用語・トークン・課題などの構造化索引を出力する。名前・ID・日本語別名の照合に加えて、Pagefindの本文検索を使う。Pagefindはbuild後半で生成するため、本文検索の確認にはbuild済みpreviewを使う。
 

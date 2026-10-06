@@ -1,0 +1,28 @@
+{
+  "python": "3.12.14",
+  "torch": "2.14.1+cpu",
+  "device": "cpu",
+  "dtype": "float32",
+  "seed": 42,
+  "iterations": 120,
+  "config": {
+    "vocab_size": 29,
+    "width": 32,
+    "heads": 2,
+    "context": 16
+  },
+  "inputShape": [1, 16],
+  "logitsShape": [1, 16, 29],
+  "trainLossBefore": 3.5498032569885254,
+  "trainLossAfter": 0.13940687477588654,
+  "validationLossBefore": 3.5145821571350098,
+  "validationLossAfter": 2.597975015640259,
+  "firstGradientNorm": 0.07444937527179718,
+  "weightChanged": true,
+  "causalCheck": true,
+  "reloadEqual": true,
+  "generatedText": "sun is red.\nsky is blue.\nmoon is whi",
+  "verifiedAt": "2026-10-06",
+  "separateProcessReload": true,
+  "sourceSha256": "ed8cefa94babc572f408cb11f6db2ec674a295620c781ce227c78a20416582dc"
+}

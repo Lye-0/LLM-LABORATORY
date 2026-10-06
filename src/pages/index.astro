@@ -3,6 +3,7 @@ import { withBase } from '../lib/paths';
 import SiteLayout from '../layouts/SiteLayout.astro';
 import { stages } from '../data/catalog';
 import { getCollection } from 'astro:content';
+import '../styles/maps.css';
 const lessons = await getCollection('lessons');
 const pipeline = [
   ['01', 'Tokenizer', '文字列 → ID', 'tokenizer'],
@@ -95,6 +96,12 @@ const pipeline = [
       </a>
     ))}
   </div>
+  <a class="map-entry" href={withBase('/learn/maps/')}>
+    <strong>図でつなぐ — LLMの全体地図 →</strong>
+    <span>
+      文章・コード・データ・重み。学んだことを、推論・作成・学習・改造の道筋につなげます。
+    </span>
+  </a>
   <div class="home-columns">
     <section>
       <div class="section-title">
