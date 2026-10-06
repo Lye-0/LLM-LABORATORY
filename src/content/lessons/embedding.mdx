@@ -292,4 +292,6 @@ True
 
 Qwen3-0.6Bの参照設定はhidden_size=1024、モデル側vocab_size=151936です。実物は`model.get_input_embeddings().weight.shape`で確認します。Tokenizerの語彙件数とモデルの行数は、必ずしも一致しません。
 
-Embedding直後のベクトルは同じIDに対して同じですが、Transformer層を通ったhidden stateは周囲の文脈で変わります。「意味が似る」という説明を、すべての行の距離や各成分へ機械的に当てはめないことも大切です。
+Embedding直後のベクトルは同じIDに対して同じですが、Transformer層を通ったhidden stateは、その位置から参照できる文脈や各層の処理で変わります。Qwenのように未来を見ないモデルでは、後ろのトークンを参照できません。「意味が似る」という説明を、すべての行の距離や各成分へ機械的に当てはめないことも大切です。
+
+Qwenの観察ページの後半では、`hidden_states[0]`が入力Embeddingと一致すること、その次の`hidden_states[1]`がLayer 0を通った表現であることを、同じ入力で確かめます。Layerを通って値が変わることと、元のEmbeddingの重み表を学習で更新することは別です。

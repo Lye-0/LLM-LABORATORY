@@ -1,14 +1,14 @@
 ---
 title: "実際のQwenを観察する"
-description: "学習済みのEmbeddingで、ID・トークン位置・出力ベクトルを結びつける。"
+description: "学習済みEmbeddingからHidden Stateへ、同じトークン位置の値とshapeを追う。"
 stage: "representation"
 order: 16
-minutes: 22
+minutes: 30
 eyebrow: "MODEL ANATOMY"
 prerequisites: ["first-generation","embedding"]
 labs: ["model","embedding"]
 sources: ["qwen","module","embedding","tokenizer"]
-tags: ["Qwen3","Qwen3ForCausalLM","get_input_embeddings","hidden_size","state_dict","return_tensors"]
+tags: ["Qwen3","Qwen3ForCausalLM","get_input_embeddings","hidden_size","hidden_states","output_hidden_states","allclose","state_dict","return_tensors"]
 question: "7トークンの入力が[1, 7, 1024]になるとき、7個のIDは1本のベクトルへまとめられますか？"
 answer: "各IDがそれぞれ1024成分のベクトルになります。入力1件・7位置の構造が残り、output[0, i]で位置iのベクトルを取り出せます。"
 ---
@@ -16,7 +16,7 @@ answer: "各IDがそれぞれ1024成分のベクトルになります。入力1�
 
 [Embeddingの基礎](../embedding/)では、`nn.Embedding(5, 3)`で作った表を参照しました。ここではQwen3-0.6Bが持つ学習済みの表を使い、**「こんにちは」→ ID 89015 → 1024成分のベクトル**までを実物で確かめます。
 
-このページの数値と表示は、2026-10-05にPython 3.13.15・PyTorch 2.14.1+cu130・Transformers 5.18.0、下記の固定revisionを**CPU・bfloat16**で読み込んで確認しました。GPUで読み込んだ場合はdeviceの表示が変わります。入力Embeddingの参照だけを行い、文章生成や学習は実行しません。
+Embeddingの数値と表示は2026-10-05、Hidden Stateの観察は2026-10-07に確認しました。Python 3.13.15・PyTorch 2.14.1+cu130・Transformers 5.18.0、下記の固定revisionを**CPU・bfloat16**で読み込んだ結果です。GPUや演算方法の違いで数値の一部が変わることがあります。Embeddingの参照からモデルの1回の計算へ進みます。文章生成や学習は実行しません。
 
 ## モデル名・クラス・実物を分ける
 
@@ -110,7 +110,7 @@ Qwen3ForCausalLM(
 
 </details>
 
-`Qwen3Model`はEmbeddingやDecoder Layerなどを持つ本体です。`Qwen3ForCausalLM`は、さらに次トークン予測用の`lm_head`を含みます。今回は入口のEmbeddingまでを動かします。後続の計算は[Transformerブロック](../transformer-block/)で扱います。
+`Qwen3Model`はEmbeddingやDecoder Layerなどを持つ本体です。`Qwen3ForCausalLM`は、さらに次トークン予測用の`lm_head`を含みます。まず入口のEmbeddingを動かし、後半でDecoder Layerを通った状態を観察します。1層の内部処理は[Transformerブロック](../transformer-block/)で扱います。
 
 ## configの主要値
 
@@ -382,6 +382,136 @@ for position, token_id in enumerate(ids[0].tolist()):
 | 6 | 128797 | `ãģ§ãģĻãģŃ` | `[0.0093, -0.0371, 0.0571]` |
 
 内部トークン表記はTokenizerが使う表記で、ベクトルの意味の名前ではありません。各成分に「日本語らしさ」などの意味が一対一で割り当てられているとも限りません。この後は、位置ごとのベクトルがTransformer層を通り、周囲の文脈を反映した表現へ変わっていきます。
+
+## EmbeddingからHidden Stateへ
+
+ここまでは`embedding(ids)`で表を引きました。次は**同じ入力文をモデル全体へ渡し、計算途中のTensorを受け取ります。** `model(**inputs)`の中でもEmbeddingが実行されるため、先ほどの`output`をもう一度IDとして渡す必要はありません。
+
+```python
+text = "こんにちは、今日はいい天気ですね"
+inputs = tokenizer(text, add_special_tokens=False, return_tensors="pt")
+inputs = {
+    key: value.to(model.get_input_embeddings().weight.device)
+    for key, value in inputs.items()
+}
+with torch.no_grad():
+    outputs = model(
+        **inputs, output_hidden_states=True, use_cache=False
+    )
+hidden_states = outputs.hidden_states
+print("Decoder Layer数:", len(model.model.layers))
+print("状態の型:", type(hidden_states))
+print("保存された状態の個数:", len(hidden_states))
+print("各状態のshape:", hidden_states[0].shape)
+print("全状態が同じshapeか:",
+      all(h.shape == hidden_states[0].shape for h in hidden_states))
+```
+
+```text
+Decoder Layer数: 28
+状態の型: <class 'tuple'>
+保存された状態の個数: 29
+各状態のshape: torch.Size([1, 7, 1024])
+全状態が同じshapeか: True
+```
+
+`inputs`は`input_ids`と`attention_mask`を持つ辞書に似た`BatchEncoding`です。`**inputs`はそれぞれを名前付き引数として渡します。辞書内の値を配置先へ移した後も、IDは整数のままです。この例はモデル全体をCPUに置いています。複数デバイスへ分散した場合の配置は、[実行環境](../../environment/)の条件も確認します。
+
+| 指定・返り値 | 今回の役割 |
+|---|---|
+| `output_hidden_states=True` | 中間状態も返すように指定する |
+| `use_cache=False` | 今回の観察では生成用のKV cacheを返さない |
+| `outputs` | Hidden Stateやlogitsを含むモデルの返り値 |
+| `outputs.hidden_states` | 計算の節目にあるTensorを並べたtuple |
+
+`model(...)`はここでは1回のforward計算です。`generate(...)`のようにトークンを選んで追加する処理ではなく、学習済み重みを書き換える処理でもありません。
+
+### 28層なのに、なぜ29個あるか
+
+**tupleの番号はDecoder Layer番号ではありません。** Embedding後の状態が最初に入り、その後の状態が続きます。以下の各保存地点のshapeはすべて`[1, 7, 1024]`です。
+
+```text
+整数ID [1, 7]
+  ↓ Embedding
+hidden_states[0]  ← Layer 0に入る前
+  ↓ Layer 0
+hidden_states[1]  ← Layer 0後・Layer 1に入る前
+  ↓ Layer 1
+hidden_states[2]
+  ↓ … Layer 2〜26 …
+hidden_states[27] ← Layer 26後・Layer 27に入る前
+  ↓ Layer 27（最後の層）
+  ↓ 最終RMSNorm
+hidden_states[28] ← 最終RMSNorm後
+  ↓ LM head
+logits [1, 7, 151936]
+```
+
+| 保存された状態 | 観察している場所 |
+|---|---|
+| `hidden_states[0]` | 入力Embeddingの出力 |
+| `hidden_states[1]`〜`[27]` | Layer 0〜26の出力 |
+| `hidden_states[28]`（`[-1]`） | Layer 27を通り、さらに最終RMSNormを通った出力 |
+
+最後の状態を「Layer 27直後」とだけ呼ぶと、最終RMSNormの処理を見落とします。今回の実装では、Layer 27の生の出力はこのtupleに別の項目として入りません。この対応はTransformers 5.18.0のQwen3実装と、各層・最終Normの出力を実際に照合して確認しています。[Qwen3の実装](https://github.com/huggingface/transformers/blob/v5.18.0/src/transformers/models/qwen3/modeling_qwen3.py)
+
+### 「こんにちは」の位置の先頭8成分を追う
+
+```python
+before_layer0 = hidden_states[0]
+after_layer0 = hidden_states[1]
+print("Layer 0前:", before_layer0[0, 0, :8])
+print("Layer 0後:", after_layer0[0, 0, :8])
+print("Tensor全体が近い値か:", torch.allclose(before_layer0, after_layer0))
+```
+
+```text
+Layer 0前: tensor([ 0.0140, -0.0510,  0.0308,  0.0250,  0.0118, -0.0352,  0.0242,  0.0557],
+       dtype=torch.bfloat16)
+Layer 0後: tensor([-0.2207,  0.4219,  0.1211, -0.6328,  0.0732,  0.2676, -0.6094,  0.5078],
+       dtype=torch.bfloat16)
+Tensor全体が近い値か: False
+```
+
+| `hidden_states[i][0, 0, :8]`の指定 | 選んでいるもの |
+|---|---|
+| `i` | 保存された状態の番号 |
+| 最初の`0` | 入力1件のうち0番目 |
+| 次の`0` | 入力内のトークン位置0（今回のIDは89015） |
+| `:8` | 1024成分のうち成分0〜7 |
+
+`hidden_states[0][0, 0]`は`weight[89015]`を引いたベクトルと一致します。Layerを通った後は、**「ID 89015の重み表の行」ではなく、「こんにちは」がある位置の内部表現**を見ています。shapeと位置の対応は保たれますが、ベクトルの値は更新されます。元のEmbeddingの行を学習で更新した結果ではありません。
+
+Qwen3は未来を見ない因果的なAttentionを使います。この文の位置0には前のトークンもないので、後ろの「今日はいい天気ですね」を参照して値が変わったわけではありません。文脈による変化を観察したい場合は、前のトークンを参照できる後ろの位置も比較します。会話テンプレートを加えると、位置0が「こんにちは」とは限らなくなります。
+
+### allcloseのFalseから分かること
+
+表示したのは先頭8成分ですが、`torch.allclose(before_layer0, after_layer0)`は**1×7×1024＝7168個の対応する全成分**を比較します。すべてが許容誤差内なら`True`、一つでも範囲を外れれば`False`です。「すべての成分が変わった」「意味が良くなった」とまでは分かりません。
+
+先頭8成分だけを比べるなら、両引数を`[0, 0, :8]`で切り出します。`a == b`は要素ごとの完全一致を表すbool Tensor、`torch.equal(a, b)`は同じshape・値かを一つのboolで返します。`allclose`は許容誤差付きの比較です。
+
+既定の許容誤差は`rtol=1e-5`、`atol=1e-8`です。bfloat16を渡しても、自動的に粗い精度へ合わせて緩くなるわけではありません。演算環境をまたいで数値を比較するときは、目的に合う誤差を指定します。[allcloseの仕様](https://docs.pytorch.org/docs/2.14/generated/torch.allclose.html)
+
+<details>
+<summary>同じ位置を全29状態で追うコード</summary>
+
+```python
+for i, state in enumerate(hidden_states):
+    if i == 0:
+        label = "Embedding後・Layer 0前"
+    elif i == len(hidden_states) - 1:
+        label = "最後のLayer後・最終RMSNorm後"
+    else:
+        label = f"Layer {i - 1}後・Layer {i}前"
+    print(f"hidden_states[{i}] — {label}", state.shape)
+    print(state[0, 0, :8])
+```
+
+各行の8成分はベクトルの一部です。例えば先頭成分が同じでも残り1016成分まで同じとは限らず、bfloat16の丸めで小さな変化が表示へ出ない場合もあります。大きい値だけから計算の故障や意味を断定せず、Layer内の計算や正規化を別に観察します。
+
+</details>
+
+次は[Transformerブロック](../transformer-block/)で、Layer 0内の`input_layernorm → Self-Attention → Residual加算 → post_attention_layernorm → MLP → Residual加算`を追います。[モデルの中を拡大する地図](../maps/structure/)でも同じ部品の配置を見渡せます。
 
 ## moduleの構成をたどる
 

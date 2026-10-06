@@ -101,8 +101,8 @@ export const glossary = [
     'hidden-state',
     'Hidden state',
     'モデル内部の各位置の表現。層を通ることで文脈を反映する。',
-    '同じtokenでも周囲の文脈で値が変わる。',
-    'transformer-block',
+    '同じtokenでも参照できる文脈で値が変わる。Qwenのhidden_states[0]はEmbedding後。',
+    'qwen',
   ],
   [
     'attention',

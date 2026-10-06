@@ -13,7 +13,7 @@ const captions: Record<string, Record<string, [string, string]>> = {
   inference: {
     ids: ['Tokenizer', '分割して、語彙表のIDへ'],
     embedding: ['Embedding', '各IDに対応する行を引く'],
-    context: ['Decoder Layers ×28', '過去の位置から情報を集める'],
+    context: ['Decoder Layers ×28 → 最終RMSNorm', '各位置の表現を更新する'],
     logits: ['LM head', '語彙候補のスコアを作る'],
     choose: ['greedy / sampling', '候補から次のIDを選ぶ'],
     loop: ['generate', 'IDを追加し、計算を繰り返す'],

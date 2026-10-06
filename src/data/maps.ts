@@ -93,10 +93,11 @@ export const learningMaps: LearningMap[] = [
             '周囲の文脈を反映する',
             '位置ごとのベクトル\n[B, T, D] = [1, 7, 1024]',
             '文脈を反映したhidden states\n[1, 7, 1024]',
-            'outputs = model(input_ids=ids, output_hidden_states=True)\nlast_hidden = outputs.hidden_states[-1]',
+            'with torch.no_grad():\n    outputs = model(input_ids=ids, output_hidden_states=True, use_cache=False)\nlast_hidden = outputs.hidden_states[-1]',
             'Embedding、28個のDecoder Layer、最後のNormを通り、各位置の表現が変わります。shapeが同じでも数値と役割は変わります。この呼び出しはIDからモデル全体を実行します。',
-            '構造から説明する基本形。ここでhidden stateの数値は未掲載です。前のembedding出力をさらにこのmodel呼び出しに渡すコードではありません。',
+            '実測：CPU・bfloat16、2026-10-07。hidden_statesは29個で、[0]はEmbedding後、[1]はLayer 0後、[-1]は最終RMSNorm後。各状態は[1,7,1024]です。数値と番号の対応はQwenの観察ページで確認できます。',
             [
+              lesson('qwen', 'Hidden Stateの観察'),
               lesson('transformer-block', 'Transformerブロック'),
               { title: '図を拡大：モデルの内部', url: '/learn/maps/structure/' },
             ],
@@ -182,8 +183,11 @@ export const learningMaps: LearningMap[] = [
             '[B,T,1024]',
             'model.model.layers',
             '28個の層で情報を処理します。同じ構成でも各層の重みは別です。下の図で1層を拡大できます。',
-            '構造表示：各層の出力shapeを保ちながら、数値が変わります。',
-            [lesson('transformer-block', 'Transformerブロック')],
+            '各層の出力shapeを保ちながら数値が変わります。hidden_states[0]は層の出力ではなくEmbedding後、最後の状態は最終Norm後です。',
+            [
+              lesson('transformer-block', 'Transformerブロック'),
+              lesson('qwen', 'Hidden Stateの観察'),
+            ],
           ),
           step(
             'norm',
