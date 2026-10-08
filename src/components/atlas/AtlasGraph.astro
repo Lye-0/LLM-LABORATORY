@@ -25,7 +25,7 @@ const presentNode = (id: string) =>
   id === 'prefill' && map.slug === 'training'
     ? {
         ...nodeById[id],
-        title: '学習用batchの計算を開始',
+        title: 'Forward：学習用batchの計算を開始',
         code: 'forward（学習）',
         meaning:
           '学習用の入力列を、この先のEmbedding〜LM headで計算する。生成時の初回計算はprefillと呼ぶ。',

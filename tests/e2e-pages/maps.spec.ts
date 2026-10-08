@@ -42,7 +42,7 @@ test('全体地図には詳細な分岐が初期表示され、検索しても�
   await page.getByLabel('地図内を探す', { exact: true }).press('Enter');
   await expect(page.locator('.is-current-match')).toHaveCount(1);
   await expect(page.locator('[data-node]')).toHaveCount(count);
-  await expect(page.locator('[data-search-status]')).toContainText('Qの正規化');
+  await expect(page.locator('[data-search-status]')).toContainText('Q-Norm / RMSNorm：Qの正規化');
   await page.getByRole('button', { name: '広く見る', exact: true }).click();
   await expect(page.locator('#sidebar')).toBeHidden();
   await page.getByRole('button', { name: '左メニューを戻す' }).click();
@@ -73,7 +73,7 @@ test('補足は中央ポップアップで、URL復元・履歴・Escape・フ�
   await page.goBack();
   await expect(dialog).toBeHidden();
   await page.goForward();
-  await expect(dialog).toContainText('Qの正規化');
+  await expect(dialog).toContainText('Q-Norm / RMSNorm：Qの正規化');
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(dialog).toBeVisible();
   expect(await dialog.evaluate((el) => el.matches(':modal'))).toBeTruthy();

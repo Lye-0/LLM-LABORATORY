@@ -43,7 +43,7 @@ const node = (
 export const nodes: AtlasNode[] = [
   node(
     'source-code',
-    '計算の設計図',
+    'Model implementation：計算の設計図',
     'modeling_qwen3.py',
     'Pythonのクラス定義',
     'forwardの処理順',
@@ -52,7 +52,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'config',
-    'モデルの寸法',
+    'Config：モデルの寸法',
     'config.json',
     'モデル構成',
     'D=1024 / 28 layers',
@@ -61,7 +61,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'weights',
-    '学習済みの数値',
+    'Model weights：学習済みの数値',
     'model.safetensors',
     '配布ファイル',
     '名前付きの重みTensor',
@@ -70,7 +70,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'initialize',
-    '新しく初期化',
+    'Initialization：新しく初期化',
     'from_config(config)',
     '構成と乱数seed',
     '初期重みを持つモデル',
@@ -81,7 +81,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'load',
-    '配布モデルを読み込む',
+    'from_pretrained：配布モデルを読み込む',
     'from_pretrained(...)',
     'コード + config + 重み',
     'model：Pythonの実物',
@@ -92,7 +92,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'tokenizer-assets',
-    '語彙と分割規則',
+    'Tokenizer assets：語彙と分割規則',
     'tokenizer.json / tokenizer_config.json',
     '語彙・分割・特殊トークン',
     'tokenizer',
@@ -101,7 +101,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'text',
-    '文章・会話',
+    'Prompt / Messages：文章・会話',
     'str / list[dict]',
     '利用者の入力',
     '文章 または role/content の列',
@@ -110,7 +110,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'template',
-    '会話を直列化',
+    'Chat template：会話を直列化',
     'apply_chat_template',
     'messages',
     '役割・境界を含む入力',
@@ -120,7 +120,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'tokenize',
-    '文字列をトークンへ',
+    'Tokenizer：文字列をトークンへ',
     'tokenizer / encode',
     '文字列',
     'トークンの列 → 整数ID列',
@@ -131,7 +131,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'input-ids',
-    'IDを並べたTensor',
+    'input_ids：IDを並べたTensor',
     'input_ids',
     '[89015, 5373, …]',
     'int64 [B,T]  例：[1,7]',
@@ -141,7 +141,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'input-mask',
-    '有効な入力位置',
+    'Attention mask：有効な入力位置',
     'attention_mask',
     '入力・padding位置',
     '[B,T]  例：すべて1',
@@ -150,7 +150,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'device',
-    '計算する場所へ',
+    'Device transfer：計算する場所へ',
     'tensor.to(device)',
     '辞書内の各Tensor',
     '同じshape / 指定device',
@@ -161,7 +161,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'embedding',
-    '語彙表の行を引く',
+    'Embedding：語彙表の行を引く',
     'model.embed_tokens',
     'input_ids [B,T]',
     'hidden [B,T,D]  例：[1,7,1024]',
@@ -172,7 +172,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'layer-input',
-    '層に入る内部表現',
+    'Hidden state：層に入る内部表現',
     'hidden_states',
     '前の層 / Embeddingの出力',
     '[B,Tq,1024]',
@@ -181,7 +181,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'input-norm',
-    'Attention前の正規化',
+    'RMSNorm：Attention前の正規化',
     'input_layernorm · RMSNorm',
     '[B,Tq,1024]',
     '[B,Tq,1024]',
@@ -192,7 +192,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'q-proj',
-    '問い合せを作る',
+    'Query projection（Q）：問い合せを作る',
     'q_proj',
     '[B,Tq,1024]',
     '[B,Tq,2048]',
@@ -200,7 +200,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'q-heads',
-    'Qを16 headsへ',
+    'Head split（Q）：Qを16 headsへ',
     'view',
     '[B,Tq,2048]',
     '[B,Tq,16,128]',
@@ -208,7 +208,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'q-norm',
-    'Qの正規化',
+    'Q-Norm / RMSNorm：Qの正規化',
     'q_norm · RMSNorm',
     '[B,Tq,16,128]',
     '[B,Tq,16,128]',
@@ -216,7 +216,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'q-transpose',
-    'Qの軸を並べ替え',
+    'Transpose（Q）：Qの軸を並べ替え',
     'transpose(1,2)',
     '[B,Tq,16,128]',
     'Q [B,16,Tq,128]',
@@ -224,7 +224,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'q-rope',
-    'Qへ位置を反映',
+    'RoPE（Q）：Qへ位置を反映',
     'apply_rotary_pos_emb',
     'Q + cos/sin',
     'Q [B,16,Tq,128]',
@@ -232,16 +232,23 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'k-proj',
-    '参照される鍵を作る',
+    'Key projection（K）：参照される鍵を作る',
     'k_proj',
     '[B,Tq,1024]',
     '[B,Tq,1024]',
     '入力をK用の重みで線形変換する。',
   ),
-  node('k-heads', 'Kを8 headsへ', 'view', '[B,Tq,1024]', '[B,Tq,8,128]', 'Qとはhead数が異なる。'),
+  node(
+    'k-heads',
+    'Head split（K）：Kを8 headsへ',
+    'view',
+    '[B,Tq,1024]',
+    '[B,Tq,8,128]',
+    'Qとはhead数が異なる。',
+  ),
   node(
     'k-norm',
-    'Kの正規化',
+    'K-Norm / RMSNorm：Kの正規化',
     'k_norm · RMSNorm',
     '[B,Tq,8,128]',
     '[B,Tq,8,128]',
@@ -249,7 +256,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'k-transpose',
-    'Kの軸を並べ替え',
+    'Transpose（K）：Kの軸を並べ替え',
     'transpose(1,2)',
     '[B,Tq,8,128]',
     'K [B,8,Tq,128]',
@@ -257,7 +264,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'k-rope',
-    'Kへ位置を反映',
+    'RoPE（K）：Kへ位置を反映',
     'apply_rotary_pos_emb',
     'K + cos/sin',
     'K [B,8,Tq,128]',
@@ -265,7 +272,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'k-cache',
-    '過去のKとつなぐ',
+    'KV cache（K）：過去のKとつなぐ',
     'past_key_values.update',
     '今回のK + 過去のK',
     'K [B,8,Tkv,128]',
@@ -273,7 +280,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'k-gqa',
-    'KをQ headsへ対応',
+    'GQA（K）：KをQ headsへ対応',
     'GQA / repeat_kv',
     '8 KV heads',
     '論理上 [B,16,Tkv,128]',
@@ -283,7 +290,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'v-proj',
-    '渡す情報を作る',
+    'Value projection（V）：渡す情報を作る',
     'v_proj',
     '[B,Tq,1024]',
     '[B,Tq,1024]',
@@ -291,7 +298,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'v-heads',
-    'Vを8 headsへ',
+    'Head split（V）：Vを8 headsへ',
     'view',
     '[B,Tq,1024]',
     '[B,Tq,8,128]',
@@ -299,7 +306,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'v-transpose',
-    'Vの軸を並べ替え',
+    'Transpose（V）：Vの軸を並べ替え',
     'transpose(1,2)',
     '[B,Tq,8,128]',
     'V [B,8,Tq,128]',
@@ -307,7 +314,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'v-cache',
-    '過去のVとつなぐ',
+    'KV cache（V）：過去のVとつなぐ',
     'past_key_values.update',
     '今回のV + 過去のV',
     'V [B,8,Tkv,128]',
@@ -315,7 +322,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'v-gqa',
-    'VをQ headsへ対応',
+    'GQA（V）：VをQ headsへ対応',
     'GQA / repeat_kv',
     '8 KV heads',
     '論理上 [B,16,Tkv,128]',
@@ -323,7 +330,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'scores',
-    'QとKを比較',
+    'Attention scores：QとKを比較',
     'Q @ Kᵀ / √128',
     'Q と K（GQA対応後）',
     'scores [B,16,Tq,Tkv]',
@@ -331,7 +338,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'causal-mask',
-    '参照できる位置を決める',
+    'Causal / Padding mask：参照できる位置を決める',
     'causal mask + padding mask',
     '位置 + attention_mask',
     'scoreへ適用するmask',
@@ -340,7 +347,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'masked-scores',
-    '参照禁止を反映',
+    'Attention masking：参照禁止を反映',
     'scores + mask',
     'scores と mask',
     'masked scores [B,16,Tq,Tkv]',
@@ -348,7 +355,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'softmax',
-    '参照する割合へ',
+    'Softmax：参照する割合へ',
     'softmax(dim=-1)',
     'masked scores',
     '割合 [B,16,Tq,Tkv]',
@@ -358,7 +365,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'weighted-sum',
-    '割合に従ってVを混ぜる',
+    'Weighted sum：割合に従ってVを混ぜる',
     'attention_weights @ V',
     '割合 と V（GQA対応後）',
     '[B,16,Tq,128]',
@@ -366,7 +373,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'attention-transpose',
-    '位置を前へ戻す',
+    'Transpose：位置を前へ戻す',
     'transpose(1,2)',
     '[B,16,Tq,128]',
     '[B,Tq,16,128]',
@@ -374,7 +381,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'head-merge',
-    'headsを結合',
+    'Head merge：headsを結合',
     'reshape / contiguous',
     '[B,Tq,16,128]',
     '[B,Tq,2048]',
@@ -382,7 +389,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'o-proj',
-    'モデルの幅へ戻す',
+    'Output projection：モデルの幅へ戻す',
     'o_proj',
     '[B,Tq,2048]',
     '[B,Tq,1024]',
@@ -390,7 +397,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'residual-attn',
-    '＋ 元の入力を足す',
+    'Residual connection ①：＋ 元の入力を足す',
     'residual + attention_output',
     'この層のhidden state + o_proj出力',
     '[B,Tq,1024]',
@@ -399,7 +406,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'post-norm',
-    'MLP前の正規化',
+    'RMSNorm：MLP前の正規化',
     'post_attention_layernorm',
     '[B,Tq,1024]',
     '[B,Tq,1024]',
@@ -407,7 +414,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'gate-proj',
-    '通す量の枝',
+    'Gate projection：通す量の枝',
     'gate_proj',
     '[B,Tq,1024]',
     '[B,Tq,3072]',
@@ -415,7 +422,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'silu',
-    'gateの非線形変換',
+    'SiLU：gateの非線形変換',
     'SiLU(x) = x · sigmoid(x)',
     'gate [B,Tq,3072]',
     '[B,Tq,3072]',
@@ -423,7 +430,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'up-proj',
-    '特徴を広げる枝',
+    'Up projection：特徴を広げる枝',
     'up_proj',
     '[B,Tq,1024]',
     '[B,Tq,3072]',
@@ -431,7 +438,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'multiply',
-    '× 要素ごとに掛ける',
+    'SwiGLUの要素積：× 要素ごとに掛ける',
     'SiLU(gate) * up',
     '2本の [B,Tq,3072]',
     '[B,Tq,3072]',
@@ -440,7 +447,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'down-proj',
-    '幅を戻す',
+    'Down projection：幅を戻す',
     'down_proj',
     '[B,Tq,3072]',
     '[B,Tq,1024]',
@@ -448,7 +455,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'residual-mlp',
-    '＋ MLP前の値を足す',
+    'Residual connection ②：＋ MLP前の値を足す',
     'residual + mlp_output',
     'Attention後の値 + down_proj出力',
     '層の出力 [B,Tq,1024]',
@@ -457,7 +464,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'next-layer',
-    '次のDecoder Layerへ',
+    'Decoder Layer stack：次のDecoder Layerへ',
     'layers[0] … layers[27]',
     '層の出力',
     '次の層の入力 [B,Tq,1024]',
@@ -468,7 +475,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'final-norm',
-    '最後の正規化',
+    'Final RMSNorm：最後の正規化',
     'model.norm',
     'Layer 27の出力',
     '[B,Tq,1024]',
@@ -476,7 +483,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'lm-head',
-    '語彙の候補へ射影',
+    'LM head：語彙の候補へ射影',
     'lm_head',
     '[B,Tq,1024]',
     'logits [B,Tq,151936]',
@@ -487,7 +494,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'last-logits',
-    '最後の位置を選ぶ',
+    'Last-token logits：最後の位置を選ぶ',
     'logits[:, -1, :]',
     '[B,Tq,V]',
     '[B,V]',
@@ -495,7 +502,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'processors',
-    '候補の選び方を調整',
+    'Logits processing：候補の選び方を調整',
     'temperature / top_k / top_p',
     'logits [B,V]',
     '調整済みスコア・確率',
@@ -503,7 +510,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'greedy',
-    '最も高い候補',
+    'Greedy decoding：最も高い候補',
     'argmax',
     'スコア [B,V]',
     '次ID [B,1]',
@@ -511,7 +518,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'sampling',
-    '確率に従って選ぶ',
+    'Sampling：確率に従って選ぶ',
     'softmax → multinomial',
     '調整済みスコア [B,V]',
     '次ID [B,1]',
@@ -519,7 +526,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'append',
-    '生成列へ追加',
+    'Token concatenation：生成列へ追加',
     'cat / generate',
     '入力ID列 + 次ID',
     '1トークン長くなった列',
@@ -527,7 +534,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'prefill',
-    '初回：入力全体の計算を開始',
+    'Prefill：初回：入力全体の計算を開始',
     'prefill',
     '入力 [B,T]',
     'input_ids [B,T] / Tq=Tkv=T',
@@ -535,7 +542,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'cached-decode',
-    '続行：新しいIDだけ',
+    'Decoding with KV cache：続行：新しいIDだけ',
     'decode with KV cache',
     '次ID [B,1] + K/V cache',
     'logits [B,1,V] / Tq=1、Tkv=蓄積長',
@@ -543,7 +550,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'no-cache',
-    '続行：列全体を再計算',
+    'Decoding without cache：続行：列全体を再計算',
     'use_cache=False',
     '伸びたID列 [B,T]',
     'logits [B,T,V] / Tq=Tkv=T',
@@ -551,7 +558,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'stop',
-    '生成の終了判定',
+    'Stopping criteria：生成の終了判定',
     'EOS / max_new_tokens',
     '生成ID列 と 停止条件',
     '続行 または 完了',
@@ -560,7 +567,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'decode',
-    '完了：文字列へ戻す',
+    'Tokenizer decode：完了：文字列へ戻す',
     'tokenizer.decode',
     '生成ID列',
     '表示する文字列',
@@ -571,7 +578,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'dataset',
-    '学習材料を整える',
+    'Dataset preparation：学習材料を整える',
     'dataset / cleaning',
     '文章・会話の集合',
     '学習に使うテキスト',
@@ -580,7 +587,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'split',
-    '学習・検証を分ける',
+    'Train / Validation split：学習・検証を分ける',
     'train / validation split',
     'データ集合',
     '学習用 と 検証用',
@@ -588,7 +595,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'train-tokenize',
-    '学習データをIDへ',
+    'Tokenization：学習データをIDへ',
     'tokenizer / chat template',
     '学習用テキスト',
     'ID列 と 有効位置',
@@ -596,7 +603,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'batch',
-    '長さを整えbatchへ',
+    'Data collator：長さを整えbatchへ',
     'collator / padding / packing',
     '複数のID列',
     'input_ids / mask [B,T]',
@@ -604,7 +611,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'labels',
-    '正解と除外位置',
+    'Labels：正解と除外位置',
     'labels',
     'input_ids [B,T]',
     'labels [B,T] / 除外は-100',
@@ -614,7 +621,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'train-start',
-    '重みの出発点',
+    'Model initialization：重みの出発点',
     'initialize / pretrained / adapter',
     '新規・継続学習・LoRAの選択',
     '更新対象のパラメータ',
@@ -622,7 +629,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'train-mode',
-    '学習モードにする',
+    'Training mode：学習モードにする',
     'model.train()',
     'モデル',
     '学習時の部品の挙動',
@@ -630,7 +637,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'zero-grad',
-    '前の勾配を消す',
+    'Zero gradients：前の勾配を消す',
     'optimizer.zero_grad()',
     '前回のgrad',
     'gradをリセット',
@@ -638,7 +645,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'shift',
-    '予測と次の正解を対応',
+    'Causal LM shift：予測と次の正解を対応',
     'logits[:, :-1] / labels[:, 1:]',
     'logits [B,T,V] + labels [B,T]',
     '位置tの予測 ↔ 位置t+1のID',
@@ -646,7 +653,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'loss',
-    '予測のずれを数値に',
+    'Cross-entropy loss：予測のずれを数値に',
     'cross_entropy',
     '候補スコア と 正解ID',
     'loss：スカラーTensor',
@@ -655,7 +662,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'backward',
-    '勾配を計算',
+    'Backpropagation：勾配を計算',
     'loss.backward()',
     'loss と 計算グラフ',
     '各パラメータのgrad',
@@ -663,7 +670,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'grad',
-    '重みごとの変化方向',
+    'Gradient：重みごとの変化方向',
     'parameter.grad',
     '逆伝播の結果',
     '各重みと同じshape',
@@ -672,7 +679,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'optimizer',
-    '重みを更新',
+    'Optimizer step：重みを更新',
     'optimizer.step()',
     '重み + grad + optimizer状態',
     '更新後の重み',
@@ -680,7 +687,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'evaluate',
-    '同じ条件で評価',
+    'Evaluation：同じ条件で評価',
     'eval() + no_grad()',
     '検証データ と モデル',
     'loss / 品質 / 速度 / メモリ',
@@ -688,7 +695,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'checkpoint',
-    '途中状態を保存',
+    'Checkpoint：途中状態を保存',
     'checkpoint',
     '重み・optimizer・進捗・乱数等',
     '再開用ファイル',
@@ -697,7 +704,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'resume',
-    '学習を再開',
+    'Resume training：学習を再開',
     'load state',
     'checkpoint + 同じ構成',
     '進捗・重み・optimizer等',
@@ -705,7 +712,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'baseline',
-    '変更前を記録',
+    'Baseline：変更前を記録',
     'seed / input / settings',
     'モデル + 評価入力',
     '元の結果・設定・保存物',
@@ -713,7 +720,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'generation-edit',
-    '生成設定を変える',
+    'Generation config：生成設定を変える',
     'GenerationConfig',
     '候補選択の設定',
     '出力の選ばれ方',
@@ -721,7 +728,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'embedding-edit',
-    'Embeddingを編集',
+    'Embedding weights：Embeddingを編集',
     'embed_tokens.weight',
     '指定IDの行',
     '変更した入力表現',
@@ -729,7 +736,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'vocab-edit',
-    '語彙を追加',
+    'Vocabulary expansion：語彙を追加',
     'add_tokens + resize_token_embeddings',
     'Tokenizer + 語彙表 + 出力層',
     '新しいIDと行',
@@ -737,7 +744,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'lora',
-    '小さな更新経路を足す',
+    'LoRA：小さな更新経路を足す',
     'LoRA: Wx + BAx',
     '凍結した基底重み + adapter',
     'adapterだけを学習',
@@ -745,7 +752,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'quantize',
-    '数値表現を軽くする',
+    'Quantization：数値表現を軽くする',
     'quantization',
     '重み・スケール・計算方式',
     '低精度の表現と対応演算',
@@ -753,7 +760,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'replace-layer',
-    '部品を置き換える',
+    'Module replacement：部品を置き換える',
     'Module replacement',
     '対象層 + 入出力の契約',
     '差し替えたモデル',
@@ -761,7 +768,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'compare',
-    '変更前後を比べる',
+    'Evaluation comparison：変更前後を比べる',
     'same input / seed / metric',
     '元のモデル と 変更モデル',
     '品質・速度・メモリの差',
@@ -769,7 +776,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'save-change',
-    '採用して保存',
+    'Model / Adapter save：採用して保存',
     'save_pretrained / adapter save',
     'モデル と Tokenizer・設定',
     '再現できる保存物',
@@ -778,7 +785,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'restore',
-    '基準へ戻す',
+    'Baseline restore：基準へ戻す',
     'reload baseline',
     '変更前の保存物',
     '元のモデル',
@@ -786,7 +793,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'owner',
-    'モデル全体',
+    'Qwen3ForCausalLM：モデル全体',
     'Qwen3ForCausalLM',
     'config + weights',
     'model本体 と lm_head',
@@ -795,7 +802,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'body',
-    'モデル本体',
+    'Qwen3Model：モデル本体',
     'Qwen3Model',
     'input_ids等',
     '最終hidden state',
@@ -804,7 +811,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'position',
-    '位置の回転係数',
+    'RoPE cos / sin：位置の回転係数',
     'rotary_emb / position_ids',
     'トークンの位置',
     'cos / sin',
@@ -812,7 +819,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'hidden-tuple',
-    '途中状態をまとめる',
+    'Hidden states tuple：途中状態をまとめる',
     'outputs.hidden_states',
     'Embedding・各層境界・最終Norm',
     'tuple：29個 × [B,T,1024]',
@@ -823,7 +830,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'slice',
-    '同じ位置の一部を見る',
+    'Tensor slicing：同じ位置の一部を見る',
     'hidden_states[i][0,0,:8]',
     'i番目の状態 [B,T,1024]',
     '先頭入力・先頭位置の8要素',
@@ -831,7 +838,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'batch-encoding',
-    '名前付きの容器',
+    'BatchEncoding：名前付きの容器',
     'BatchEncoding',
     'Tokenizerの出力',
     'input_ids / attention_mask',
@@ -840,7 +847,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'dict',
-    '各Tensorを取り出す',
+    'Keyword argument unpacking：各Tensorを取り出す',
     'dict[str, Tensor] / **inputs',
     'BatchEncoding',
     '名前付き引数としてforwardへ',
@@ -848,7 +855,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'dtype',
-    '値の表現を区別',
+    'dtype：値の表現を区別',
     'int64 / bfloat16 / float32',
     'ID・内部表現・計算',
     '意味に適したdtype',
@@ -857,7 +864,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'probabilities',
-    '候補の確率',
+    'Token probabilities：候補の確率',
     'softmax(logits)',
     '候補スコア [B,V]',
     '確率 [B,V]',
@@ -866,7 +873,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'torch',
-    'Tensor演算を実行',
+    'PyTorch：Tensor演算を実行',
     'PyTorch operators',
     'モデルのforward',
     'matmul / norm / activation',
@@ -874,7 +881,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'hardware',
-    'CPU / GPU上で計算',
+    'Device / Kernels：CPU / GPU上で計算',
     'device / kernels',
     'Tensor と 演算',
     'メモリ上の計算結果',
@@ -882,7 +889,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'memory',
-    'メモリを使うもの',
+    'Memory usage：メモリを使うもの',
     'weights / activations / cache / grad',
     '推論・学習の状態',
     '必要メモリ',
@@ -891,7 +898,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'export',
-    '推論用に保存',
+    'save_pretrained：推論用に保存',
     'save_pretrained',
     'メモリ上のmodel / tokenizer',
     'config・重み・Tokenizer資産',
@@ -900,7 +907,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'reload',
-    'ファイルから再読込',
+    'from_pretrained：ファイルから再読込',
     'from_pretrained(local_path)',
     '保存した構成・数値・語彙',
     '新しいPythonインスタンス',
@@ -908,7 +915,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'engine',
-    '別の実行方式へ',
+    'Model conversion：別の実行方式へ',
     'export / conversion',
     '対応するモデル・形式',
     '互換性のある推論エンジン',
@@ -916,7 +923,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'documents',
-    '検索する資料',
+    'RAG documents：検索する資料',
     'documents',
     '文書・ページ',
     '参照用コーパス',
@@ -925,7 +932,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'chunks',
-    '文書を小さく分ける',
+    'Chunking：文書を小さく分ける',
     'chunking',
     '参照用文書',
     '短い文書片 + 出典',
@@ -933,7 +940,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'retrieval-embedding',
-    '検索用ベクトルへ',
+    'Text embedding：検索用ベクトルへ',
     'embedding model',
     '文書片',
     '検索用ベクトル',
@@ -941,7 +948,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'index',
-    '検索できる形で保存',
+    'Vector index：検索できる形で保存',
     'vector index',
     'ベクトル + 文書片 + 出典',
     '検索索引',
@@ -950,7 +957,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'query',
-    '質問を検索へ',
+    'Retrieval：質問を検索へ',
     'query embedding / retrieval',
     '質問 + 同じ検索空間',
     '関連する文書片',
@@ -958,7 +965,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'context',
-    '資料を入力へ加える',
+    'RAG context：資料を入力へ加える',
     'prompt / messages',
     '質問 + 検索結果',
     '根拠を含むモデル入力',
@@ -966,7 +973,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'tool-request',
-    'モデルが呼出しを指定',
+    'Tool calling：モデルが呼出しを指定',
     'tool call',
     '質問 + ツールの説明',
     '名前 と 引数',
@@ -974,7 +981,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'tool-run',
-    'アプリが実行する',
+    'Tool execution：アプリが実行する',
     'application / tool',
     '呼出し指定 + 検証',
     '外部処理の結果',
@@ -982,7 +989,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'tool-result',
-    '結果を会話へ戻す',
+    'Tool result：結果を会話へ戻す',
     'tool message',
     '外部処理の結果',
     '追加された会話',
@@ -990,7 +997,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'media',
-    '画像・音声など',
+    'Multimodal input：画像・音声など',
     'multimodal inputs',
     '画像 / 音声',
     '前処理済みデータ',
@@ -999,7 +1006,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'encoder',
-    '専用の特徴抽出',
+    'Vision / Audio encoder：専用の特徴抽出',
     'vision / audio encoder',
     '前処理済みデータ',
     '特徴ベクトル',
@@ -1007,7 +1014,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'connector',
-    '言語側へつなぐ',
+    'Projector / Connector：言語側へつなぐ',
     'projector / connector',
     '媒体の特徴',
     '対応モデルへの入力表現',
@@ -1129,7 +1136,7 @@ export const sections: AtlasSection[] = [
       ),
       block(
         [['gate-proj', 'silu'], ['up-proj']],
-        'MLP：同じ入力から2本を作る。正規化前の値はResidual ②へ',
+        'MLP / SwiGLU：同じ入力から2本を作る。正規化前の値はResidual ②へ',
       ),
       block(
         [['multiply', 'down-proj', 'residual-mlp', 'next-layer']],

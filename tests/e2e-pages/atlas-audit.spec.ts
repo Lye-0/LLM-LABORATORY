@@ -31,13 +31,15 @@ test('全地点の補足を末尾まで読んでも閉じる操作と横幅を�
 
 test('学習の章境界と保存後の分岐が本文と補足で一致する', async ({ page }) => {
   await page.goto('/LLM-LABORATORY/maps/training/');
-  await expect(page.locator('#n-prefill h3')).toHaveText('学習用batchの計算を開始');
+  await expect(page.locator('#n-prefill h3')).toHaveText('Forward：学習用batchの計算を開始');
   await expect(
     page.locator('.atlas-cross-route[data-from="lm-head"][data-to="shift"]'),
   ).toHaveAttribute('data-direct', 'true');
   await page.locator('#n-lm-head summary').click();
   await expect(
-    page.getByRole('dialog').getByRole('link', { name: '予測と次の正解を対応', exact: true }),
+    page
+      .getByRole('dialog')
+      .getByRole('link', { name: 'Causal LM shift：予測と次の正解を対応', exact: true }),
   ).toBeVisible();
   await page.keyboard.press('Escape');
   await page.goto('/LLM-LABORATORY/maps/runtime/');
@@ -73,10 +75,12 @@ test('改造候補は常時表示の選択領域にまとめ、外周の重複�
     }
     await group.locator('#n-lora summary').click();
     await expect(
-      page.getByRole('dialog').getByRole('link', { name: '変更前を記録', exact: true }),
+      page.getByRole('dialog').getByRole('link', { name: 'Baseline：変更前を記録', exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByRole('dialog').getByRole('link', { name: '変更前後を比べる', exact: true }),
+      page
+        .getByRole('dialog')
+        .getByRole('link', { name: 'Evaluation comparison：変更前後を比べる', exact: true }),
     ).toBeVisible();
     await page.keyboard.press('Escape');
   }
