@@ -239,7 +239,7 @@ export function initAtlas() {
       const direct =
         to.closest('.atlas-section')?.classList.contains('atlas-section--continuation') &&
         ['embedding', 'next-layer', 'lm-head'].includes(fromId);
-      const narrow = matchMedia('(max-width:600px)').matches;
+      const narrow = matchMedia('(max-width:1000px)').matches;
       const x1 = a.left + (direct && narrow ? 12 : a.width / 2) - bounds.left,
         y1 = a.bottom - bounds.top;
       const x2 = b.left + (direct && narrow ? 12 : b.width / 2) - bounds.left,

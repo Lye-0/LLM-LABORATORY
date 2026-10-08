@@ -890,3 +890,25 @@
   left: 50%;
   color: var(--accent);
 }
+@media (max-width: 1000px) {
+  .atlas-boundary {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+    padding-left: 40px;
+  }
+  .atlas-section--continuation .atlas-block:first-of-type > .atlas-branch-label {
+    width: calc(100% - 40px);
+    margin-left: 40px;
+  }
+}
+@media (max-width: 600px) {
+  .atlas-stack-layers li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 3px;
+  }
+}
+@media (min-width: 601px) and (max-width: 1000px) {
+  .atlas-lanes[style*='--lanes:1'] {
+    width: 100%;
+  }
+}
