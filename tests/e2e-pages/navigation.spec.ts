@@ -15,12 +15,22 @@ test('狭幅の教材表をキーボードで横へ読める', async ({ page }) 
 test('同じ上部セクションでは一覧と詳細の左ナビが変わらない', async ({ page }) => {
   const sections = [
     {
+      root: '/maps/',
+      pages: [
+        '/maps/inference/',
+        '/maps/training/',
+        '/maps/modification/',
+        '/maps/structure/',
+        '/maps/data/',
+        '/maps/runtime/',
+        '/maps/ecosystem/',
+      ],
+    },
+    {
       root: '/learn/',
       pages: [
         '/learn/tensor/',
         '/learn/qwen/',
-        '/learn/maps/',
-        '/learn/maps/inference/',
         '/learn/maps/training/small-model/',
         '/environment/',
       ],
@@ -74,28 +84,21 @@ test('同じ上部セクションでは一覧と詳細の左ナビが変わら�
   );
 });
 
-test('地図から教材へ移動でき、モバイルでも同じ学ぶメニューを使える', async ({ page }) => {
+test('地図と教材の所属が明確で、モバイルでも地図の一覧が共通', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.goto(`${base}/learn/maps/inference/`);
-  await expect(page.locator('#sidebar .nav-group').first()).toContainText('図でつなぐ');
-  await page.screenshot({ path: 'test-results/shared-learning-navigation-desktop.png' });
-  await page.locator('#sidebar a[href$="/learn/tensor/"]').click();
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Tensor');
+  await page.goto(base + '/maps/inference/');
+  await page.locator('#n-embedding summary').click();
+  await page.locator('.atlas-inspector a[href$="/learn/qwen/"]').first().click();
+  await expect(page.locator('.top-nav a[aria-current]')).toHaveAttribute('href', base + '/learn/');
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: 'ナビゲーションを開く' }).click();
+  await page.locator('.sidebar-sections a[href$="/maps/"]').click();
   await page.getByRole('button', { name: 'ナビゲーションを開く' }).click();
   await expect(page.locator('.sidebar-sections a[aria-current]')).toHaveAttribute(
     'href',
-    `${base}/learn/`,
+    base + '/maps/',
   );
-  await page.locator('#sidebar a[href$="/learn/maps/inference/"]').click();
-  await page.getByRole('button', { name: 'ナビゲーションを開く' }).click();
-  await expect(page.locator('.nav-group a[aria-current]')).toHaveAttribute(
-    'href',
-    `${base}/learn/maps/inference/`,
-  );
-  await expect(page.locator('#sidebar a[href$="/learn/tensor/"]')).toBeVisible();
-  await expect.poll(async () => (await page.locator('#sidebar').boundingBox())?.x).toBe(0);
-  await page.screenshot({ path: 'test-results/shared-learning-navigation-mobile.png' });
+  await expect(page.locator('#sidebar .nav-group a')).toHaveCount(7);
   await page.keyboard.press('Escape');
   await expect(page.getByRole('button', { name: 'ナビゲーションを開く' })).toBeFocused();
 });

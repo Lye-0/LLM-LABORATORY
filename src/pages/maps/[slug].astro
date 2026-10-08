@@ -1,0 +1,10 @@
+---
+import AtlasPage from '../../components/atlas/AtlasPage.astro';
+import { maps } from '../../data/atlas';
+export function getStaticPaths() {
+  return maps.filter((m) => m.slug).map((map) => ({ params: { slug: map.slug }, props: { map } }));
+}
+const { map } = Astro.props;
+---
+
+<AtlasPage map={map} />

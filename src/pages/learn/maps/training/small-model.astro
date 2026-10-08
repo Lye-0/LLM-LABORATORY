@@ -86,9 +86,7 @@ const tinyMap: MapSection = {
   description="CPUで動く小さなCausal LMを、新規初期化・学習・生成・保存・再読込まで一つのプログラムで追う。"
 >
   <nav class="map-breadcrumb" aria-label="パンくず">
-    <a href={withBase('/learn/maps/')}>図でつなぐ</a>
-    <span>/</span>
-    <a href={withBase('/learn/maps/training/')}>作成と学習</a>
+    <a href={withBase('/learn/')}>学ぶ</a>
     <span>/ 小さな言語モデル</span>
   </nav>
   <article class="map-code-lesson">
@@ -143,7 +141,7 @@ const tinyMap: MapSection = {
     </p>
     <h2>プログラムの各部分は、図のどこ？</h2>
     <div class="map-directory">
-      <a href={withBase('/learn/maps/training/?creation=initialize')}>
+      <a href={withBase('/maps/training/#n-train-start')}>
         <span class="mono">01</span>
         <div>
           <h2>構造と初期重み</h2>
@@ -151,7 +149,7 @@ const tinyMap: MapSection = {
         </div>
         <span>↗</span>
       </a>
-      <a href={withBase('/learn/maps/training/?update=loss')}>
+      <a href={withBase('/maps/training/#n-loss')}>
         <span class="mono">02</span>
         <div>
           <h2>次トークンの正解</h2>
@@ -159,7 +157,7 @@ const tinyMap: MapSection = {
         </div>
         <span>↗</span>
       </a>
-      <a href={withBase('/learn/maps/training/?update=step')}>
+      <a href={withBase('/maps/training/#n-optimizer')}>
         <span class="mono">03</span>
         <div>
           <h2>勾配と更新</h2>
@@ -167,7 +165,7 @@ const tinyMap: MapSection = {
         </div>
         <span>↗</span>
       </a>
-      <a href={withBase('/learn/maps/runtime/?runtime=reload')}>
+      <a href={withBase('/maps/runtime/#n-reload')}>
         <span class="mono">04</span>
         <div>
           <h2>評価・保存・再読込</h2>
@@ -175,7 +173,7 @@ const tinyMap: MapSection = {
         </div>
         <span>↗</span>
       </a>
-      <a href={withBase('/learn/maps/inference/?inference=loop')}>
+      <a href={withBase('/maps/inference/#n-append')}>
         <span class="mono">05</span>
         <div>
           <h2>1文字ずつ生成</h2>
@@ -245,7 +243,7 @@ const tinyMap: MapSection = {
       まず元の結果を残し、更新回数・学習率・内部次元のどれか1つを変更して、同じ未使用文のlossを比べます。構造を変えた場合は、その設定も保存して読み直します。
     </p>
     <div class="flow-links">
-      <a href={withBase('/learn/maps/training/')}>作成と学習の図に戻る</a>
+      <a href={withBase('/maps/training/')}>作成と学習の図に戻る</a>
       <a href={withBase('/learn/loss/')}>損失と更新を詳しく読む</a>
       <a href={withBase('/learn/data-evaluation/')}>データと評価の分離</a>
       <a href="https://docs.pytorch.org/docs/2.14/generated/torch.nn.TransformerEncoderLayer.html">

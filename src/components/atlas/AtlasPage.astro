@@ -1,0 +1,157 @@
+---
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import AtlasGraph from './AtlasGraph.astro';
+import { maps, mapUrl, sectionById, type AtlasMap } from '../../data/atlas';
+import { withBase } from '../../lib/paths';
+import { getCollection } from 'astro:content';
+import { lessonLocations } from '../../data/atlas/supplements';
+import { nodeById, nodeUrl } from '../../data/atlas';
+import '../../styles/atlas.css';
+interface Props {
+  map: AtlasMap;
+}
+const { map } = Astro.props;
+const count = map.sections.flatMap((s) =>
+  sectionById[s].blocks.flatMap((b) => b.lanes.flat()),
+).length;
+const lessons = (await getCollection('lessons')).filter((l) =>
+  map.sections.some((s) =>
+    sectionById[s].blocks.some((b) => b.lanes.some((lane) => lane.includes(lessonLocations[l.id]))),
+  ),
+);
+---
+
+<SiteLayout title={map.title} description={map.description} wide>
+  <div class="atlas" data-atlas>
+    <header class="page-header atlas-intro">
+      <div class="eyebrow">LLM ATLAS / {String(maps.indexOf(map) + 1).padStart(2, '0')}</div>
+      <h1>{map.title}</h1>
+      <p>{map.description}</p>
+      <div class="atlas-meta">
+        <span>{count}地点を常時表示</span>
+        <span>上から下へ読む</span>
+        <a href="#atlas-guide">記号・確認条件</a>
+      </div>
+    </header>
+    <div class="atlas-toolbar" data-pagefind-ignore>
+      <form class="atlas-search" role="search" aria-label="この地図で探す">
+        <label for="atlas-query">地図内を探す</label>
+        <div>
+          <input id="atlas-query" type="search" placeholder="例：q_norm、勾配" autocomplete="off" />
+          <button type="button" data-prev aria-label="前の一致">
+            ↑
+          </button>
+          <button type="submit" aria-label="次の一致">
+            ↓
+          </button>
+        </div>
+        <output aria-live="polite" data-search-status>
+          名前・コード・データから探せます
+        </output>
+      </form>
+      <button type="button" class="atlas-wide" aria-pressed="false">
+        広く見る
+      </button>
+    </div>
+    <noscript>
+      <p class="atlas-notice">
+        すべての地点と補足をそのまま読めます。検索・接続線の追加表示にはJavaScriptを使用します。
+      </p>
+    </noscript>
+    <div class="atlas-workspace">
+      <div class="atlas-canvas" data-pagefind-body>
+        {map.sections.map((id, i) => (
+          <>
+            {id === 'decoder' && (
+              <p class="atlas-transition">↓ Embeddingの出力 [B,T,D] → Layer 0の入力</p>
+            )}
+            {id === 'output' && map.sections.includes('decoder') && (
+              <p class="atlas-transition">↓ Layer 27の出力 → 最終Norm → LM head</p>
+            )}
+            {id === 'learning' && (
+              <p class="atlas-transition atlas-transition--branch">
+                学習の経路：共通forwardのlogitsと、保持したlabelsが合流。生成の候補選択は通りません。
+              </p>
+            )}
+            <AtlasGraph section={sectionById[id]} map={map} number={i + 1} />
+          </>
+        ))}
+      </div>
+      <aside class="atlas-position" aria-label="地図内の現在位置" data-pagefind-ignore>
+        <div class="atlas-position-inner">
+          <nav class="atlas-chapters" aria-label="この地図の章">
+            <p>この地図の中</p>
+            <ol>
+              {map.sections.map((id, i) => (
+                <li>
+                  <a href={`#s-${id}`}>
+                    <span>{String(i + 1).padStart(2, '0')}</span>
+                    {sectionById[id].title}
+                  </a>
+                </li>
+              ))}
+            </ol>
+          </nav>
+          <dialog class="atlas-inspector" aria-labelledby="atlas-inspector-title">
+            <div class="atlas-inspector-header">
+              <h2 id="atlas-inspector-title">地点の補足</h2>
+              <button type="button" data-close>
+                閉じる
+              </button>
+            </div>
+            <div data-inspector-body></div>
+          </dialog>
+        </div>
+      </aside>
+    </div>
+    <footer class="atlas-guide" id="atlas-guide">
+      <h2>この地図の読み方と確認条件</h2>
+      <p>
+        実線・矢印はデータの流れ。側面の迂回はResidualなどの保持経路。破線と「更新」は反復・重み更新、矢印のない点線は包含・共有です。領域をまたぐ長い関係は「つながる地点」の名前付きリンクで接続しています。
+      </p>
+      <p>
+        B＝入力件数、T＝列の長さ、D＝特徴の幅、V＝語彙数。Tq＝今回計算する位置数、Tkv＝参照する全位置数。固定例はQwen/Qwen3-0.6Bの生文7トークンです。会話テンプレートや生成の途中では長さが変わります。
+      </p>
+      <p>
+        対象revision：<code>c1899de289a04d12100db370d81485cdf75e47ca</code>。Transformers
+        5.18.0。高速化されたAttentionを、学習用に演算へ分解しています。全28層の同型部分は1つの詳細図にまとめ、繰り返しを表示しています。
+      </p>
+      <p>
+        根拠：
+        <a
+          href="https://github.com/huggingface/transformers/blob/v5.18.0/src/transformers/models/qwen3/modeling_qwen3.py"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Qwen3の実装
+        </a>
+        。Embedding・層境界・最終Normは既存の実測で確認。Attention・MLPの形状は固定モデルの検証記録と照合しています。RAG・Tool
+        Use・改造は概念図で、実測値を表すものではありません。
+      </p>
+      <a href={withBase('/learn/maps/training/small-model/')}>小さなモデルを実際に作る教材 →</a>
+      <details class="atlas-coverage">
+        <summary>教材と、この地図の地点の対応</summary>
+        <ul>
+          {lessons.map((l) => (
+            <li>
+              <a href={withBase(`/learn/${l.id}/`)}>{l.data.title}</a>
+              <span> → </span>
+              <a href={withBase(nodeUrl(lessonLocations[l.id], map))}>
+                {nodeById[lessonLocations[l.id]].title}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </details>
+      <nav aria-label="地図の種類">
+        {maps.map((m) => (
+          <a href={withBase(mapUrl(m.slug))}>{m.title}</a>
+        ))}
+      </nav>
+    </footer>
+  </div>
+</SiteLayout>
+<script>
+  import { initAtlas } from './atlas-client';
+  initAtlas();
+</script>

@@ -4,7 +4,7 @@ import { getCollection } from 'astro:content';
 import { stages, labs } from '../data/catalog';
 import { projects } from '../data/projects';
 import { topics } from '../data/topics';
-import { learningMaps } from '../data/maps';
+import { maps, mapUrl } from '../data/atlas';
 import { apiLibraries, apiClasses, getApiClass } from '../data/api-groups';
 import { apiEntries } from '../data/api';
 import '../styles/global.css';
@@ -12,29 +12,36 @@ interface Props {
   title: string;
   description?: string;
   wide?: boolean;
+  canonical?: string;
+  noindex?: boolean;
 }
 const {
   title,
   description = 'LLMの仕組みを、読む・動かす・調べる。基礎からモデル改造へつなぐ学習サイト。',
   wide = false,
+  canonical,
+  noindex = false,
 } = Astro.props;
 const lessons = (await getCollection('lessons')).sort((a, b) => a.data.order - b.data.order);
 const path = withoutBase(Astro.url.pathname);
 const nav = [
-  { href: '/learn/', label: '学ぶ', no: '01' },
-  { href: '/labs/', label: '実験する', no: '02' },
-  { href: '/reference/', label: '調べる', no: '03' },
-  { href: '/projects/', label: '改造する', no: '04' },
+  { href: '/maps/', label: '地図', no: '01' },
+  { href: '/learn/', label: '学ぶ', no: '02' },
+  { href: '/labs/', label: '実験する', no: '03' },
+  { href: '/reference/', label: '調べる', no: '04' },
+  { href: '/projects/', label: '改造する', no: '05' },
 ];
-const activeSection = path.startsWith('/labs/')
-  ? '/labs/'
-  : path.startsWith('/projects/')
-    ? '/projects/'
-    : path.startsWith('/reference/') || path.startsWith('/topics/')
-      ? '/reference/'
-      : path.startsWith('/learn/') || path.startsWith('/environment/')
-        ? '/learn/'
-        : '';
+const activeSection = path.startsWith('/maps/')
+  ? '/maps/'
+  : path.startsWith('/labs/')
+    ? '/labs/'
+    : path.startsWith('/projects/')
+      ? '/projects/'
+      : path.startsWith('/reference/') || path.startsWith('/topics/')
+        ? '/reference/'
+        : path.startsWith('/learn/') || path.startsWith('/environment/')
+          ? '/learn/'
+          : '';
 const apiDetail = apiEntries.find((e) => path === `/reference/api/${e.slug}/`);
 const detailClass = apiDetail ? getApiClass(apiDetail.owner) : undefined;
 interface SideGroup {
@@ -44,15 +51,28 @@ interface SideGroup {
 }
 let sidebarHome = { href: '/', label: 'サイトの案内' };
 let sidebarGroups: SideGroup[] = [];
-if (activeSection === '/learn/') {
+if (activeSection === '/maps/') {
+  sidebarHome = { href: '/maps/', label: '全体地図' };
+  sidebarGroups = [
+    {
+      title: '流れを追う',
+      links: maps.slice(1, 4).map((m) => ({ href: mapUrl(m.slug), label: m.title })),
+    },
+    {
+      title: '構成を知る',
+      links: maps.slice(4, 7).map((m) => ({ href: mapUrl(m.slug), label: m.title })),
+    },
+    {
+      title: '応用へつなぐ',
+      links: maps.slice(7).map((m) => ({ href: mapUrl(m.slug), label: m.title })),
+    },
+  ];
+} else if (activeSection === '/learn/') {
   sidebarHome = { href: '/learn/', label: '学ぶ：全体と教材一覧' };
   sidebarGroups = [
     {
-      title: '図でつなぐ',
-      links: [
-        { href: '/learn/maps/', label: 'LLMの全体地図' },
-        ...learningMaps.map((map) => ({ href: `/learn/maps/${map.slug}/`, label: map.title })),
-      ],
+      title: '地図で見る',
+      links: [{ href: '/maps/', label: '全体地図へ ↗' }],
     },
     ...stages.map((stage) => ({
       title: stage.title,
@@ -135,6 +155,13 @@ function isCurrentLink(href: string) {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={description} />
+    {canonical && (
+      <link
+        rel="canonical"
+        href={new URL(withBase(canonical), Astro.site || 'https://lye-0.github.io/')}
+      />
+    )}
+    {noindex && <meta name="robots" content="noindex, follow" />}
     <meta name="theme-color" content="#11171d" />
     <title>{title === 'Home' ? 'LLM LABORATORY — モデルを、内側から理解する。' : `${title} · LLM LABORATORY`}</title>
     <link rel="icon" type="image/svg+xml" href={withBase('/favicon.svg')} />

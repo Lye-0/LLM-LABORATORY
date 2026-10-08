@@ -1,152 +1,148 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-
 const base = '/LLM-LABORATORY';
-test('全体地図を操作前から見渡せる', async ({ page }) => {
+const slugs = [
+  '',
+  'inference/',
+  'training/',
+  'modification/',
+  'structure/',
+  'data/',
+  'runtime/',
+  'ecosystem/',
+];
+test('全体地図には詳細な分岐が初期表示され、検索しても他の地点を隠さない', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.goto(`${base}/learn/maps/`);
-  const world = page.locator('.world-map');
-  await expect(world.locator('.world-pipeline li')).toHaveCount(6);
-  await expect(world).toContainText('[B, T, D]');
-  await expect(world).toContainText('[B, T, V]');
-  await expect(world).toContainText('損失');
-  await expect(world).toContainText('重みの更新');
-  await expect(world).toContainText('量子化');
-  await expect(page.getByRole('dialog')).toHaveCount(0);
-  await world.screenshot({ path: 'test-results/llm-world-map.png' });
+  await page.goto(`${base}/maps/`);
+  const count = await page.locator('[data-node]').count();
+  expect(count).toBeGreaterThan(100);
+  for (const id of [
+    'q-proj',
+    'q-norm',
+    'k-rope',
+    'v-gqa',
+    'scores',
+    'softmax',
+    'gate-proj',
+    'up-proj',
+    'multiply',
+    'residual-mlp',
+    'backward',
+    'lora',
+    'tool-run',
+  ])
+    await expect(page.locator(`#n-${id}`)).toBeVisible();
+  await expect(page.locator('.atlas-route[data-from="input-norm"][data-to="v-proj"]')).toHaveCount(
+    1,
+  );
   await expect(
-    page
-      .getByRole('navigation', { name: 'メインナビゲーション' })
-      .getByRole('link', { name: '01 学ぶ' }),
-  ).toHaveAttribute('aria-current', 'page');
+    page.locator('.atlas-route[data-from="v-heads"][data-to="v-transpose"]'),
+  ).toHaveCount(1);
+  await page.getByLabel('地図内を探す', { exact: true }).fill('q_norm');
+  await page.getByLabel('地図内を探す', { exact: true }).press('Enter');
+  await expect(page.locator('.is-current-match')).toHaveCount(1);
+  await expect(page.locator('[data-node]')).toHaveCount(count);
+  await expect(page.locator('[data-search-status]')).toContainText('Qの正規化');
+  await page.getByRole('button', { name: '広く見る', exact: true }).click();
+  await expect(page.locator('#sidebar')).toBeHidden();
+  await page.getByRole('button', { name: '左メニューを戻す' }).click();
+  await expect(page.locator('#sidebar')).toBeVisible();
 });
-
-test('推論の全地点が常時見え、詳細は補足として開閉できる', async ({ page }) => {
+test('補足は地図に重ならず、URL復元・履歴・Escape・フォーカス復帰に対応', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
-  const errors: string[] = [];
-  page.on('pageerror', (error) => errors.push(error.message));
-  await page.goto(`${base}/learn/maps/inference/`);
-  const nodes = page.locator('[data-flow="inference"] .map-nodes');
-  await expect(nodes.locator('li')).toHaveCount(7);
-  await expect(nodes).toContainText('整数ID [1,7]');
-  await expect(nodes).toContainText('ベクトル [1,7,1024]');
-  await expect(nodes).toContainText('logits [1,7,151936]');
-  await expect(nodes).toContainText('表示用の文字列');
-  await expect(page.getByRole('dialog')).toHaveCount(0);
-  await page.locator('.map-board').screenshot({ path: 'test-results/llm-inference-map.png' });
-  const open = page.getByRole('button', { name: '文章を整数IDへの詳細を開く', exact: true });
-  await open.press('Enter');
-  const dialog = page.getByRole('dialog', { name: '入力から、次のトークンへの詳細' });
-  await expect(dialog).toBeVisible();
-  await expect(dialog).toContainText('tokenizer.encode');
-  const padding = await dialog
-    .locator('.map-detail-value')
-    .first()
-    .evaluate((e) => parseFloat(getComputedStyle(e).paddingLeft));
-  expect(padding).toBeGreaterThanOrEqual(16);
-  await dialog.screenshot({ path: 'test-results/llm-map-detail.png' });
-  await page.keyboard.press('Escape');
-  await expect(dialog).toBeHidden();
-  await expect(open).toBeFocused();
-  await expect(nodes).toContainText('表示用の文字列');
-  await page.getByRole('button', { name: 'IDごとに表の行を引くの詳細を開く', exact: true }).click();
-  await expect(dialog).toContainText('model.get_input_embeddings()');
-  await page.reload();
-  await expect(dialog).toContainText('[1, 7, 1024]');
-  await page.keyboard.press('Escape');
-  expect(errors).toEqual([]);
-});
-
-test('構造と改造の詳細を閉じて、地図の関係へ戻れる', async ({ page }) => {
-  await page.goto(`${base}/learn/maps/structure/`);
-  await expect(page.locator('[data-flow="model"] .map-nodes')).toContainText('LM head');
-  await expect(page.locator('.residual-diagram')).toContainText('r₁');
-  await page
-    .locator('[data-flow="model"]')
-    .getByRole('button', { name: /LM headの詳細を開く/ })
-    .click();
-  await expect(page.getByRole('dialog')).toContainText('重みを共有');
-  await page.keyboard.press('Escape');
-  await page
-    .locator('[data-flow="attention"]')
-    .getByRole('button', { name: /位置を反映するの詳細を開く/ })
-    .click();
-  await expect(page.getByRole('dialog')).toContainText('回転');
-  await page.keyboard.press('Escape');
-  await page.goto(`${base}/learn/maps/modification/?change=embedding`);
-  await expect(page.getByRole('dialog')).toContainText('対象IDを含まない入力');
-  await page.keyboard.press('Escape');
-  const branches = page.locator('[data-flow="change"]');
-  await expect(branches.locator('.map-route')).toHaveCount(0);
-  await branches.getByRole('button', { name: /語彙を追加の詳細を開く/ }).click();
-  await expect(page.getByRole('dialog')).toContainText('max(len(tokenizer)');
-});
-
-test('全追加ページの地図・小画面・テーマ・アクセシビリティ', async ({ page, request }) => {
-  const errors: string[] = [];
-  page.on('pageerror', (error) => errors.push(error.message));
-  for (const slug of [
-    'inference',
-    'structure',
-    'training',
-    'modification',
-    'runtime',
-    'training/small-model',
-  ]) {
-    await page.setViewportSize({ width: 1440, height: 1000 });
-    await page.goto(`${base}/learn/maps/${slug}/`);
-    await expect(page.locator('main h1')).toBeVisible();
-    await expect(page.locator('.map-board').first()).toBeVisible();
-    await expect(page.getByRole('dialog')).toHaveCount(0);
-    await page
-      .locator('.map-board')
-      .first()
-      .screenshot({ path: `test-results/map-${slug.replaceAll('/', '-')}.png` });
-    for (const width of [768, 390, 320]) {
-      await page.setViewportSize({ width, height: 844 });
-      expect(
-        await page.evaluate(
-          () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
-        ),
-      ).toBeTruthy();
-    }
-  }
-  await page.goto(`${base}/learn/maps/inference/`);
-  await page.getByRole('button', { name: 'IDごとに表の行を引くの詳細を開く', exact: true }).click();
+  await page.goto(`${base}/maps/inference/`);
+  const opener = page.locator('#n-embedding summary');
+  await opener.click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
-  for (let theme = 0; theme < 2; theme++) {
-    // Native modal excludes the background from the accessibility tree.
-    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
-    await page.keyboard.press('Escape');
-    await page.getByRole('button', { name: '明暗テーマを切り替える' }).click();
-    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
-    await page
-      .getByRole('button', { name: 'IDごとに表の行を引くの詳細を開く', exact: true })
-      .click();
-  }
+  await expect(dialog).toContainText('151936');
+  expect(page.url()).toContain('detail=embedding');
+  const canvas = await page.locator('.atlas-canvas').boundingBox(),
+    detail = await dialog.boundingBox();
+  expect(detail!.x).toBeGreaterThanOrEqual(canvas!.x + canvas!.width);
+  await page.reload();
+  await expect(dialog).toBeVisible();
   await page.keyboard.press('Escape');
-  const program = await request.get(`${base}/examples/tiny-language-model.py`);
-  expect(program.ok()).toBeTruthy();
-  expect(await program.text()).toContain('class TinyCausalLM');
+  await expect(dialog).toBeHidden();
+  await expect(opener).toBeFocused();
+  await page.locator('#n-q-norm summary').click();
+  await page.goBack();
+  await expect(dialog).toBeHidden();
+  await page.goForward();
+  await expect(dialog).toContainText('Qの正規化');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(dialog).toBeVisible();
+  expect(await dialog.evaluate((el) => el.matches(':modal'))).toBeTruthy();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#n-q-norm summary')).toBeFocused();
+});
+test('8種類の地図は狭幅・明暗でも情報が欠けず、アクセシビリティ違反がない', async ({ page }) => {
+  test.setTimeout(150000);
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  for (const slug of slugs) {
+    await page.goto(`${base}/maps/${slug}`);
+    for (const width of [320, 390, 768, 1280, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+        `${slug} ${width}`,
+      ).toBeTruthy();
+    }
+    await expect(page.locator('.top-nav a[aria-current]')).toHaveAttribute('href', `${base}/maps/`);
+    expect((await new AxeBuilder({ page }).analyze()).violations, slug).toEqual([]);
+  }
+  await page.goto(`${base}/maps/inference/`);
+  await page.getByRole('button', { name: '明暗テーマを切り替える' }).click();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator('#n-embedding summary').click();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.keyboard.press('Escape');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.locator('#n-q-proj').scrollIntoViewIfNeeded();
   expect(errors).toEqual([]);
 });
-
-test('JavaScriptなしでも処理とデータの変化が見える', async ({ browser }) => {
+test('旧URLの地点指定が移行し、小モデル教材は学ぶに残る', async ({ page, request }) => {
+  for (const [old, next] of [
+    ['inference/?inference=embedding', 'inference/#n-embedding'],
+    ['structure/?attention=rope', 'structure/#n-q-rope'],
+    ['training/?update=step', 'training/#n-optimizer'],
+    ['modification/?change=embedding', 'modification/#n-embedding-edit'],
+    ['runtime/?runtime=reload', 'runtime/#n-reload'],
+  ]) {
+    await page.goto(`${base}/learn/maps/${old}`);
+    await expect(page).toHaveURL(new RegExp(`/maps/${next}$`));
+  }
+  await page.goto(`${base}/learn/maps/training/small-model/`);
+  await expect(page.locator('.top-nav a[aria-current]')).toHaveAttribute('href', `${base}/learn/`);
+  await expect(page.locator('.map-board').first()).toBeVisible();
+  const program = await request.get(`${base}/examples/tiny-language-model.py`);
+  expect(await program.text()).toContain('class TinyCausalLM');
+  const search = await (await request.get(`${base}/search-index.json`)).json();
+  expect(JSON.stringify(search)).not.toContain('/learn/maps/inference/');
+  expect(JSON.stringify(search)).toContain('/maps/#n-q-norm');
+});
+test('JavaScriptなしでも8地図・分岐の意味・補足を読める', async ({ browser }) => {
   const context = await browser.newContext({
     javaScriptEnabled: false,
     viewport: { width: 390, height: 844 },
   });
   const page = await context.newPage();
-  await page.goto(`http://127.0.0.1:4323${base}/learn/maps/inference/`);
-  await expect(page.locator('.map-nodes')).toContainText('ベクトル [1,7,1024]');
-  await expect(page.locator('.map-nodes')).toContainText('表示用の文字列');
+  await page.goto(`http://127.0.0.1:4323${base}/maps/inference/`);
+  await expect(page.locator('#n-q-proj')).toBeVisible();
+  await expect(page.locator('#n-v-transpose')).toContainText('RoPEを適用しない');
+  await page.locator('#n-embedding summary').click();
+  await expect(page.locator('#n-embedding .atlas-detail-body')).toBeVisible();
+  await expect(page.locator('#n-embedding')).toContainText('get_input_embeddings');
   expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
-    ),
+    await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
   ).toBeTruthy();
-  await page.getByText('全文をまとめて読む', { exact: true }).click();
-  await expect(page.locator('.map-transcript')).toContainText('tokenizer.decode');
+  await page.goto(`http://127.0.0.1:4323${base}/learn/maps/inference/`);
+  await expect(page.locator('a[href$="/maps/inference/"]').first()).toBeVisible();
+  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
+    'href',
+    'https://lye-0.github.io/LLM-LABORATORY/maps/inference/',
+  );
   await context.close();
 });

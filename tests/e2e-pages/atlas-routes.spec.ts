@@ -1,0 +1,50 @@
+import { test, expect } from '@playwright/test';
+test('接続線が別の地点を横切らず、補足による幅変更にも追従する', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto('/LLM-LABORATORY/maps/');
+  const collisionCheck = () =>
+    page.evaluate(() => {
+      const problems: string[] = [];
+      for (const graph of document.querySelectorAll<HTMLElement>('.atlas-graph')) {
+        const nodes = [...graph.querySelectorAll<HTMLElement>('[data-node]')].map((n) => ({
+          id: n.dataset.node,
+          r: n.getBoundingClientRect(),
+        }));
+        const r = graph.getBoundingClientRect();
+        for (const path of graph.querySelectorAll<SVGPathElement>('.atlas-route')) {
+          const len = path.getTotalLength();
+          for (let i = 5; i < len - 5; i += 8) {
+            const p = path.getPointAtLength(i);
+            const hit = nodes.find(
+              (n) =>
+                n.id !== path.dataset.from &&
+                n.id !== path.dataset.to &&
+                p.x + r.left > n.r.left + 2 &&
+                p.x + r.left < n.r.right - 2 &&
+                p.y + r.top > n.r.top + 2 &&
+                p.y + r.top < n.r.bottom - 2,
+            );
+            if (hit) {
+              problems.push(`${path.dataset.from} → ${path.dataset.to} crosses ${hit.id}`);
+              break;
+            }
+          }
+        }
+      }
+      return problems;
+    });
+  await expect(page.locator('.has-routes')).toHaveCount(12);
+  await expect.poll(collisionCheck).toEqual([]);
+  await page.locator('#n-q-proj summary').click();
+  await expect.poll(collisionCheck).toEqual([]);
+  await page.keyboard.press('Escape');
+  await page.setViewportSize({ width: 768, height: 900 });
+  await expect.poll(collisionCheck).toEqual([]);
+  await page.setViewportSize({ width: 720, height: 500 });
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+  ).toBeTruthy();
+  await page.emulateMedia({ media: 'print' });
+  await expect(page.locator('#n-q-norm')).toBeVisible();
+  await expect(page.locator('#n-optimizer')).toBeVisible();
+});

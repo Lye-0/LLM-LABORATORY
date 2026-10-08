@@ -1,0 +1,57 @@
+---
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import { maps, mapUrl, nodeUrl } from '../../data/atlas';
+import { legacyNodes } from '../../data/atlas/legacy';
+import { withBase } from '../../lib/paths';
+interface Props {
+  slug?: string;
+}
+const { slug = '' } = Astro.props;
+const map = maps.find((m) => m.slug === slug)!;
+const target = withBase(mapUrl(slug));
+const aliases = Object.fromEntries(
+  Object.entries(legacyNodes[slug] || {}).map(([group, values]) => [
+    group,
+    Object.fromEntries(
+      Object.entries(values).map(([key, id]) => {
+        const url = nodeUrl(id, map);
+        return [key, withBase(url.startsWith('#') ? `${mapUrl(slug)}${url}` : url)];
+      }),
+    ),
+  ]),
+);
+---
+
+<SiteLayout title="地図の新しい場所" canonical={mapUrl(slug)} noindex>
+  <div class="page-header" data-pagefind-ignore>
+    <h1>地図は独立した「地図」タブへ移りました</h1>
+    <p>細部まで展開した縦型の地図を、新しい場所で読めます。</p>
+    <p>
+      <a href={target}>{map.title}へ進む →</a>
+    </p>
+    {Object.entries(aliases).map(([group, values]) => (
+      <details>
+        <summary>{group}の以前の地点</summary>
+        <ul>
+          {Object.entries(values).map(([label, url]) => (
+            <li>
+              <a href={url}>{label}</a>
+            </li>
+          ))}
+        </ul>
+      </details>
+    ))}
+  </div>
+</SiteLayout>
+<script is:inline define:vars={{ target, aliases }}>
+  const query = new URLSearchParams(location.search);
+  let destination = target;
+  for (const [group, values] of Object.entries(aliases)) {
+    const value = query.get(group);
+    if (value && values[value]) {
+      destination = values[value];
+      break;
+    }
+  }
+  location.replace(destination);
+</script>

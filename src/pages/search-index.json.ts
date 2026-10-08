@@ -6,26 +6,26 @@ import { glossary, comparisons } from '../data/glossary';
 import { labs } from '../data/catalog';
 import { projects } from '../data/projects';
 import { topics } from '../data/topics';
-import { learningMaps } from '../data/maps';
+import { maps, mapUrl, nodes, sectionById } from '../data/atlas';
 import tokens from '../data/tokens.json';
 export async function GET() {
   const lessons = await getCollection('lessons');
   const index = [
-    {
-      title: '図でつなぐ — LLMの全体地図',
-      description: '推論・作成・学習・改造を見渡す',
-      url: '/learn/maps/',
-      kind: 'まとめ',
-      keywords: '全体図 作成 改造 データ プログラム',
-    },
-    ...learningMaps.map((map) => ({
+    ...maps.map((map) => ({
       title: map.title,
       description: map.description,
-      url: `/learn/maps/${map.slug}/`,
-      kind: 'まとめ',
+      url: mapUrl(map.slug),
+      kind: '地図',
       keywords: map.sections
-        .flatMap((section) => section.steps.map((step) => `${step.title} ${step.explanation}`))
+        .flatMap((id) => sectionById[id].blocks.flatMap((b) => b.lanes.flat()))
         .join(' '),
+    })),
+    ...nodes.map((n) => ({
+      title: `地図：${n.title}`,
+      description: n.meaning,
+      url: `/maps/#n-${n.id}`,
+      kind: '地図の地点',
+      keywords: `${n.code} ${n.input} ${n.output}`,
     })),
     {
       title: '小さな言語モデルを作る',

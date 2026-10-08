@@ -1,0 +1,182 @@
+---
+import { nodeById, nodeUrl, type AtlasMap, type AtlasSection } from '../../data/atlas';
+import { withBase } from '../../lib/paths';
+import { supplements } from '../../data/atlas/supplements';
+interface Props {
+  section: AtlasSection;
+  map: AtlasMap;
+  number: number;
+}
+const { section, map, number } = Astro.props;
+---
+
+<section class="atlas-section" id={`s-${section.id}`} aria-labelledby={`heading-${section.id}`}>
+  <header class="atlas-section-heading">
+    <span class="atlas-number">{String(number).padStart(2, '0')}</span>
+    <div>
+      <h2 id={`heading-${section.id}`}>{section.title}</h2>
+      <p>{section.note}</p>
+    </div>
+  </header>
+  <div class="atlas-graph" data-edges={JSON.stringify(section.edges)}>
+    <svg class="atlas-edges" aria-hidden="true">
+      <defs>
+        <marker
+          id={`arrow-${section.id}`}
+          viewBox="0 0 10 10"
+          refX="9"
+          refY="5"
+          markerWidth="6"
+          markerHeight="6"
+          orient="auto-start-reverse"
+        >
+          <path d="M 0 0 L 10 5 L 0 10 z" />
+        </marker>
+      </defs>
+    </svg>
+    {section.blocks.map((block) => (
+      <div class="atlas-block">
+        {block.label && <p class="atlas-branch-label">{block.label}</p>}
+        <div class="atlas-lanes" style={`--lanes:${block.lanes.length}`}>
+          {block.lanes.map((lane) => (
+            <ol class="atlas-lane">
+              {lane.map((id) => {
+                const n = nodeById[id];
+                const incoming = section.edges.filter((e) => e.to === id);
+                return (
+                  <li
+                    class={`atlas-node atlas-node--${n.kind}`}
+                    id={`n-${id}`}
+                    data-node={id}
+                    data-search={`${n.title} ${n.code} ${n.input} ${n.output} ${n.meaning}`}
+                  >
+                    <div class="atlas-node-top">
+                      <span class="atlas-kind">
+                        {
+                          {
+                            process: '処理',
+                            data: 'データ',
+                            asset: '資産・部品',
+                            join: '合流・判定',
+                          }[n.kind]
+                        }
+                      </span>
+                      <a
+                        class="atlas-anchor"
+                        href={`#n-${id}`}
+                        aria-label={`${n.title}の地点リンク`}
+                      >
+                        #
+                      </a>
+                    </div>
+                    <h3>{n.title}</h3>
+                    <code class="atlas-code">{n.code}</code>
+                    <p class="atlas-meaning">{n.meaning}</p>
+                    <dl class="atlas-io">
+                      <div>
+                        <dt>入</dt>
+                        <dd>{n.input}</dd>
+                      </div>
+                      <div>
+                        <dt>出</dt>
+                        <dd>{n.output}</dd>
+                      </div>
+                    </dl>
+                    {incoming.length > 0 && (
+                      <p class="atlas-from">
+                        <span>受け取る：</span>
+                        {incoming.map((e, i) => (
+                          <>
+                            {i > 0 ? ' / ' : ''}
+                            <a href={`#n-${e.from}`}>{e.label || nodeById[e.from].code}</a>
+                          </>
+                        ))}
+                      </p>
+                    )}
+                    <details class="atlas-detail">
+                      <summary aria-label={`${n.title}の補足`}>補足・つながり</summary>
+                      <div class="atlas-detail-body">
+                        <h4>{n.title}</h4>
+                        <p>{n.detail || n.meaning}</p>
+                        <p>
+                          <code>{n.code}</code>
+                        </p>
+                        <dl>
+                          <dt>入力</dt>
+                          <dd>{n.input}</dd>
+                          <dt>出力</dt>
+                          <dd>{n.output}</dd>
+                        </dl>
+                        {incoming.length > 0 && (
+                          <>
+                            <h5>ここへ入る経路</h5>
+                            <ul>
+                              {incoming.map((e) => (
+                                <li>
+                                  <a href={`#n-${e.from}`}>{nodeById[e.from].title}</a>
+                                  {e.label && `：${e.label}`}
+                                </li>
+                              ))}
+                            </ul>
+                          </>
+                        )}
+                        {section.edges.some((e) => e.from === id) && (
+                          <>
+                            <h5>ここから進む経路</h5>
+                            <ul>
+                              {section.edges
+                                .filter((e) => e.from === id)
+                                .map((e) => (
+                                  <li>
+                                    <a href={`#n-${e.to}`}>{nodeById[e.to].title}</a>
+                                    {e.label && `：${e.label}`}
+                                  </li>
+                                ))}
+                            </ul>
+                          </>
+                        )}
+                        {supplements[id] && (
+                          <>
+                            <h5>既存教材のコード例</h5>
+                            <pre><code>{supplements[id].code}</code></pre>
+                            <p>{supplements[id].explanation}</p>
+                            <p>{supplements[id].note}</p>
+                            <ul>
+                              {supplements[id].links
+                                .filter((link) => !link.url.includes('/learn/maps/'))
+                                .map((link) => (
+                                  <li>
+                                    <a href={withBase(link.url)}>{link.title}</a>
+                                  </li>
+                                ))}
+                            </ul>
+                          </>
+                        )}
+                        {n.lesson && (
+                          <a href={withBase(`/learn/${n.lesson}/`)}>関連する教材を読む →</a>
+                        )}
+                        <p class="atlas-evidence">
+                          Qwen内部の寸法は固定モデルの構成・実装に基づく。外部連携や改造の枝は一般的な概念図。確認条件はページ末尾に記載。
+                        </p>
+                      </div>
+                    </details>
+                  </li>
+                );
+              })}
+            </ol>
+          ))}
+        </div>
+      </div>
+    ))}
+  </div>
+  {section.links && (
+    <nav class="atlas-bridges" aria-label={`${section.title}の接続先`}>
+      <span>つながる地点</span>
+      {section.links.map((link) => (
+        <a href={withBase(nodeUrl(link.node, map))}>
+          {link.label} <span aria-hidden="true">↗</span>
+        </a>
+      ))}
+    </nav>
+  )}
+</section>
