@@ -48,10 +48,11 @@ test('全体地図には詳細な分岐が初期表示され、検索しても�
   await page.getByRole('button', { name: '左メニューを戻す' }).click();
   await expect(page.locator('#sidebar')).toBeVisible();
 });
-test('補足は地図に重ならず、URL復元・履歴・Escape・フォーカス復帰に対応', async ({ page }) => {
+test('補足は中央ポップアップで、URL復元・履歴・Escape・フォーカス復帰に対応', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(`${base}/maps/inference/`);
   const opener = page.locator('#n-embedding summary');
+  const originalWidth = (await page.locator('.atlas-canvas').boundingBox())!.width;
   await opener.click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
@@ -59,7 +60,10 @@ test('補足は地図に重ならず、URL復元・履歴・Escape・フォー�
   expect(page.url()).toContain('detail=embedding');
   const canvas = await page.locator('.atlas-canvas').boundingBox(),
     detail = await dialog.boundingBox();
-  expect(detail!.x).toBeGreaterThanOrEqual(canvas!.x + canvas!.width);
+  expect(canvas!.width).toBe(originalWidth);
+  expect(detail!.width).toBeGreaterThan(650);
+  expect(Math.abs(detail!.x + detail!.width / 2 - 720)).toBeLessThan(2);
+  expect(await dialog.evaluate((el) => el.matches(':modal'))).toBeTruthy();
   await page.reload();
   await expect(dialog).toBeVisible();
   await page.keyboard.press('Escape');

@@ -5,13 +5,15 @@ test('接続線が別の地点を横切らず、補足による幅変更にも�
   const collisionCheck = () =>
     page.evaluate(() => {
       const problems: string[] = [];
-      for (const graph of document.querySelectorAll<HTMLElement>('.atlas-graph')) {
+      for (const graph of document.querySelectorAll<HTMLElement>('.atlas-graph, .atlas-canvas')) {
         const nodes = [...graph.querySelectorAll<HTMLElement>('[data-node]')].map((n) => ({
           id: n.dataset.node,
           r: n.getBoundingClientRect(),
         }));
         const r = graph.getBoundingClientRect();
-        for (const path of graph.querySelectorAll<SVGPathElement>('.atlas-route')) {
+        for (const path of graph.querySelectorAll<SVGPathElement>(
+          graph.classList.contains('atlas-canvas') ? '.atlas-cross-route' : '.atlas-route',
+        )) {
           const len = path.getTotalLength();
           for (let i = 5; i < len - 5; i += 8) {
             const p = path.getPointAtLength(i);
@@ -34,6 +36,23 @@ test('接続線が別の地点を横切らず、補足による幅変更にも�
       return problems;
     });
   await expect(page.locator('.has-routes')).toHaveCount(12);
+  await expect(
+    page.locator('.atlas-cross-route[data-from="embedding"][data-to="layer-input"]'),
+  ).toHaveCount(1);
+  await expect(
+    page.locator('.atlas-cross-route[data-from="next-layer"][data-to="final-norm"]'),
+  ).toHaveCount(1);
+  await page.locator('#atlas-query').focus();
+  const searchGeometry = await page.locator('.atlas-search > div').evaluate((el) => {
+    const input = el.querySelector('input')!;
+    const button = el.querySelector('button')!;
+    return {
+      gap: button.getBoundingClientRect().left - input.getBoundingClientRect().right,
+      offset: parseFloat(getComputedStyle(input).outlineOffset),
+    };
+  });
+  expect(searchGeometry.gap).toBeGreaterThanOrEqual(8);
+  expect(searchGeometry.offset).toBeLessThan(0);
   await expect.poll(collisionCheck).toEqual([]);
   await page.locator('#n-q-proj summary').click();
   await expect.poll(collisionCheck).toEqual([]);

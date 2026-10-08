@@ -6,20 +6,16 @@ export function initAtlas() {
   root.classList.add('is-enhanced');
   const all = Array.from(root.querySelectorAll<HTMLElement>('[data-node]'));
   const byId = new Map(all.map((n) => [n.dataset.node!, n]));
-  const workspace = root.querySelector<HTMLElement>('.atlas-workspace')!;
   const dialog = root.querySelector<HTMLDialogElement>('.atlas-inspector')!;
   const content = root.querySelector<HTMLElement>('[data-inspector-body]')!;
-  const compact = matchMedia('(max-width:1250px)');
   let opener: HTMLElement | null = null;
-  let openId = '';
   const close = (restore = true, historyUpdate = true) => {
     dialog.close();
-    workspace.classList.remove('inspector-open');
+    document.body.classList.remove('atlas-modal-open');
     if (restore) {
       opener?.focus({ preventScroll: true });
       requestAnimationFrame(() => opener?.scrollIntoView({ block: 'center', behavior: 'instant' }));
     }
-    openId = '';
     if (historyUpdate) {
       const url = new URL(location.href);
       url.searchParams.delete('detail');
@@ -48,12 +44,10 @@ export function initAtlas() {
         }
       });
     });
-    openId = id;
     if (dialog.open) dialog.close();
-    workspace.classList.add('inspector-open');
-    if (compact.matches) dialog.showModal();
-    else dialog.show();
-    requestAnimationFrame(() => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+    dialog.showModal();
+    dialog.scrollTop = 0;
+    document.body.classList.add('atlas-modal-open');
     dialog.querySelector<HTMLButtonElement>('[data-close]')!.focus({ preventScroll: true });
     if (push) {
       const url = new URL(location.href);
@@ -82,9 +76,6 @@ export function initAtlas() {
   dialog.addEventListener('click', (event) => {
     const link = (event.target as Element).closest('a');
     if (link?.getAttribute('href')?.startsWith('#')) close(false);
-  });
-  compact.addEventListener('change', () => {
-    if (openId) show(openId, false);
   });
   function restoreUrl() {
     const id = new URL(location.href).searchParams.get('detail');
@@ -194,13 +185,65 @@ export function initAtlas() {
     });
     graph.classList.add('has-routes');
   }
+  const canvas = root.querySelector<HTMLElement>('.atlas-canvas')!;
+  const crossSvg = canvas.querySelector<SVGSVGElement>('.atlas-cross-edges')!;
+  const connections = [
+    ['embedding', 'layer-input'],
+    ['next-layer', 'final-norm'],
+    ['lm-head', 'last-logits'],
+    ['lm-head', 'shift'],
+    ['zero-grad', 'device'],
+  ];
+  function drawConnections() {
+    crossSvg.querySelectorAll('path[data-from]').forEach((p) => p.remove());
+    const bounds = canvas.getBoundingClientRect();
+    connections.forEach(([fromId, toId], i) => {
+      const from = byId.get(fromId),
+        to = byId.get(toId);
+      if (!from || !to) return;
+      const a = from.getBoundingClientRect(),
+        b = to.getBoundingClientRect();
+      const x1 = a.left + a.width / 2 - bounds.left,
+        y1 = a.bottom - bounds.top;
+      const x2 = b.left + b.width / 2 - bounds.left,
+        y2 = b.top - bounds.top;
+      const rail = 5 + (i % 3) * 6;
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute(
+        'd',
+        'M' +
+          x1 +
+          ',' +
+          y1 +
+          ' V' +
+          (y1 + 12) +
+          ' H' +
+          rail +
+          ' V' +
+          (y2 - 12) +
+          ' H' +
+          x2 +
+          ' V' +
+          y2,
+      );
+      path.setAttribute('class', 'atlas-cross-route');
+      path.setAttribute('marker-end', 'url(#atlas-cross-arrow)');
+      path.dataset.from = fromId;
+      path.dataset.to = toId;
+      crossSvg.append(path);
+    });
+  }
   let frame = 0;
   const redraw = () => {
     cancelAnimationFrame(frame);
-    frame = requestAnimationFrame(() => graphs.forEach(draw));
+    frame = requestAnimationFrame(() => {
+      graphs.forEach(draw);
+      drawConnections();
+    });
   };
   const observer = new ResizeObserver(redraw);
   graphs.forEach((g) => observer.observe(g));
+  observer.observe(canvas);
   document.fonts.ready.then(redraw);
   redraw();
   const chapters = Array.from(root.querySelectorAll<HTMLAnchorElement>('.atlas-chapters a'));
