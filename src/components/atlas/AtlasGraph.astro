@@ -76,8 +76,17 @@ const presentNode = (id: string) =>
       </defs>
     </svg>
     {section.blocks.map((block) => (
-      <div class="atlas-block">
+      <div
+        class:list={['atlas-block', { 'atlas-block--choices': block.choices }]}
+        data-choice-from={block.choices?.from}
+        data-choice-to={block.choices?.to}
+      >
         {block.label && <p class="atlas-branch-label">{block.label}</p>}
+        {block.choices && (
+          <p class="atlas-choice-note">
+            目的に合う方法を選びます。上下のカードは処理の順番を表しません。
+          </p>
+        )}
         <div class="atlas-lanes" style={`--lanes:${block.lanes.length}`}>
           {block.lanes.map((lane) => (
             <ol class="atlas-lane">
@@ -207,6 +216,7 @@ const presentNode = (id: string) =>
             </ol>
           ))}
         </div>
+        {block.choices && <p class="atlas-choice-result">{block.choices.result}</p>}
       </div>
     ))}
   </div>

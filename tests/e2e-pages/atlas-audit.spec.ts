@@ -48,3 +48,36 @@ test('学習の章境界と保存後の分岐が本文と補足で一致する',
     await expect(page.locator(`.atlas-route[data-from="export"][data-to="${id}"]`)).toHaveCount(1);
   }
 });
+
+test('改造候補は常時表示の選択領域にまとめ、外周の重複配線を作らない', async ({ page }) => {
+  for (const slug of ['', 'modification/']) {
+    await page.goto('/LLM-LABORATORY/maps/' + slug);
+    const group = page.locator('.atlas-block--choices');
+    await expect(group.locator('[data-node]')).toHaveCount(6);
+    for (const width of [1440, 768, 390]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await expect(group).toContainText('上下のカードは処理の順番を表しません');
+      await expect(group.locator('#n-replace-layer')).toBeVisible();
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+      ).toBeTruthy();
+      if (width > 600) {
+        await expect(page.locator('#s-modifications .atlas-route--choice')).toHaveCount(2);
+        await expect(
+          page.locator('#s-modifications .atlas-route[data-from="baseline"]'),
+        ).toHaveCount(1);
+        await expect(page.locator('#s-modifications .atlas-route[data-to="compare"]')).toHaveCount(
+          1,
+        );
+      }
+    }
+    await group.locator('#n-lora summary').click();
+    await expect(
+      page.getByRole('dialog').getByRole('link', { name: '変更前を記録', exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('dialog').getByRole('link', { name: '変更前後を比べる', exact: true }),
+    ).toBeVisible();
+    await page.keyboard.press('Escape');
+  }
+});

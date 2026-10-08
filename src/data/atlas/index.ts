@@ -19,6 +19,7 @@ export interface AtlasEdge {
 export interface AtlasBlock {
   label?: string;
   lanes: string[][];
+  choices?: { from: string; to: string; result: string };
 }
 export interface AtlasSection {
   id: string;
@@ -1217,14 +1218,22 @@ export const sections: AtlasSection[] = [
     '基準を残して変更箇所を選ぶ。6つの枝は選択肢であり、順番にすべて行う工程ではない。',
     [
       block([['baseline']]),
-      block(
-        [['generation-edit'], ['embedding-edit'], ['vocab-edit']],
-        '候補選択を変える ／ 入力表現を変える ／ 語彙を増やす',
-      ),
-      block(
-        [['lora'], ['quantize'], ['replace-layer']],
-        '更新経路を足す ／ 数値表現を変える ／ 構造を変える',
-      ),
+      {
+        label: '改造方法の選択肢',
+        lanes: [
+          ['generation-edit'],
+          ['embedding-edit'],
+          ['vocab-edit'],
+          ['lora'],
+          ['quantize'],
+          ['replace-layer'],
+        ],
+        choices: {
+          from: 'baseline',
+          to: 'compare',
+          result: '選んだ変更の結果を、同じ条件で比較する',
+        },
+      },
       block([['compare']]),
       block([['save-change'], ['restore']], '採用して保存 ／ 基準に戻す'),
     ],

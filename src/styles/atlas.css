@@ -712,3 +712,71 @@
     margin-left: 40px;
   }
 }
+/* A choice group has one entrance and one exit; its cards are alternatives. */
+.atlas-block--choices {
+  margin: 20px 0;
+  padding: 22px;
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  background: var(--bg);
+}
+.atlas-block--choices > .atlas-branch-label {
+  margin-bottom: 10px;
+  color: var(--text);
+}
+.atlas-choice-note,
+.atlas-choice-result {
+  font-size: 12px;
+  line-height: 1.8;
+  text-align: center;
+  color: var(--muted);
+}
+.atlas-choice-note {
+  margin: 0 0 22px;
+}
+.atlas-choice-result {
+  margin: 22px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  color: var(--teal);
+}
+.atlas-block--choices > .atlas-lanes {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+}
+.atlas-block--choices .atlas-node {
+  height: 100%;
+}
+@media (max-width: 1000px) {
+  .atlas-block--choices > .atlas-lanes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 600px) {
+  .atlas-block--choices {
+    padding: 12px;
+  }
+  .atlas-block--choices > .atlas-lanes {
+    grid-template-columns: 1fr;
+  }
+  .atlas-block--choices > .atlas-lanes > .atlas-lane {
+    border: 0;
+    padding: 0;
+  }
+  .atlas-block--choices::before,
+  .atlas-block--choices::after {
+    content: '↓';
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    height: 40px;
+    line-height: 40px;
+    color: var(--accent);
+  }
+  .atlas-block--choices::before {
+    top: -41px;
+  }
+  .atlas-block--choices::after {
+    bottom: -41px;
+  }
+}

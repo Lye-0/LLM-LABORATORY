@@ -133,7 +133,35 @@ export function initAtlas() {
     if (matchMedia('(max-width:600px)').matches) return;
     const bounds = graph.getBoundingClientRect();
     const edges: AtlasEdge[] = JSON.parse(graph.dataset.edges!);
+    const groups = [...graph.querySelectorAll<HTMLElement>('[data-choice-from]')];
+    const groupedEdges = new Set<string>();
+    for (const group of groups) {
+      const fromId = group.dataset.choiceFrom!,
+        toId = group.dataset.choiceTo!;
+      for (const node of group.querySelectorAll<HTMLElement>('[data-node]')) {
+        groupedEdges.add(`${fromId}:${node.dataset.node}`);
+        groupedEdges.add(`${node.dataset.node}:${toId}`);
+      }
+      const r = group.getBoundingClientRect();
+      for (const [id, entering] of [
+        [fromId, true],
+        [toId, false],
+      ] as const) {
+        const n = byId.get(id)!.getBoundingClientRect();
+        const x = n.left + n.width / 2 - bounds.left;
+        const y1 = (entering ? n.bottom : r.bottom) - bounds.top;
+        const y2 = (entering ? r.top : n.top) - bounds.top;
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', `M${x},${y1} V${y2}`);
+        path.setAttribute('class', 'atlas-route atlas-route--choice');
+        path.setAttribute('marker-end', `url(#${svg.querySelector('marker')!.id})`);
+        path.dataset.from = entering ? id : 'choices';
+        path.dataset.to = entering ? 'choices' : id;
+        svg.append(path);
+      }
+    }
     edges.forEach((edge, i) => {
+      if (groupedEdges.has(`${edge.from}:${edge.to}`)) return;
       const from = byId.get(edge.from),
         to = byId.get(edge.to);
       if (!from || !to) return;
