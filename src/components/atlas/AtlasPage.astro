@@ -18,6 +18,7 @@ const transfers: Record<string, { previous: string; target: string; data: string
     data: '受け渡すデータ：hidden [B,T,D] → Layer 0',
   },
   output: { previous: 'decoder', target: 'final-norm', data: 'Layer 27の出力 [B,T,D] → 最終Norm' },
+  learning: { previous: 'output', target: 'shift', data: 'logits [B,T,V] と labels → 正解の照合' },
   generation: {
     previous: 'output',
     target: 'last-logits',
@@ -99,7 +100,7 @@ const lessons = (await getCollection('lessons')).filter((l) =>
         </svg>
         {map.sections.map((id, i) => (
           <>
-            {id === 'learning' && (
+            {id === 'learning' && !incoming(id, i) && (
               <p class="atlas-transition atlas-transition--branch">
                 学習の経路：共通forwardのlogitsと、保持したlabelsが合流。生成の候補選択は通りません。
               </p>

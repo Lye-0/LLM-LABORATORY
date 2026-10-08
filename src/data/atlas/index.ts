@@ -1187,8 +1187,8 @@ export const sections: AtlasSection[] = [
       edge('stop', 'cached-decode', undefined, '続行・cacheあり'),
       edge('stop', 'no-cache', undefined, '続行・cacheなし'),
       edge('stop', 'decode', undefined, '完了'),
-      edge('cached-decode', 'last-logits', 'update', '再計算のlogitsで次の候補選択へ'),
-      edge('no-cache', 'last-logits', 'update', '再計算のlogitsで次の候補選択へ'),
+      edge('cached-decode', 'last-logits', 'update', 'cacheありの再計算結果'),
+      edge('no-cache', 'last-logits', 'update', 'cacheなしの再計算結果'),
     ],
     [
       { node: 'embedding', label: '生成ループ：各回のID → 共通forwardへ戻る' },
@@ -1236,7 +1236,7 @@ export const sections: AtlasSection[] = [
         'lora',
         'quantize',
         'replace-layer',
-      ].flatMap((id) => [edge('baseline', id, 'update', '変更'), edge(id, 'compare')]),
+      ].flatMap((id) => [edge('baseline', id, undefined, '変更'), edge(id, 'compare')]),
       edge('compare', 'save-change'),
       edge('compare', 'restore'),
     ],
@@ -1282,10 +1282,10 @@ export const sections: AtlasSection[] = [
     'コードから演算、保存物へ',
     'ファイル上の情報を、Pythonの実物とメモリ上の数値へ。保存する目的で必要な状態が変わる。',
     [
-      block([['torch', 'hardware', 'memory', 'export', 'reload']]),
-      block([['engine']], '別形式への変換は、対応する場合の選択肢'),
+      block([['torch', 'hardware', 'memory', 'export']]),
+      block([['reload'], ['engine']], '保存後の選択：再読込で確認 ／ 対応する別形式へ変換'),
     ],
-    [edge('export', 'engine')],
+    [edge('export', 'reload'), edge('export', 'engine')],
     [
       { node: 'load', label: '再読込：コード・config・重みの組へ' },
       { node: 'checkpoint', label: '学習再開にはoptimizerや進捗も保存' },

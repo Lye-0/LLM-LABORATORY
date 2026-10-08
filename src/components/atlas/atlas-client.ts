@@ -1,3 +1,4 @@
+import { crossConnections } from '../../data/atlas/connections';
 import type { AtlasEdge } from '../../data/atlas';
 
 export function initAtlas() {
@@ -159,7 +160,17 @@ export function initAtlas() {
           );
         });
       const side = edge.kind === 'residual' || edge.kind === 'update' || y2 < y1 || blocked;
-      if (side) {
+      if (edge.kind === 'shared' && !crossesBlock && a.right < b.left) {
+        d =
+          'M' +
+          (a.right - bounds.left) +
+          ',' +
+          (a.top + a.height / 2 - bounds.top) +
+          ' L' +
+          (b.left - bounds.left) +
+          ',' +
+          (b.top + b.height / 2 - bounds.top);
+      } else if (side) {
         const right = edge.label === 'Vの値' || edge.label === '完了';
         const sx = (right ? a.right : a.left) - bounds.left,
           tx = (right ? b.right : b.left) - bounds.left;
@@ -187,13 +198,7 @@ export function initAtlas() {
   }
   const canvas = root.querySelector<HTMLElement>('.atlas-canvas')!;
   const crossSvg = canvas.querySelector<SVGSVGElement>('.atlas-cross-edges')!;
-  const connections = [
-    ['embedding', 'layer-input'],
-    ['next-layer', 'final-norm'],
-    ['lm-head', 'last-logits'],
-    ['lm-head', 'shift'],
-    ['zero-grad', 'device'],
-  ];
+  const connections = crossConnections;
   function drawConnections() {
     crossSvg.querySelectorAll('path[data-from]').forEach((p) => p.remove());
     const bounds = canvas.getBoundingClientRect();

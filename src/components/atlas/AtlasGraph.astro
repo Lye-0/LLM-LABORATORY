@@ -1,6 +1,7 @@
 ---
-import { nodeById, nodeUrl, type AtlasMap, type AtlasSection } from '../../data/atlas';
+import { nodeById, nodeUrl, sectionById, type AtlasMap, type AtlasSection } from '../../data/atlas';
 import { withBase } from '../../lib/paths';
+import { crossConnections } from '../../data/atlas/connections';
 import { supplements } from '../../data/atlas/supplements';
 interface Props {
   section: AtlasSection;
@@ -10,6 +11,25 @@ interface Props {
   continues?: boolean;
 }
 const { section, map, number, continuation, continues = false } = Astro.props;
+const visible = new Set(
+  map.sections.flatMap((id) => sectionById[id].blocks.flatMap((b) => b.lanes.flat())),
+);
+const relations = [
+  ...section.edges,
+  ...crossConnections
+    .filter(([from, to]) => visible.has(from) && visible.has(to))
+    .map(([from, to]) => ({ from, to, label: undefined })),
+];
+const presentNode = (id: string) =>
+  id === 'prefill' && map.slug === 'training'
+    ? {
+        ...nodeById[id],
+        title: '学習用batchの計算を開始',
+        code: 'forward（学習）',
+        meaning:
+          '学習用の入力列を、この先のEmbedding〜LM headで計算する。生成時の初回計算はprefillと呼ぶ。',
+      }
+    : nodeById[id];
 ---
 
 <section
@@ -62,8 +82,8 @@ const { section, map, number, continuation, continues = false } = Astro.props;
           {block.lanes.map((lane) => (
             <ol class="atlas-lane">
               {lane.map((id) => {
-                const n = nodeById[id];
-                const incoming = section.edges.filter((e) => e.to === id);
+                const n = presentNode(id);
+                const incoming = relations.filter((e) => e.to === id);
                 return (
                   <li
                     class={`atlas-node atlas-node--${n.kind}`}
@@ -109,7 +129,7 @@ const { section, map, number, continuation, continues = false } = Astro.props;
                         {incoming.map((e, i) => (
                           <>
                             {i > 0 ? ' / ' : ''}
-                            <a href={`#n-${e.from}`}>{e.label || nodeById[e.from].code}</a>
+                            <a href={`#n-${e.from}`}>{e.label || presentNode(e.from).code}</a>
                           </>
                         ))}
                       </p>
@@ -134,22 +154,22 @@ const { section, map, number, continuation, continues = false } = Astro.props;
                             <ul>
                               {incoming.map((e) => (
                                 <li>
-                                  <a href={`#n-${e.from}`}>{nodeById[e.from].title}</a>
+                                  <a href={`#n-${e.from}`}>{presentNode(e.from).title}</a>
                                   {e.label && `：${e.label}`}
                                 </li>
                               ))}
                             </ul>
                           </>
                         )}
-                        {section.edges.some((e) => e.from === id) && (
+                        {relations.some((e) => e.from === id) && (
                           <>
                             <h5>ここから進む経路</h5>
                             <ul>
-                              {section.edges
+                              {relations
                                 .filter((e) => e.from === id)
                                 .map((e) => (
                                   <li>
-                                    <a href={`#n-${e.to}`}>{nodeById[e.to].title}</a>
+                                    <a href={`#n-${e.to}`}>{presentNode(e.to).title}</a>
                                     {e.label && `：${e.label}`}
                                   </li>
                                 ))}
