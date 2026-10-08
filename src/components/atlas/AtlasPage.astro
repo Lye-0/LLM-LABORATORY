@@ -11,6 +11,28 @@ interface Props {
   map: AtlasMap;
 }
 const { map } = Astro.props;
+const transfers: Record<string, { previous: string; target: string; data: string }> = {
+  decoder: {
+    previous: 'input',
+    target: 'layer-input',
+    data: '受け渡すデータ：hidden [B,T,D] → Layer 0',
+  },
+  output: { previous: 'decoder', target: 'final-norm', data: 'Layer 27の出力 [B,T,D] → 最終Norm' },
+  generation: {
+    previous: 'output',
+    target: 'last-logits',
+    data: 'logits [B,T,V] → 末尾の次トークン候補',
+  },
+};
+const incoming = (id: string, i: number) => {
+  const t = transfers[id];
+  return t && map.sections[i - 1] === t.previous
+    ? {
+        data: t.data,
+        links: (sectionById[t.previous].links || []).filter((link) => link.node !== t.target),
+      }
+    : undefined;
+};
 const count = map.sections.flatMap((s) =>
   sectionById[s].blocks.flatMap((b) => b.lanes.flat()),
 ).length;
@@ -77,18 +99,18 @@ const lessons = (await getCollection('lessons')).filter((l) =>
         </svg>
         {map.sections.map((id, i) => (
           <>
-            {id === 'decoder' && (
-              <p class="atlas-transition">↓ Embeddingの出力 [B,T,D] → Layer 0の入力</p>
-            )}
-            {id === 'output' && map.sections.includes('decoder') && (
-              <p class="atlas-transition">↓ Layer 27の出力 → 最終Norm → LM head</p>
-            )}
             {id === 'learning' && (
               <p class="atlas-transition atlas-transition--branch">
                 学習の経路：共通forwardのlogitsと、保持したlabelsが合流。生成の候補選択は通りません。
               </p>
             )}
-            <AtlasGraph section={sectionById[id]} map={map} number={i + 1} />
+            <AtlasGraph
+              section={sectionById[id]}
+              map={map}
+              number={i + 1}
+              continuation={incoming(id, i)}
+              continues={Boolean(incoming(map.sections[i + 1], i + 1))}
+            />
           </>
         ))}
       </div>
@@ -122,7 +144,7 @@ const lessons = (await getCollection('lessons')).filter((l) =>
     <footer class="atlas-guide" id="atlas-guide">
       <h2>この地図の読み方と確認条件</h2>
       <p>
-        実線・矢印はデータの流れ。側面の迂回はResidualなどの保持経路。破線と「更新」は反復・重み更新、矢印のない点線は包含・共有です。章をまたぐ計算も、左側を通る線で次の入力へ接続しています。長い分岐や参照先は「つながる地点」からもたどれます。
+        実線・矢印はデータの流れ。側面の迂回はResidualなどの保持経路。破線と「更新」は反復・重み更新、矢印のない点線は包含・共有です。連続する章の主経路は直線で次の入力へ接続し、章の見出し・説明は線の横に配置しています。長い分岐や参照先は「つながる地点」からもたどれます。
       </p>
       <p>
         B＝入力件数、T＝列の長さ、D＝特徴の幅、V＝語彙数。Tq＝今回計算する位置数、Tkv＝参照する全位置数。固定例はQwen/Qwen3-0.6Bの生文7トークンです。会話テンプレートや生成の途中では長さが変わります。

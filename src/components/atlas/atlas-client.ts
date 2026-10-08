@@ -203,9 +203,13 @@ export function initAtlas() {
       if (!from || !to) return;
       const a = from.getBoundingClientRect(),
         b = to.getBoundingClientRect();
-      const x1 = a.left + a.width / 2 - bounds.left,
+      const direct =
+        to.closest('.atlas-section')?.classList.contains('atlas-section--continuation') &&
+        ['embedding', 'next-layer', 'lm-head'].includes(fromId);
+      const narrow = matchMedia('(max-width:600px)').matches;
+      const x1 = a.left + (direct && narrow ? 12 : a.width / 2) - bounds.left,
         y1 = a.bottom - bounds.top;
-      const x2 = b.left + b.width / 2 - bounds.left,
+      const x2 = b.left + (direct && narrow ? 12 : b.width / 2) - bounds.left,
         y2 = b.top - bounds.top;
       const rail = 5 + (i % 3) * 6;
       const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
@@ -226,6 +230,8 @@ export function initAtlas() {
           ' V' +
           y2,
       );
+      if (direct) path.setAttribute('d', `M${x1},${y1} L${x2},${y2}`);
+      path.dataset.direct = String(Boolean(direct));
       path.setAttribute('class', 'atlas-cross-route');
       path.setAttribute('marker-end', 'url(#atlas-cross-arrow)');
       path.dataset.from = fromId;

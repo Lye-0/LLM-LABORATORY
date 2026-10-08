@@ -6,18 +6,39 @@ interface Props {
   section: AtlasSection;
   map: AtlasMap;
   number: number;
+  continuation?: { data: string; links: NonNullable<AtlasSection['links']> };
+  continues?: boolean;
 }
-const { section, map, number } = Astro.props;
+const { section, map, number, continuation, continues = false } = Astro.props;
 ---
 
-<section class="atlas-section" id={`s-${section.id}`} aria-labelledby={`heading-${section.id}`}>
-  <header class="atlas-section-heading">
-    <span class="atlas-number">{String(number).padStart(2, '0')}</span>
-    <div>
-      <h2 id={`heading-${section.id}`}>{section.title}</h2>
-      <p>{section.note}</p>
-    </div>
-  </header>
+<section
+  class:list={[
+    'atlas-section',
+    { 'atlas-section--continuation': continuation, 'atlas-section--continues': continues },
+  ]}
+  id={`s-${section.id}`}
+  aria-labelledby={`heading-${section.id}`}
+>
+  <div class:list={{ 'atlas-boundary': continuation }}>
+    <header class="atlas-section-heading">
+      <span class="atlas-number">{String(number).padStart(2, '0')}</span>
+      <div>
+        <h2 id={`heading-${section.id}`}>{section.title}</h2>
+        <p>{section.note}</p>
+      </div>
+    </header>
+    {continuation && (
+      <div class="atlas-boundary-notes">
+        <p class="atlas-transfer">{continuation.data}</p>
+        <nav aria-label={`${section.title}の関連する接続`}>
+          {continuation.links.map((link) => (
+            <a href={withBase(nodeUrl(link.node, map))}>{link.label} ↗</a>
+          ))}
+        </nav>
+      </div>
+    )}
+  </div>
   <div class="atlas-graph" data-edges={JSON.stringify(section.edges)}>
     <svg class="atlas-edges" aria-hidden="true">
       <defs>
@@ -169,7 +190,7 @@ const { section, map, number } = Astro.props;
       </div>
     ))}
   </div>
-  {section.links && (
+  {section.links && !continues && (
     <nav class="atlas-bridges" aria-label={`${section.title}の接続先`}>
       <span>つながる地点</span>
       {section.links.map((link) => (
