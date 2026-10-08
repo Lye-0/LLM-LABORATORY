@@ -912,3 +912,13 @@
     width: 100%;
   }
 }
+.atlas-stack-layers .atlas-stack-repeat {
+  background: transparent;
+  border: 1px dashed var(--line);
+  align-items: center;
+}
+.atlas-stack-repeat > strong {
+  text-align: center;
+  font-size: 24px;
+  color: var(--teal);
+}

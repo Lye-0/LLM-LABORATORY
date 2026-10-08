@@ -85,7 +85,9 @@ test('改造候補は常時表示の選択領域にまとめ、外周の重複�
 test('28層の全体図と1層の拡大図をクリックせず読める', async ({ page }) => {
   for (const slug of ['', 'inference/', 'training/', 'structure/']) {
     await page.goto('/LLM-LABORATORY/maps/' + slug);
-    await expect(page.locator('.atlas-stack-layers li')).toHaveCount(28);
+    await expect(page.locator('.atlas-stack-layers li')).toHaveCount(5);
+    await expect(page.locator('.atlas-stack-repeat')).toContainText('Layer 2〜25');
+    await expect(page.locator('.atlas-stack-repeat')).toContainText('hidden_states[3]〜[26]');
     await expect(page.locator('.atlas-stack-layers li').last()).toContainText('Layer 27');
     await expect(page.locator('#decoder-stack')).toContainText('hidden_states[28]');
     await expect(page.locator('#decoder-stack')).toContainText('最終RMSNorm後');

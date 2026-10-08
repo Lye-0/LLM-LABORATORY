@@ -1,5 +1,5 @@
 ---
-const layers = Array.from({ length: 28 }, (_, i) => i);
+const layers = [0, 1, null, 26, 27];
 ---
 
 <aside class="atlas-layer-stack" id="decoder-stack" aria-labelledby="decoder-stack-title">
@@ -16,23 +16,34 @@ const layers = Array.from({ length: 28 }, (_, i) => i);
     <span>Layer 0に入る前のベクトル</span>
   </div>
   <ol class="atlas-stack-layers" aria-label="Decoder Layer 0から27までの順序">
-    {layers.map((i) => (
-      <li>
-        <strong>Layer {i}</strong>
-        <span>
-          {i < 27 ? (
-            <>
-              <code>hidden_states[{i + 1}]</code>
-              <small>次のLayer {i + 1}へ</small>
-            </>
-          ) : (
-            <>
-              最後の層の出力<small>最終RMSNormへ</small>
-            </>
-          )}
-        </span>
-      </li>
-    ))}
+    {layers.map((i) =>
+      i === null ? (
+        <li class="atlas-stack-repeat">
+          <strong aria-hidden="true">⋮</strong>
+          <span>
+            Layer 2〜25：同じ構造で24層を通る
+            <small>各層でhidden stateを更新</small>
+            <code>hidden_states[3]〜[26]</code>
+          </span>
+        </li>
+      ) : (
+        <li>
+          <strong>Layer {i}</strong>
+          <span>
+            {i < 27 ? (
+              <>
+                <code>hidden_states[{i + 1}]</code>
+                <small>次のLayer {i + 1}へ</small>
+              </>
+            ) : (
+              <>
+                最後の層の出力<small>最終RMSNormへ</small>
+              </>
+            )}
+          </span>
+        </li>
+      ),
+    )}
   </ol>
   <div class="atlas-stack-end">
     最終RMSNorm
