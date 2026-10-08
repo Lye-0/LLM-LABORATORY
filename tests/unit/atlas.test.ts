@@ -6,6 +6,23 @@ import { lessonLocations } from '../../src/data/atlas/supplements';
 import measured from '../fixtures/qwen-atlas-reference.json';
 
 describe('atlas relations and migration', () => {
+  it('prefill precedes model computation; only continuation loops back after stopping decision', () => {
+    const input = sectionById.input.blocks.flatMap((b) => b.lanes.flat());
+    expect(input.indexOf('prefill')).toBeLessThan(input.indexOf('embedding'));
+    const generation = sectionById.generation;
+    expect(generation.blocks.flatMap((b) => b.lanes.flat())).not.toContain('prefill');
+    expect(
+      generation.edges
+        .filter((e) => e.from === 'stop')
+        .map((e) => e.to)
+        .sort(),
+    ).toEqual(['cached-decode', 'decode', 'no-cache']);
+    for (const id of ['cached-decode', 'no-cache'])
+      expect(generation.edges).toContainEqual(
+        expect.objectContaining({ from: id, to: 'last-logits', kind: 'update' }),
+      );
+    expect(generation.edges.some((e) => e.from === 'decode')).toBe(false);
+  });
   it('every visible edge and cross-map link resolves to one stable node', () => {
     expect(new Set(nodes.map((n) => n.id)).size).toBe(nodes.length);
     const overall = maps[0].sections.flatMap((id) =>
