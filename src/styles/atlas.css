@@ -780,3 +780,113 @@
     bottom: -41px;
   }
 }
+.atlas-layer-stack {
+  margin-top: 20px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  max-width: 520px;
+  scroll-margin-top: calc(var(--header) + 20px);
+}
+.atlas-layer-stack h3 {
+  margin: 0 0 12px;
+  font-size: 15px;
+  line-height: 1.6;
+}
+.atlas-layer-stack p {
+  margin: 14px 0;
+}
+.atlas-stack-end {
+  padding: 12px;
+  background: var(--surface);
+  font-size: 12px;
+  line-height: 1.9;
+  text-align: center;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+}
+.atlas-stack-end span {
+  display: block;
+  color: var(--muted);
+}
+.atlas-stack-layers {
+  list-style: none;
+  padding: 0;
+  margin: 22px 0;
+}
+.atlas-stack-layers li {
+  display: grid;
+  grid-template-columns: 70px minmax(0, 1fr);
+  gap: 8px;
+  padding: 8px 10px;
+  margin: 16px 0;
+  position: relative;
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--teal);
+  background: var(--surface);
+  font-size: 11px;
+}
+.atlas-stack-layers li::before {
+  content: '↓';
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  color: var(--accent);
+}
+.atlas-stack-layers li:last-child::after {
+  content: '↓';
+  position: absolute;
+  bottom: -20px;
+  left: 50%;
+  color: var(--accent);
+}
+.atlas-stack-layers small {
+  display: block;
+  color: var(--muted);
+}
+.atlas-layer-stack code {
+  overflow-wrap: anywhere;
+  color: var(--teal);
+}
+.atlas-layer-stack a,
+.atlas-stack-link {
+  display: inline-block;
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--accent);
+  text-decoration: underline;
+}
+.atlas-section-heading > div {
+  min-width: 0;
+}
+.atlas-layer-key {
+  margin-top: 24px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+}
+.atlas-layer-key h3 {
+  font-size: 15px;
+  line-height: 1.6;
+}
+.atlas-layer-key ol {
+  list-style: none;
+  margin: 20px 0;
+  padding: 0;
+}
+.atlas-layer-key li {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  padding: 10px;
+  margin: 20px 0;
+}
+.atlas-layer-key li + li::before {
+  content: '↓';
+  position: absolute;
+  top: -22px;
+  left: 50%;
+  color: var(--accent);
+}

@@ -1,0 +1,52 @@
+---
+const layers = Array.from({ length: 28 }, (_, i) => i);
+---
+
+<aside class="atlas-layer-stack" id="decoder-stack" aria-labelledby="decoder-stack-title">
+  <h3 id="decoder-stack-title">全体：28層でhidden stateを順に更新</h3>
+  <p>
+    層は計算する部品、hidden
+    stateはそこを流れるデータです。各層の出力が、次の層の入力になります。構造は共通で、重みは層ごとに異なります。
+  </p>
+  <div class="atlas-stack-end">
+    文章 → Tokenizer → 整数IDのTensor
+    <br />↓ Embedding
+    <br />
+    <code>hidden_states[0]</code>
+    <span>Layer 0に入る前のベクトル</span>
+  </div>
+  <ol class="atlas-stack-layers" aria-label="Decoder Layer 0から27までの順序">
+    {layers.map((i) => (
+      <li>
+        <strong>Layer {i}</strong>
+        <span>
+          {i < 27 ? (
+            <>
+              <code>hidden_states[{i + 1}]</code>
+              <small>次のLayer {i + 1}へ</small>
+            </>
+          ) : (
+            <>
+              最後の層の出力<small>最終RMSNormへ</small>
+            </>
+          )}
+        </span>
+      </li>
+    ))}
+  </ol>
+  <div class="atlas-stack-end">
+    最終RMSNorm
+    <br />
+    <code>hidden_states[28]</code>
+    <span>↓ LM head → logits</span>
+  </div>
+  <p>
+    例文の初回計算では、各状態のshapeは <code>[1, 7, 1024]</code>
+    。同じトークン位置のベクトルの値が、層を通るたびに変わります。
+  </p>
+  <p>
+    <code>output_hidden_states=True</code> で観察する状態は29個。最後の <code>[28]</code> はLayer
+    27直後ではなく、最終RMSNorm後です。
+  </p>
+  <a href="#n-layer-input">この下の拡大図：1層の内部処理へ ↓</a>
+</aside>

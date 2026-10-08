@@ -3,6 +3,7 @@ import { nodeById, nodeUrl, sectionById, type AtlasMap, type AtlasSection } from
 import { withBase } from '../../lib/paths';
 import { crossConnections } from '../../data/atlas/connections';
 import { supplements } from '../../data/atlas/supplements';
+import AtlasLayerStack from './AtlasLayerStack.astro';
 interface Props {
   section: AtlasSection;
   map: AtlasMap;
@@ -46,6 +47,7 @@ const presentNode = (id: string) =>
       <div>
         <h2 id={`heading-${section.id}`}>{section.title}</h2>
         <p>{section.note}</p>
+        {section.id === 'decoder' && <AtlasLayerStack />}
       </div>
     </header>
     {continuation && (
@@ -56,6 +58,22 @@ const presentNode = (id: string) =>
             <a href={withBase(nodeUrl(link.node, map))}>{link.label} ↗</a>
           ))}
         </nav>
+        {section.id === 'decoder' && (
+          <div class="atlas-layer-key">
+            <h3>拡大：どの層も、この処理で更新</h3>
+            <p>全体図に並ぶLayer 0〜27、それぞれの内部です。</p>
+            <ol>
+              <li>その層に入るhidden state</li>
+              <li>RMSNorm → Self-Attention</li>
+              <li>＋ その層の入力を足す（Residual ①）</li>
+              <li>RMSNorm → MLP</li>
+              <li>＋ MLP前に保持した値を足す（Residual ②）</li>
+              <li>更新したhidden stateを次の層へ</li>
+            </ol>
+            <p>行列積はAttentionやMLPの内部で行います。「＋」の地点は要素ごとの足し算です。</p>
+            <a href="#n-layer-input">Q・K・VやMLPまで詳しくたどる ↓</a>
+          </div>
+        )}
       </div>
     )}
   </div>
@@ -122,6 +140,18 @@ const presentNode = (id: string) =>
                     <h3>{n.title}</h3>
                     <code class="atlas-code">{n.code}</code>
                     <p class="atlas-meaning">{n.meaning}</p>
+                    {['next-layer', 'hidden-tuple'].includes(id) && (
+                      <a
+                        class="atlas-stack-link"
+                        href={
+                          map.sections.includes('decoder')
+                            ? '#decoder-stack'
+                            : withBase('/maps/structure/#decoder-stack')
+                        }
+                      >
+                        28層とhidden stateの全体図を見る ↑
+                      </a>
+                    )}
                     <dl class="atlas-io">
                       <div>
                         <dt>入</dt>
@@ -231,3 +261,4 @@ const presentNode = (id: string) =>
     </nav>
   )}
 </section>
+

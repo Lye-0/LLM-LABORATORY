@@ -392,9 +392,9 @@ export const nodes: AtlasNode[] = [
     'residual-attn',
     '＋ 元の入力を足す',
     'residual + attention_output',
-    '層の入力 + o_proj出力',
+    'この層のhidden state + o_proj出力',
     '[B,Tq,1024]',
-    'Attentionの経路と、迂回した入力がここで合流。',
+    'この層に入ったhidden stateに、Attentionの出力を要素ごとに足す。行列積ではなく加算。',
     'join',
   ),
   node(
@@ -1102,7 +1102,7 @@ export const sections: AtlasSection[] = [
     'Decoder Layerを内側までたどる',
     'Layer 0〜27でこの構造を繰り返す。各層の重みは別。Tqは今回の位置数、Tkvは参照する全位置数。',
     [
-      block([['layer-input', 'input-norm']], '層の入力をResidual ①として保持'),
+      block([['layer-input', 'input-norm']], 'ここから1層の拡大図：入力をResidual ①として保持'),
       block(
         [
           ['q-proj', 'q-heads', 'q-norm', 'q-transpose', 'q-rope'],

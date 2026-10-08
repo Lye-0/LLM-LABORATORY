@@ -81,3 +81,23 @@ test('改造候補は常時表示の選択領域にまとめ、外周の重複�
     await page.keyboard.press('Escape');
   }
 });
+
+test('28層の全体図と1層の拡大図をクリックせず読める', async ({ page }) => {
+  for (const slug of ['', 'inference/', 'training/', 'structure/']) {
+    await page.goto('/LLM-LABORATORY/maps/' + slug);
+    await expect(page.locator('.atlas-stack-layers li')).toHaveCount(28);
+    await expect(page.locator('.atlas-stack-layers li').last()).toContainText('Layer 27');
+    await expect(page.locator('#decoder-stack')).toContainText('hidden_states[28]');
+    await expect(page.locator('#decoder-stack')).toContainText('最終RMSNorm後');
+  }
+  for (const width of [1440, 768, 390, 320]) {
+    await page.setViewportSize({ width, height: 1000 });
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+    ).toBeTruthy();
+    await page.locator('#decoder-stack').screenshot({ path: `docs/reviews/stack-${width}.png` });
+  }
+  await page.goto('/LLM-LABORATORY/maps/data/');
+  await page.locator('#n-hidden-tuple .atlas-stack-link').click();
+  await expect(page).toHaveURL(/maps\/structure\/#decoder-stack/);
+});
