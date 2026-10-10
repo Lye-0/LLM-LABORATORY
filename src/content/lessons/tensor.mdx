@@ -180,6 +180,27 @@ batch.shape: torch.Size([1, 7])
 
 `batch`の第0軸は長さ1なので、取り除くと`[7]`へ戻ります。ここでも元の`batch`のshapeは変わりません。`squeeze()`で軸を省略すると、長さ1の軸をまとめて取り除くため、残したいbatch軸まで消さないようにします。長さ1でない軸は、この操作では取り除けません。[squeezeのAPI](../../reference/api/squeeze/)
 
+## reshapeとtransposeは何が違うか
+
+```python
+x = torch.tensor([10, 20, 30, 40, 50, 60])
+y = x.reshape(3, 2)
+print(y.tolist())                 # [[10,20], [30,40], [50,60]]
+print(y.transpose(0, 1).tolist())  # [[10,30,50], [20,40,60]]
+print(x.shape)                    # torch.Size([6])
+```
+
+`reshape`は同じ要素列を新しいshapeとして扱い、`transpose`は指定した2軸を交換します。どちらもLinearのように重みで新しい数値を計算する処理ではありません。reshapeは必要に応じてコピーを作るため、常に同じ保存領域とは限りません。
+
+Qwen3のQなら`[1,7,2048] → reshape → [1,7,16,128]`。1位置の2048成分を、128成分ずつの16 Headとして扱います。Head 1の先頭8成分は、分割前の`q[0,0,128:136]`に対応します。
+
+| 交換 | 目的 | shape例 |
+|---|---|---|
+| `transpose(1,2)` | TokenとHeadの軸を交換する | `[1,7,16,128] → [1,16,7,128]` |
+| `transpose(-2,-1)` | 末尾の行・列を交換する | `[1,16,7,128] → [1,16,128,7]` |
+
+負の軸番号は後ろから数え、`-1`が最後、`-2`が最後から2番目です。VもHead軸を前へ移しますが、`A @ V`ではVの末尾2軸を交換しません。Head軸を移す操作と、`Q @ Kᵀ`の転置は区別します。[transposeの仕様](https://docs.pytorch.org/docs/2.14/generated/torch.transpose.html)
+
 ## デバイスを変える
 
 ```python

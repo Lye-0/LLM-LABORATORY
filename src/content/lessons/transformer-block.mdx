@@ -3,7 +3,7 @@ title: "Transformerブロック"
 description: "Attention・MLP・Residual・Normを、一つの計算としてつなぐ。"
 stage: "representation"
 order: 15
-minutes: 10
+minutes: 18
 eyebrow: "INSIDE A BLOCK"
 prerequisites: ["attention","position"]
 labs: ["model"]
@@ -48,6 +48,43 @@ tensor([[1.2000, 1.7000]])
 
 特徴軸の二乗平均から得た大きさで割り、学習可能な係数を掛けます。LayerNormのように平均を引く操作とは区別します。epsilonはゼロ除算を避けるための小さな値です。
 
+`yᵢ = weightᵢ × xᵢ / √(mean(x²) + ε)`。例えばεとweightを省いた`[1,2,2]`の正規化なら、RMSは√3で、結果は約`[0.577,1.155,1.155]`です。必ず値を小さくする処理でも、0〜1へ収める処理でもありません。
+
+RMSで割る段階は同じベクトルの全成分へ共通の倍率を掛けます。その後の学習済みweightは成分ごとに違い、比率・向き・符号も変わり得ます。
+
+| Qwen3のNorm | 正規化する単位 | weightのshape |
+|---|---|---|
+| input_layernorm | 各Tokenの1024成分。Attentionへ渡す前 | `[1024]` |
+| q_norm / k_norm | 各Token・各Headの128成分 | 各`[128]` |
+| post_attention_layernorm | 1回目の残差加算後の1024成分。MLPへ渡す前 | `[1024]` |
+| model.norm | 全Decoder Layer通過後の1024成分 | `[1024]` |
+
+各モジュールは別のweightを持ちます。Q Normでは各Headで別々のRMSを求めますが、同じ`q_norm.weight`を位置とHeadに共通で使います。V専用のQ/K Normはありません。
+
+<details>
+<summary>RMSNormを基本演算で再現する</summary>
+
+[Qwenの観察](../qwen/)で得た`hidden_states`と`model`を使います。
+
+```python
+norm = model.model.layers[0].input_layernorm
+before_norm = hidden_states[0]
+with torch.no_grad():
+    x = before_norm.float()
+    mean_square = x.pow(2).mean(dim=-1, keepdim=True)
+    inverse_rms = torch.rsqrt(mean_square + norm.variance_epsilon)
+    normalized = x * inverse_rms
+    manual = norm.weight * normalized.to(before_norm.dtype)
+    actual = norm(before_norm)
+print(mean_square.shape)  # [1,7,1]：各Tokenにつき1個
+print(manual.shape)       # [1,7,1024]
+print(torch.allclose(manual, actual))
+```
+
+`rsqrt`は逆平方根です。`keepdim=True`で末尾の長さ1の軸を保つので、1024成分へbroadcastできます。`norm(before_norm)`は保存値の取得ではなく、そのモジュールをもう一度実行する呼び出しです。`output_hidden_states=True`でモデル全体を実行した後に、一部分だけ再実行して観察しています。
+
+</details>
+
 ## MLPとSwiGLU
 
 MLPは各トークン位置のベクトルを広い特徴空間へ写し、非線形変換後に元の次元へ戻します。Qwenではgateとupの二つの投影を使うSwiGLU系の構造を観察できます。
@@ -59,6 +96,49 @@ output = down_proj(gate * up)
 ```
 
 これは構造の模式コードです。実物のbiasやshapeはconfigとmoduleを確認します。
+
+Qwen3-0.6BのMLPでは、gateとupは同じ正規化後の入力から分岐し、別々の重みを使います。
+
+| 処理 | shape（1件・7 Token） | 計算の意味 |
+|---|---|---|
+| post_attention_layernorm | `[1,7,1024]` | MLPへ渡す入力を正規化 |
+| gate_proj / up_proj | 各`[1,7,3072]` | 同じ入力を別々に線形変換 |
+| SiLU(gate) | `[1,7,3072]` | `x × sigmoid(x)`を各成分へ適用 |
+| SiLU(gate) * up | `[1,7,3072]` | 対応成分を掛ける。行列積ではない |
+| down_proj | `[1,7,1024]` | 元の幅へ線形変換 |
+| 2回目の残差加算 | `[1,7,1024]` | MLP前のNormより前の値へ加える |
+
+SiLUの値は負にも1より大きくもなるので、gateは0〜1の確率ではありません。Token数は7のままで、同じMLPを各位置へ適用します。
+
+## 2回の残差接続をコードで区別する
+
+```text
+x：層に入ったHidden State
+a = x + SelfAttention(input_layernorm(x))
+y = a + MLP(post_attention_layernorm(a))
+```
+
+1回目で足すのは`x`、2回目で足すのは`a`です。それぞれのNorm後の値を残差として足すのではありません。
+
+<details>
+<summary>Attention観察の続きでMLPと残差を確認する</summary>
+
+[Attentionの手動観察](../attention/#rope後からの手動観察コード)で作った`after_attention`と`layer0`を使います。
+
+```python
+with torch.no_grad():
+    mlp = layer0.mlp
+    mlp_input = layer0.post_attention_layernorm(after_attention)
+    gate = mlp.act_fn(mlp.gate_proj(mlp_input))
+    up = mlp.up_proj(mlp_input)
+    mlp_output = mlp.down_proj(gate * up)
+    layer0_output = after_attention + mlp_output
+    print(torch.allclose(mlp_output, mlp(mlp_input)))
+```
+
+MLP単体を同じ入力で比べる検証と、Layer全体を`outputs.hidden_states[1]`と比べる検証は別です。後者では入力・model.eval()・dtype・Attention実装をそろえ、最大絶対誤差なども記録します。手動Attentionでfloat32を使う経路は、本体の演算と完全一致するとは限りません。
+
+</details>
 
 ## 重ねることで表現を変える
 

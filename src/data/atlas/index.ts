@@ -207,6 +207,9 @@ export const nodes: AtlasNode[] = [
     '[B,Tq,2048]',
     '[B,Tq,16,128]',
     '2048の特徴を16組に分ける。',
+    'process',
+    'reshapeは成分の区切り方を変えます。数値を新しく計算せず、各Tokenの2048成分を16×128へ分けます。Token軸とHead軸は別です。',
+    'tensor',
   ),
   node(
     'q-norm',
@@ -215,6 +218,9 @@ export const nodes: AtlasNode[] = [
     '[B,Tq,16,128]',
     '[B,Tq,16,128]',
     '各headの128次元に適用する。',
+    'process',
+    '各Token・各HeadでRMSを求めます。学習済みq_norm.weightは128成分で、Headと位置に共通です。0〜1へ収める処理ではありません。',
+    'transformer-block',
   ),
   node(
     'q-transpose',
@@ -231,6 +237,9 @@ export const nodes: AtlasNode[] = [
     'Q + cos/sin',
     'Q [B,16,Tq,128]',
     '位置に応じて特徴の組を回転する。',
+    'process',
+    '同じToken・同じHead内の成分(0,64)、(1,65)…を組にします。角度は位置×ペアごとの回転速度。ここでは他のTokenとの比較はまだ行いません。',
+    'position',
   ),
   node(
     'k-proj',
@@ -290,7 +299,8 @@ export const nodes: AtlasNode[] = [
     '論理上 [B,16,Tkv,128]',
     '1つのKV headを2つのQ headsが共有する。',
     'process',
-    'eager実装ではrepeat_kvを使います。高速な実装では物理的な複製Tensorを作るとは限りません。',
+    'Q Head 0・1はK Head 0、Q Head 2・3はK Head 1を共有します。repeat_interleave相当の順序で、全Headをまとめて繰り返すrepeatとは異なります。高速実装は物理的な複製を省く場合があります。',
+    'attention',
   ),
   node(
     'v-proj',
@@ -341,6 +351,9 @@ export const nodes: AtlasNode[] = [
     'Q と K（GQA対応後）',
     'scores [B,16,Tq,Tkv]',
     '内積で関連の強さを求め、スケールを整える。',
+    'process',
+    '各マスは、1つのQ位置と1つのK位置の128成分の内積÷√128です。内積で足すのは特徴成分の積で、他のTokenのKを足すわけではありません。',
+    'attention',
   ),
   node(
     'causal-mask',
@@ -376,6 +389,9 @@ export const nodes: AtlasNode[] = [
     '割合 と V（GQA対応後）',
     '[B,16,Tq,128]',
     '同じ位置の値だけでなく、参照可能な位置の情報を集める。',
+    'process',
+    '例えば割合が0.6・0.1・0.3なら、0.6×V₀ + 0.1×V₁ + 0.3×V₂。各割合を対応するTokenの全128成分へ掛け、成分ごとに足します。',
+    'attention',
   ),
   node(
     'attention-transpose',
@@ -400,6 +416,9 @@ export const nodes: AtlasNode[] = [
     '[B,Tq,2048]',
     '[B,Tq,1024]',
     '集めた特徴を次の処理へ渡す幅に射影する。',
+    'process',
+    '連結した16 Headの2048成分を、weightの転置で混ぜて1024成分へ写します。半分を削る処理ではありません。結果はQへ書き戻さず、残差加算へ進みます。',
+    'attention',
   ),
   node(
     'residual-attn',

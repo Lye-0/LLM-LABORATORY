@@ -54,6 +54,21 @@ print(sum(p.numel() for p in layer.parameters() if p.requires_grad))
 
 同じ入力・出力shapeを持つ層を、別実装に置き換えるところから始めます。Residualへ戻るshapeが合っていても、数値のスケールや役割が違えば品質は変わります。Identityへの置換は、層を無効化するablationとして役立ちますが、改善を保証しません。
 
+## Head・Norm・RoPEも変更対象になる
+
+重みの数値だけでなく、それを使う計算構造も研究対象です。Qwen3-0.6Bでは次の違いを分けて考えます。
+
+| 変更するもの | 影響する箇所 | 比較する条件 |
+|---|---|---|
+| Q Head数・head_dim | 独立したAttention計算と1 Headの幅 | 射影の出力幅、RoPE、o_projとの整合 |
+| KV Head数・対応順 | K/Vの共有とcache容量 | 同じToken数・層数・dtypeで品質と容量を比較 |
+| RMSNormの位置・方式・eps | 特徴のスケール、勾配、Attentionスコア | 元モデルと同じ入力・評価条件 |
+| RoPEの速度・基準値 | 位置差が内積へ与える効果 | 短文と長文の両方の品質 |
+
+Headを増やすほど良いとは限りません。`16×128`と`32×64`は合計2048成分でも、Attentionの計算単位が変わります。reshapeやconfigだけの変更では、重み・Norm・位置処理を含む整合性まで保証できません。
+
+学習済みモデルのNormを外すなどの**ablation**は「その重みが元の部品にどれだけ依存するか」を調べる実験です。別構造を最初から学習して比較する実験とは分けます。ablationで品質が落ちても、その構造が一般的に劣るとは断定できません。
+
 ## state_dictと構造
 
 state_dictは重みやbufferの対応を持ちますが、Pythonのモデル実装そのものではありません。構造を変えたら、読み込み側も対応する必要があります。missing/unexpected keysを無視して成功としないようにします。

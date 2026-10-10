@@ -3,7 +3,7 @@ title: "位置情報とRoPE"
 description: "並びのどこにあるかを、Attentionの計算へ反映する。"
 stage: "representation"
 order: 14
-minutes: 8
+minutes: 16
 eyebrow: "POSITION & ROTATION"
 prerequisites: ["attention"]
 labs: ["rope"]
@@ -47,6 +47,45 @@ print(torch.round(rotation @ x, decimals=4))
 
 Q/Kへ位置に応じた回転を適用すると、その内積に位置の差が関わる形になります。成分の組ごとに異なる周波数を使い、複数の位置スケールを表現します。実装ではrope_theta、head_dim、position_idsなどを確認します。
 
+## Token・Head・ペア・位置を分ける
+
+| 名前 | 指しているもの |
+|---|---|
+| Token ID | 語彙のどの項目か。例：89015 |
+| Token位置p | 入力列の何番目か。通常は0から数える |
+| Head | Attentionを計算する単位。各Headに各Tokenのベクトルがある |
+| RoPEのペア | **同じToken・同じHeadの中の2成分**。QとKの組でも、2つのHeadでもない |
+| 回転速度ωᵢ | ペアiで、位置が1進むごとに増える角度 |
+
+たとえばQ Head 0の位置3には128個のスカラーがあります。その成分0と64を`(x,y)`として回転します。xもyも128次元ベクトルではなく、1個の数値です。
+
+```text
+1つのTokenの、1つのHead [128成分]
+  ├─ (成分0, 64)   → 角度 p×ω₀ で回転
+  ├─ (成分1, 65)   → 角度 p×ω₁ で回転
+  ├─ …
+  └─ (成分63,127)  → 角度 p×ω₆₃ で回転
+                    ↓ 元の成分位置へ
+回転後のQ′ [128成分] → 完成したK′と内積
+```
+
+ペアは固定の成分配置です。意味が似た値を探して組にしているわけではありません。学習済みモデルで組み方だけを変更すると、元と異なる計算になります。
+
+## 回転速度と角度はどう決まるか
+
+参照Qwen3-0.6Bの標準RoPEは、`ωᵢ = 1000000^(−2i/128)`、`θₚ,ᵢ = p×ωᵢ`です。角度の単位はラジアンです。**同じペア番号にはQとKで同じ速度**を使います。
+
+| ペアi | 成分の組 | ωᵢ（rad/位置） | 位置10の角度 |
+|---|---|---|---|
+| 0 | 0・64 | 1 | 10 rad |
+| 16 | 16・80 | 約0.03162 | 約0.3162 rad |
+| 32 | 32・96 | 0.001 | 0.01 rad |
+| 48 | 48・112 | 約0.00003162 | 約0.0003162 rad |
+
+入力が360 Tokenでも、360度を全Tokenへ分配するわけではありません。位置0〜359に同じ規則を適用します。標準RoPEの速度は入力の意味や全Token数から毎回決めるものではなく、モデル設定とペア番号から決まります。
+
+速い回転は小さな位置差でも変化し、遅い回転は長い周期を持ちます。複数の周期を組み合わせますが、「遅いペアほど重要でない」「遠いTokenほど必ず低得点」という意味ではありません。等比的な速度配置や基準値は設計上の選択で、あらゆる条件で最適と保証された規則ではありません。
+
 ## 1 headの回転と内積をつなぐ
 
 Qwen3-0.6Bの1 headは128次元です。参照実装では、前半と後半の対応する成分を組にし、`(0,64), (1,65), …, (63,127)` の64ペアを回転します。隣り合う `(0,1)` を組にする表記とは並び方が異なります。
@@ -63,7 +102,61 @@ Qwen3-0.6Bの1 headは128次元です。参照実装では、前半と後半の�
 
 数学的にはペアごとの寄与の和へ分解できますが、ペアごとに独立したAttentionスコアがあるわけではありません。Qwen3ではVをRoPEで回転しません。
 
+<details>
+<summary>cosだけを掛ける方法と何が違うか</summary>
+
+元のQ/Kをともに`[1,0]`、速度を説明用に60度/位置とします。位置の組`(p,t)=(1,0)`と`(2,1)`は、どちらも差が−1です。
+
+| 変換 | (1,0)の内積 | (2,1)の内積 |
+|---|---|---|
+| ベクトル全体へcosだけを掛ける | 0.5×1 = 0.5 | (−0.5)×0.5 = −0.25 |
+| cosとsinを使って2次元回転する | cos(−60°) = 0.5 | cos(−60°) = 0.5 |
+
+回転は長さを保ち、元のQ/Kを固定して両位置を同じだけずらすと内積も保ちます。cosだけの倍率変更には、この性質は一般にありません。実際の別Tokenは元のQ/Kも違うため、位置差だけでスコアは決まりません。
+
+Q/Kを射影してから回転する操作は、Hidden Stateを先に回してから射影する操作とも一般には異なります。RoPEの影響は、その後のAttention・残差接続を通じてHidden Stateや次の層にも伝わります。
+
+</details>
+
 <a href={withBase('/labs/rope/')}>RoPE & Relative Position</a> の実験では、7位置の説明用Q/Kから、回転行列と内積の式をたどれます。4成分だけに値を入れ、残り124成分は0とする例です。学習済みモデルの実測値ではありません。
+
+## Qwen3のコードへつなぐ
+
+[Qwenの観察](../qwen/)で読み込んだ`model`と`inputs`を使います。以下は1件・paddingなし・cacheなしの例です。Token数は入力から取得します。
+
+```python
+from transformers.models.qwen3.modeling_qwen3 import apply_rotary_pos_emb
+
+model.eval()
+layer0 = model.model.layers[0]
+attention = layer0.self_attn
+with torch.no_grad():
+    before_norm = model.get_input_embeddings()(inputs["input_ids"])
+    after_norm = layer0.input_layernorm(before_norm)
+    B, T, _ = after_norm.shape
+    D = attention.head_dim
+    q_heads = attention.q_proj(after_norm).reshape(B, T, -1, D)
+    k_heads = attention.k_proj(after_norm).reshape(B, T, -1, D)
+    v_heads = attention.v_proj(after_norm).reshape(B, T, -1, D)
+    q = attention.q_norm(q_heads).transpose(1, 2)
+    k = attention.k_norm(k_heads).transpose(1, 2)
+    position_ids = torch.arange(T, device=q.device).unsqueeze(0)
+    cos, sin = model.model.rotary_emb(before_norm, position_ids)
+    q_rotated, k_rotated = apply_rotary_pos_emb(q, k, cos, sin)
+```
+
+| 処理 | 7 Tokenの場合 |
+|---|---|
+| `torch.arange(T)` | `[0,1,2,3,4,5,6]`、shape `[7]` |
+| `.unsqueeze(0)` | batch軸を足して`[1,7]` |
+| `rotary_emb(...)` | 位置と設定からcos/sinを用意。各`[1,7,128]` |
+| `apply_rotary_pos_emb(...)` | cos/sinを使ってQ/Kを回転。shapeは変わらない |
+
+`apply_rotary_pos_emb`はTransformersから直接importした関数なので、呼び出しに`torch.`は付きません。内部実装のAPIのため、ここではTransformers 5.18.0を参照します。
+
+64ペアでもcos/sinが128成分あるのは、同じペアの2成分に同じ角度を使う配置だからです。参照実装は巨大な回転行列を作らず、`q*cos + rotate_half(q)*sin`を計算します（Head軸へのbroadcastを含む）。成分0の変化を再現するには成分64も必要で、先頭8成分だけでは足りません。
+
+続きは[Attentionの手動観察](../attention/#rope後からの手動観察コード)です。コードと設定は[Qwen3参照実装](https://github.com/huggingface/transformers/blob/v5.18.0/src/transformers/models/qwen3/modeling_qwen3.py)・[固定config](https://huggingface.co/Qwen/Qwen3-0.6B/blob/c1899de289a04d12100db370d81485cdf75e47ca/config.json)で確認できます。
 
 ## 長さ設定を変える前に
 
