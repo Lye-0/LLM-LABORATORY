@@ -35,7 +35,7 @@ const HeadCalculation = memo(function HeadCalculation({
     <div className="rope-head-calculation">
       <h4>
         {type}
-        {pos}の回転
+        {pos}の回転 · {type === 'Q' ? '行の見出し' : '列の見出し'}
       </h4>
       <p>元の4成分 [0,1,64,65]</p>
       <MathBlock xml={sub(type, pos) + op('=') + vector(v)} />

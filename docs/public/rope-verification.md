@@ -51,5 +51,7 @@ Sはスケーリング前の内積。AttentionスコアはS/√128。未来位�
 
 ## 一次資料
 
+追加の密度・階層調整：利用者の指定で計算一覧の本文と数式を10px、見出しを12pxにした。Qの回転列には青系背景と右3px線、Kの回転行には緑系背景と下3px線を使用し、交点の内積と役割を区別。行・列の見出しという文言も併記した。全49組の数式、選択維持、狭幅・キーボード・アクセシビリティ検査を再実行し、実画像で階層と密度を確認。既存の所属・余白の知見を適用した調整で、一般的な最小文字サイズを変更する知見にはしない。
+
 - [Qwen3参照実装 v5.18.0](https://github.com/huggingface/transformers/blob/v5.18.0/src/transformers/models/qwen3/modeling_qwen3.py)：rotate_half、apply_rotary_pos_emb、Q/K Norm、GQA、scale・mask。
 - [Qwen3-0.6B 固定revisionのconfig](https://huggingface.co/Qwen/Qwen3-0.6B/blob/c1899de289a04d12100db370d81485cdf75e47ca/config.json)：hidden size 1024、head_dim 128、Q heads 16、KV heads 8。
