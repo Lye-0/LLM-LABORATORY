@@ -178,6 +178,13 @@ const presentNode = (id: string) =>
                       <div class="atlas-detail-body">
                         <h4>{n.title}</h4>
                         <p>{n.detail || n.meaning}</p>
+                        {['q-rope', 'k-rope', 'scores', 'position'].includes(id) && (
+                          <p>
+                            <a href={withBase('/labs/rope/')}>
+                              RoPEの回転と相対位置を7×7表で確かめる →
+                            </a>
+                          </p>
+                        )}
                         <p>
                           <code>{n.code}</code>
                         </p>

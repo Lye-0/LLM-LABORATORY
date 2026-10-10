@@ -177,6 +177,17 @@ export const labs = [
     mode: '公式設定からの構造表示',
     number: '12',
   },
+  {
+    slug: 'rope',
+    title: 'RoPE & Relative Position',
+    ja: '回転から、相対位置の内積へ',
+    summary: '7×7表でQとKを選び、回転・相対位置・Attentionスコアのつながりを追う。',
+    tag: 'Q′ᵀK′ → 相対位置',
+    category: 'representation',
+    lesson: 'position',
+    mode: '説明用の仮定値・記号計算',
+    number: '13',
+  },
 ] as const;
 export type LabSlug = (typeof labs)[number]['slug'];
 export const qwenRevision = 'c1899de289a04d12100db370d81485cdf75e47ca';

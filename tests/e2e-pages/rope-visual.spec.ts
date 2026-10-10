@@ -1,0 +1,22 @@
+import { test, expect } from '@playwright/test';
+test('RoPEの行列を狭幅でキーボードスクロールできる', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await page.goto('/LLM-LABORATORY/labs/rope/');
+  await page.evaluate(() => document.fonts.ready);
+  await page.getByLabel('各マスに内積の式を表示').check();
+  await page.getByLabel('未来位置の内積も調べる').check();
+  await page.locator('.rope-table-scroll').first().scrollIntoViewIfNeeded();
+  await page.screenshot({ path: 'docs/reviews/rope-all-formulas.png' });
+  await page.setViewportSize({ width: 390, height: 1100 });
+  await page.locator('.rope-heads').scrollIntoViewIfNeeded();
+  const r = page.getByRole('region', { name: 'Qの回転行列と行列積', exact: true });
+  await r.scrollIntoViewIfNeeded();
+  await r.evaluate((e) => (e.scrollLeft = 0));
+  await page.screenshot({ path: 'docs/reviews/rope-mobile-matrix.png' });
+  await r.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(() => r.evaluate((e) => e.scrollLeft)).toBeGreaterThan(0);
+  await page.locator('.rope-result').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: 'docs/reviews/rope-mobile-result.png' });
+});

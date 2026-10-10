@@ -1,0 +1,187 @@
+.rope-lab {
+  line-height: 1.9;
+  font-size: 14px;
+  min-width: 0;
+}
+.rope-lab section {
+  margin: 32px 0;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+.rope-lab h3 {
+  font-size: 19px;
+  line-height: 1.6;
+  margin: 0 0 12px;
+}
+.rope-lab h4 {
+  font-size: 15px;
+  line-height: 1.6;
+}
+.rope-lab p {
+  margin: 12px 0;
+}
+.rope-flow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 32px;
+  padding-left: 24px;
+  color: var(--teal);
+}
+.rope-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 0;
+}
+.rope-controls label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.rope-controls button,
+.rope-table button {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 4px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+.rope-lab button[aria-pressed='true'] {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  background: var(--bg);
+}
+.rope-table-scroll {
+  max-width: 100%;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.rope-table {
+  width: 100%;
+  min-width: 590px;
+  border-collapse: separate;
+  border-spacing: 3px;
+  font-variant-numeric: tabular-nums;
+}
+.rope-table caption {
+  text-align: left;
+  padding: 10px;
+}
+.rope-table th {
+  background: var(--surface);
+  padding: 6px;
+}
+.rope-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+.rope-table tbody th {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+}
+.rope-table td {
+  padding: 0;
+}
+.rope-table button {
+  width: 100%;
+  min-height: 54px;
+}
+.rope-table small {
+  display: block;
+  font-size: 11px;
+}
+.rope-table button:disabled {
+  color: var(--muted);
+  background: var(--bg);
+  cursor: default;
+}
+.rope-selection {
+  border-left: 3px solid var(--accent);
+  padding: 8px 14px;
+  background: var(--surface);
+}
+.rope-heads {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.rope-formula {
+  max-width: 100%;
+  overflow: auto;
+  padding: 14px 8px;
+  margin: 12px 0;
+  background: var(--surface);
+  border-radius: 4px;
+}
+.rope-formula math {
+  width: max-content;
+  min-width: 100%;
+  font-size: 16px;
+}
+.rope-formula mtd {
+  padding: 6px;
+}
+.rope-result {
+  border: 1px solid var(--teal);
+  padding: 16px;
+  border-radius: 6px;
+  margin: 20px 0;
+}
+.rope-lab details {
+  border: 1px solid var(--line);
+  padding: 12px;
+  border-radius: 5px;
+  margin: 18px 0;
+}
+.rope-lab summary {
+  cursor: pointer;
+}
+.rope-lab code {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 1000px) {
+  .rope-heads {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 600px) {
+  .rope-lab {
+    font-size: 13px;
+  }
+  .rope-lab .lab-pane {
+    padding: 12px;
+  }
+  .rope-result {
+    padding: 10px;
+  }
+}
+.rope-formula math,
+.rope-cell-formula math {
+  font-family: 'Cambria Math', 'STIX Two Math', math;
+}
+.rope-table-expressions {
+  min-width: 1800px;
+}
+.rope-cell-formula {
+  display: block;
+  padding: 8px 0;
+}
+.rope-cell-formula math {
+  font-size: 14px;
+}
+.rope-table-expressions button {
+  min-height: 148px;
+}
+.rope-table-scroll:has(.rope-table-expressions) {
+  max-height: 650px;
+}
+@media (min-width: 1001px) {
+  .rope-heads .rope-formula math {
+    font-size: 14px;
+  }
+}

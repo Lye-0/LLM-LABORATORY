@@ -6,7 +6,7 @@ order: 13
 minutes: 12
 eyebrow: "QUERY / KEY / VALUE"
 prerequisites: ["linear"]
-labs: ["attention"]
+labs: ["attention","rope"]
 sources: ["qwen","tensor"]
 tags: ["Attention","Q","K","V","causal mask","softmax"]
 question: "causal maskがなければ、次トークン予測の学習で何が起こりますか？"
@@ -19,6 +19,8 @@ answer: "未来の正解を含む位置を参照できてしまいます。過�
 ## 1. スコアを作る
 
 `scores = Q @ K.T / sqrt(d_k)`。Qのある行と、Kの各行の内積を取ります。d_kはhead内の成分数です。成分数によるスコアの大きさの変化を調整します。
+
+RoPEを使うQwen3では、この式のQ/Kは位置に応じた回転を終えたものです。1つのスコアは1 head全体の内積で、回転ペアごとの独立したスコアではありません。「RoPE & Relative Position」の実験では、回転から内積までを7×7表で追えます。
 
 ## 2. 参照できない位置を隠す
 

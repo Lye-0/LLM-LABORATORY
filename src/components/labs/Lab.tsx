@@ -11,6 +11,7 @@ import {
   TensorLab,
 } from './MathLabs';
 import type { LabSlug } from '../../data/catalog';
+import RoPELab from './RoPELab';
 const components = {
   tokenizer: TokenizerLab,
   vocabulary: VocabularyLab,
@@ -19,6 +20,7 @@ const components = {
   embedding: EmbeddingLab,
   linear: LinearLab,
   attention: AttentionLab,
+  rope: RoPELab,
   sampling: SamplingLab,
   generation: GenerationLab,
   gradient: GradientLab,
