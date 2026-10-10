@@ -130,8 +130,8 @@ export default function RoPECalculationTable({
     const a = el.getBoundingClientRect(),
       r = target.getBoundingClientRect();
     el.scrollTo({
-      left: kind === 'q' ? 0 : el.scrollLeft + r.left - a.left - 68,
-      top: kind === 'k' ? 0 : el.scrollTop + r.top - a.top - 48,
+      left: kind === 'q' ? 0 : el.scrollLeft + r.left - a.left - 54,
+      top: kind === 'k' ? 0 : el.scrollTop + r.top - a.top - 36,
       behavior: 'instant',
     });
   }
