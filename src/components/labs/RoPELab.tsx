@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import RoPECalculationTable from './RoPECalculationTable';
 import { allowed, ropeQ, ropeK } from '../../lib/rope';
 import {
   num,
@@ -33,10 +34,18 @@ export default function RoPELab() {
   const [p, setP] = useState(3),
     [t, setT] = useState(1),
     [future, setFuture] = useState(false),
-    [expressions, setExpressions] = useState(false);
+    [expressions, setExpressions] = useState(false),
+    [view, setView] = useState<'overview' | 'calculations'>('overview'),
+    [wide, setWide] = useState(false),
+    [jump, setJump] = useState(0);
+  useEffect(() => {
+    document.body.classList.toggle('rope-expanded', wide && view === 'calculations');
+    return () => document.body.classList.remove('rope-expanded');
+  }, [wide, view]);
   function select(q: number, k: number) {
     setP(q);
     setT(k);
+    setJump((n) => n + 1);
   }
   const q = ropeQ[p],
     k = ropeK[t],
@@ -60,11 +69,34 @@ export default function RoPELab() {
         <li>完成した128次元同士で内積</li>
         <li>√128で割る → mask → softmax</li>
       </ol>
+      <div className="rope-controls" role="group" aria-label="表の表示方式">
+        <button
+          type="button"
+          aria-pressed={view === 'overview'}
+          onClick={() => setView('overview')}
+        >
+          概要＋下の計算
+        </button>
+        <button
+          type="button"
+          aria-pressed={view === 'calculations'}
+          onClick={() => setView('calculations')}
+        >
+          計算一覧
+        </button>
+        {view === 'calculations' && (
+          <button type="button" aria-pressed={wide} onClick={() => setWide(!wide)}>
+            {wide ? '通常の幅に戻す' : '広く見る'}
+          </button>
+        )}
+      </div>
       <section aria-labelledby="rope-grid-title">
         <h3 id="rope-grid-title">7×7表：どのQとKを比べる？</h3>
         <p>
-          行は情報を集めるQの位置p、列は参照されるKの位置t。各マスは1
-          head全体の組み合わせです。選ぶと下の回転・内積の式が切り替わります。
+          行は情報を集めるQの位置p、列は参照されるKの位置t。各マスは1 head全体の組み合わせです。
+          {view === 'overview'
+            ? '選ぶと下の回転・内積の式が切り替わります。'
+            : '各交点で途中計算から最終式まで読めます。'}
         </p>
         <div className="rope-controls">
           {[
@@ -92,162 +124,175 @@ export default function RoPELab() {
             />
             未来位置の内積も調べる
           </label>
-          <label>
-            <input
-              type="checkbox"
-              checked={expressions}
-              onChange={(e) => setExpressions(e.target.checked)}
-            />
-            各マスに内積の式を表示
-          </label>
+          {view === 'overview' && (
+            <label>
+              <input
+                type="checkbox"
+                checked={expressions}
+                onChange={(e) => setExpressions(e.target.checked)}
+              />
+              各マスに内積の式を表示
+            </label>
+          )}
         </div>
-        <div
-          className="rope-table-scroll"
-          role="region"
-          aria-label="QとKの7×7参照表（横にスクロール可能）"
-          tabIndex={0}
-        >
-          <table className={`rope-table${expressions ? ' rope-table-expressions' : ''}`}>
-            <caption>
-              ○：参照可能　×：未来位置（mask対象）{expressions && ' ／ 式は√128で割る前の内積S'}
-            </caption>
-            <thead>
-              <tr>
-                <th scope="col">Q ＼ K</th>
-                {ropeK.map((_, i) => (
-                  <th scope="col" key={i}>
-                    K{i}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {ropeQ.map((_, i) => (
-                <tr key={i}>
-                  <th scope="row">Q{i}</th>
-                  {ropeK.map((_, j) => (
-                    <td key={j} className={!allowed(i, j) ? 'rope-masked' : ''}>
-                      <button
-                        type="button"
-                        disabled={!future && !allowed(i, j)}
-                        aria-pressed={p === i && t === j}
-                        aria-label={`Q${i} × K${j}、位置差${j - i}、${allowed(i, j) ? '参照可能' : '未来位置・mask対象'}`}
-                        onClick={() => select(i, j)}
-                      >
-                        <strong>{allowed(i, j) ? '○' : '×'}</strong>
-                        <small>t−p={j - i}</small>
-                        {expressions && (future || allowed(i, j)) && (
-                          <span
-                            className="rope-cell-formula"
-                            dangerouslySetInnerHTML={{
-                              __html: `<math xmlns="http://www.w3.org/1998/Math/MathML" display="block">${scoreLines(i, j)}</math>`,
-                            }}
-                          />
-                        )}
-                      </button>
-                    </td>
+        {view === 'calculations' ? (
+          <RoPECalculationTable p={p} t={t} future={future} jump={jump} onSelect={select} />
+        ) : (
+          <div
+            className="rope-table-scroll"
+            role="region"
+            aria-label="QとKの7×7参照表（横にスクロール可能）"
+            tabIndex={0}
+          >
+            <table className={`rope-table${expressions ? ' rope-table-expressions' : ''}`}>
+              <caption>
+                ○：参照可能　×：未来位置（mask対象）{expressions && ' ／ 式は√128で割る前の内積S'}
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Q ＼ K</th>
+                  {ropeK.map((_, i) => (
+                    <th scope="col" key={i}>
+                      K{i}
+                    </th>
                   ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {ropeQ.map((_, i) => (
+                  <tr key={i}>
+                    <th scope="row">Q{i}</th>
+                    {ropeK.map((_, j) => (
+                      <td key={j} className={!allowed(i, j) ? 'rope-masked' : ''}>
+                        <button
+                          type="button"
+                          disabled={!future && !allowed(i, j)}
+                          aria-pressed={p === i && t === j}
+                          aria-label={`Q${i} × K${j}、位置差${j - i}、${allowed(i, j) ? '参照可能' : '未来位置・mask対象'}`}
+                          onClick={() => select(i, j)}
+                        >
+                          <strong>{allowed(i, j) ? '○' : '×'}</strong>
+                          <small>t−p={j - i}</small>
+                          {expressions && (future || allowed(i, j)) && (
+                            <span
+                              className="rope-cell-formula"
+                              dangerouslySetInnerHTML={{
+                                __html: `<math xmlns="http://www.w3.org/1998/Math/MathML" display="block">${scoreLines(i, j)}</math>`,
+                              }}
+                            />
+                          )}
+                        </button>
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
         <p className="rope-selection" role="status">
           選択：Q{p} × K{t} ／ 相対位置 t−p = {t}−{p} = {t - p} ／{' '}
           {valid ? '参照可能' : '未来位置：内積は調べられますが、Attentionではmask対象です'}
         </p>
       </section>
-      <section aria-labelledby="rope-rotation-title">
-        <h3 id="rope-rotation-title">1. QとKを、それぞれの位置で回転する</h3>
-        <p>
-          下は128×128の回転のうち、値を持つ4成分を抜き出した行列です。列ベクトル表記を使います。横に長い数式はスクロールして読めます。
-        </p>
-        <div className="rope-heads">
-          {(['Q', 'K'] as const).map((type) => {
-            const pos = type === 'Q' ? p : t,
-              v = type === 'Q' ? q : k;
-            return (
-              <article className="lab-pane" key={type}>
-                <h4>
-                  {type}
-                  {pos} → {type}′{pos}：回転を完了
-                </h4>
-                <Formula label={`${type}の元ベクトル`} xml={sub(type, pos) + op('=') + vector(v)} />
-                <Formula
-                  label={`${type}の回転行列と行列積`}
-                  xml={primed(type, pos) + op('=') + rotation(pos) + vector(v)}
-                />
-                <Formula
-                  label={`${type}の回転後の成分`}
-                  xml={primed(type, pos) + op('=') + rotated(v, pos)}
-                />
-              </article>
-            );
-          })}
-        </div>
-      </section>
-      <section aria-labelledby="rope-dot-title">
-        <h3 id="rope-dot-title">2. 完成したQ′とK′で、1つの内積を求める</h3>
-        <p>
-          64ペアの回転を終えた128次元同士を比較します。ペアごとに別のAttentionスコアを作るわけではありません。
-        </p>
-        <Formula
-          label="回転後の内積"
-          xml={
-            trans(primed('Q', p)) +
-            primed('K', t) +
-            op('=') +
-            trans(rotationSymbol(p) + sub('Q', p)) +
-            row(op('(') + rotationSymbol(t) + sub('K', t) + op(')'))
-          }
-        />
-        <Formula
-          label="相対位置が現れる変形"
-          xml={
-            op('=') +
-            trans(sub('Q', p)) +
-            trans(rotationSymbol(p)) +
-            rotationSymbol(t) +
-            sub('K', t) +
-            op('=') +
-            trans(sub('Q', p)) +
-            rotationSymbol(p, t) +
-            sub('K', t)
-          }
-        />
-        <p>
-          回転の転置は逆回転なので、RₚᵀRₜ =
-          Rₜ₋ₚ。これは同じ計算の書き換えで、実装がさらにKを回し直すという意味ではありません。
-        </p>
-        <details>
-          <summary>整数ベクトルと相対回転行列を代入する</summary>
-          <Formula
-            label="相対回転行列への代入"
-            xml={vector(q, true) + rotation(p, t) + vector(k)}
-          />
-          <Formula
-            label="相対回転行列とKの積"
-            xml={rotationSymbol(p, t) + sub('K', t) + op('=') + rotated(k, p, t)}
-          />
-          <Formula label="元のQと相対回転したKの積" xml={vector(q, true) + rotated(k, p, t)} />
-        </details>
-        <div className="rope-result">
-          <h4>内積 S（スケーリング前）</h4>
-          <Formula
-            label="内積の最終式"
-            xml={
-              `<msub><mi>S</mi><mrow>${num(p)}<mo>,</mo>${num(t)}</mrow></msub>` +
-              op('=') +
-              scoreLines(p, t)
-            }
-          />
-          <p>
-            {p === t
-              ? '同じ位置では相対回転が0になり、回転前のQとKの内積と一致します。'
-              : '整数係数だけを計算し、(t−p)ωとsin・cosを残しています。同じ位置差でも、元のQ/Kが異なれば内積は異なります。'}
-          </p>
-        </div>
-      </section>
+      {view === 'overview' && (
+        <>
+          <section aria-labelledby="rope-rotation-title">
+            <h3 id="rope-rotation-title">1. QとKを、それぞれの位置で回転する</h3>
+            <p>
+              下は128×128の回転のうち、値を持つ4成分を抜き出した行列です。列ベクトル表記を使います。横に長い数式はスクロールして読めます。
+            </p>
+            <div className="rope-heads">
+              {(['Q', 'K'] as const).map((type) => {
+                const pos = type === 'Q' ? p : t,
+                  v = type === 'Q' ? q : k;
+                return (
+                  <article className="lab-pane" key={type}>
+                    <h4>
+                      {type}
+                      {pos} → {type}′{pos}：回転を完了
+                    </h4>
+                    <Formula
+                      label={`${type}の元ベクトル`}
+                      xml={sub(type, pos) + op('=') + vector(v)}
+                    />
+                    <Formula
+                      label={`${type}の回転行列と行列積`}
+                      xml={primed(type, pos) + op('=') + rotation(pos) + vector(v)}
+                    />
+                    <Formula
+                      label={`${type}の回転後の成分`}
+                      xml={primed(type, pos) + op('=') + rotated(v, pos)}
+                    />
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+          <section aria-labelledby="rope-dot-title">
+            <h3 id="rope-dot-title">2. 完成したQ′とK′で、1つの内積を求める</h3>
+            <p>
+              64ペアの回転を終えた128次元同士を比較します。ペアごとに別のAttentionスコアを作るわけではありません。
+            </p>
+            <Formula
+              label="回転後の内積"
+              xml={
+                trans(primed('Q', p)) +
+                primed('K', t) +
+                op('=') +
+                trans(rotationSymbol(p) + sub('Q', p)) +
+                row(op('(') + rotationSymbol(t) + sub('K', t) + op(')'))
+              }
+            />
+            <Formula
+              label="相対位置が現れる変形"
+              xml={
+                op('=') +
+                trans(sub('Q', p)) +
+                trans(rotationSymbol(p)) +
+                rotationSymbol(t) +
+                sub('K', t) +
+                op('=') +
+                trans(sub('Q', p)) +
+                rotationSymbol(p, t) +
+                sub('K', t)
+              }
+            />
+            <p>
+              回転の転置は逆回転なので、RₚᵀRₜ =
+              Rₜ₋ₚ。これは同じ計算の書き換えで、実装がさらにKを回し直すという意味ではありません。
+            </p>
+            <details>
+              <summary>整数ベクトルと相対回転行列を代入する</summary>
+              <Formula
+                label="相対回転行列への代入"
+                xml={vector(q, true) + rotation(p, t) + vector(k)}
+              />
+              <Formula
+                label="相対回転行列とKの積"
+                xml={rotationSymbol(p, t) + sub('K', t) + op('=') + rotated(k, p, t)}
+              />
+              <Formula label="元のQと相対回転したKの積" xml={vector(q, true) + rotated(k, p, t)} />
+            </details>
+            <div className="rope-result">
+              <h4>内積 S（スケーリング前）</h4>
+              <Formula
+                label="内積の最終式"
+                xml={
+                  `<msub><mi>S</mi><mrow>${num(p)}<mo>,</mo>${num(t)}</mrow></msub>` +
+                  op('=') +
+                  scoreLines(p, t)
+                }
+              />
+              <p>
+                {p === t
+                  ? '同じ位置では相対回転が0になり、回転前のQとKの内積と一致します。'
+                  : '整数係数だけを計算し、(t−p)ωとsin・cosを残しています。同じ位置差でも、元のQ/Kが異なれば内積は異なります。'}
+              </p>
+            </div>
+          </section>
+        </>
+      )}
       <section aria-labelledby="rope-score-title">
         <h3 id="rope-score-title">3. Attentionスコアへ：スケールとmask</h3>
         <Formula

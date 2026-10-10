@@ -40,38 +40,52 @@ function sum(terms: [number, string][]) {
   for (const [n, body] of terms) s += term(n, body, !s);
   return s || num(0);
 }
-export function rotated(v: Four, p: number, t?: number) {
-  if ((t === undefined && p === 0) || t === p) return vector(v);
+export function rotatedComponents(v: Four, p: number, t?: number): string[] {
+  if ((t === undefined && p === 0) || t === p) return v.map(num);
   const [a, b, c, d] = v;
   const cs = [0, 1].map((i) => trig('cos', angle(p, i, t))),
     ss = [0, 1].map((i) => trig('sin', angle(p, i, t)));
-  return matrix([
-    [
-      sum([
-        [a, cs[0]],
-        [-c, ss[0]],
-      ]),
-    ],
-    [
-      sum([
-        [b, cs[1]],
-        [-d, ss[1]],
-      ]),
-    ],
-    [
-      sum([
-        [a, ss[0]],
-        [c, cs[0]],
-      ]),
-    ],
-    [
-      sum([
-        [b, ss[1]],
-        [d, cs[1]],
-      ]),
-    ],
-  ]);
+  return [
+    sum([
+      [a, cs[0]],
+      [-c, ss[0]],
+    ]),
+    sum([
+      [b, cs[1]],
+      [-d, ss[1]],
+    ]),
+    sum([
+      [a, ss[0]],
+      [c, cs[0]],
+    ]),
+    sum([
+      [b, ss[1]],
+      [d, cs[1]],
+    ]),
+  ];
 }
+export function rotated(v: Four, p: number, t?: number) {
+  return matrix(rotatedComponents(v, p, t).map((x) => [x]));
+}
+export function dotExpansion(p: number, t: number) {
+  const components = rotatedComponents(ropeK[t], p, t);
+  return (
+    '<mtable columnalign="left">' +
+    ropeQ[p]
+      .map(
+        (n, i) =>
+          '<mtr><mtd>' +
+          (i ? op('+') : '') +
+          row(op('(') + num(n) + op(')')) +
+          op('×') +
+          row(op('(') + components[i] + op(')')) +
+          '</mtd></mtr>',
+      )
+      .join('') +
+    '</mtable>'
+  );
+}
+
 export function score(p: number, t: number) {
   if (p === t) return num(dot4(ropeQ[p], ropeK[t]));
   const c = coefficients(ropeQ[p], ropeK[t]);
