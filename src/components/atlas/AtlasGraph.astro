@@ -100,6 +100,10 @@ const presentNode = (id: string) =>
           {
             'atlas-block--choices': block.choices,
             'atlas-block--group': block.group,
+            'atlas-block--group-start':
+              block.group && section.blocks[index - 1]?.group !== block.group,
+            'atlas-block--group-end':
+              block.group && section.blocks[index + 1]?.group !== block.group,
           },
         ]}
         data-process-group={block.group}
