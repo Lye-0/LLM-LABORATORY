@@ -201,20 +201,6 @@
   position: relative;
   padding: 20px 0;
 }
-.atlas-block--group::before {
-  content: '';
-  position: absolute;
-  inset: 0 -12px;
-  background: color-mix(in srgb, var(--accent) 7%, var(--bg));
-  z-index: -1;
-  pointer-events: none;
-}
-.atlas-block--group-start::before {
-  border-radius: 10px 10px 0 0;
-}
-.atlas-block--group-end::before {
-  border-radius: 0 0 10px 10px;
-}
 .atlas-process-heading {
   position: relative;
   margin: 0 0 24px;
@@ -245,9 +231,6 @@
   background: var(--bg);
 }
 @media (max-width: 600px) {
-  .atlas-block--group::before {
-    inset-inline: -6px;
-  }
   .atlas-process-heading {
     max-width: none;
   }
