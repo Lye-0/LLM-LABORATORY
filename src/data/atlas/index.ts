@@ -17,6 +17,7 @@ export interface AtlasEdge {
   label?: string;
 }
 export interface AtlasBlock {
+  group?: 'attention' | 'mlp';
   label?: string;
   lanes: string[][];
   choices?: { from: string; to: string; result: string };
@@ -1050,7 +1051,11 @@ export const nodeById = Object.fromEntries(nodes.map((n) => [n.id, n])) as Recor
   string,
   AtlasNode
 >;
-const block = (lanes: string[][], label?: string): AtlasBlock => ({ lanes, label });
+const block = (lanes: string[][], label?: string, group?: AtlasBlock['group']): AtlasBlock => ({
+  lanes,
+  label,
+  group,
+});
 const edge = (from: string, to: string, kind?: AtlasEdge['kind'], label?: string): AtlasEdge => ({
   from,
   to,
@@ -1141,9 +1146,10 @@ export const sections: AtlasSection[] = [
           ['k-proj', 'k-heads', 'k-norm', 'k-transpose', 'k-rope', 'k-cache', 'k-gqa'],
           ['v-proj', 'v-heads', 'v-transpose', 'v-cache', 'v-gqa'],
         ],
-        'Self-Attention：同じ入力からQ・K・Vの3本を作る（枝同士は直列ではない）',
+        '同じ入力からQ・K・Vへ分岐',
+        'attention',
       ),
-      block([['scores'], ['causal-mask']], 'QとKの比較 ／ 参照可能な位置'),
+      block([['scores'], ['causal-mask']], 'QとKの比較 ／ 参照可能な位置', 'attention'),
       block(
         [
           [
@@ -1153,20 +1159,15 @@ export const sections: AtlasSection[] = [
             'attention-transpose',
             'head-merge',
             'o-proj',
-            'residual-attn',
-            'post-norm',
           ],
         ],
-        '割合とVが合流 → Attention出力 → Residual ①を加算',
+        '割合とVが合流 → Headを連結 → 出力を射影',
+        'attention',
       ),
-      block(
-        [['gate-proj', 'silu'], ['up-proj']],
-        'MLP / SwiGLU：同じ入力から2本を作る。正規化前の値はResidual ②へ',
-      ),
-      block(
-        [['multiply', 'down-proj', 'residual-mlp', 'next-layer']],
-        '2本を乗算 → 幅を戻す → Residual ②を加算',
-      ),
+      block([['residual-attn', 'post-norm']]),
+      block([['gate-proj', 'silu'], ['up-proj']], '同じ入力からgateとupへ分岐', 'mlp'),
+      block([['multiply', 'down-proj']], '2本を要素ごとに乗算 → 幅を戻す', 'mlp'),
+      block([['residual-mlp', 'next-layer']]),
     ],
     [
       ...['q-proj', 'k-proj', 'v-proj'].map((id) => edge('input-norm', id)),
@@ -1177,6 +1178,8 @@ export const sections: AtlasSection[] = [
       edge('v-gqa', 'weighted-sum', 'residual', 'Vの値'),
       edge('layer-input', 'residual-attn', 'residual', 'Residual ①'),
       edge('post-norm', 'gate-proj'),
+      edge('o-proj', 'residual-attn'),
+      edge('down-proj', 'residual-mlp'),
       edge('post-norm', 'up-proj'),
       edge('silu', 'multiply'),
       edge('up-proj', 'multiply'),

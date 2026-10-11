@@ -93,12 +93,33 @@ const presentNode = (id: string) =>
         </marker>
       </defs>
     </svg>
-    {section.blocks.map((block) => (
+    {section.blocks.map((block, index) => (
       <div
-        class:list={['atlas-block', { 'atlas-block--choices': block.choices }]}
+        class:list={[
+          'atlas-block',
+          {
+            'atlas-block--choices': block.choices,
+            'atlas-block--group': block.group,
+            'atlas-block--group-start':
+              block.group && section.blocks[index - 1]?.group !== block.group,
+            'atlas-block--group-end':
+              block.group && section.blocks[index + 1]?.group !== block.group,
+          },
+        ]}
+        data-process-group={block.group}
         data-choice-from={block.choices?.from}
         data-choice-to={block.choices?.to}
       >
+        {block.group && section.blocks[index - 1]?.group !== block.group && (
+          <header class="atlas-process-heading" id={`process-${block.group}`}>
+            <h3>{block.group === 'attention' ? 'Self-Attention' : 'MLP / SwiGLU'}</h3>
+            <p>
+              {block.group === 'attention'
+                ? '位置同士の情報を集める · Q/K/Vの射影からo_projまで'
+                : '各位置の特徴を変換する · gate/upの射影からdown_projまで'}
+            </p>
+          </header>
+        )}
         {block.label && <p class="atlas-branch-label">{block.label}</p>}
         {block.choices && (
           <p class="atlas-choice-note">
@@ -254,6 +275,11 @@ const presentNode = (id: string) =>
           ))}
         </div>
         {block.choices && <p class="atlas-choice-result">{block.choices.result}</p>}
+        {block.group && section.blocks[index + 1]?.group !== block.group && (
+          <p class="atlas-process-end">
+            {block.group === 'attention' ? 'Self-Attention' : 'MLP'}の出力 → 残差加算へ
+          </p>
+        )}
       </div>
     ))}
   </div>
