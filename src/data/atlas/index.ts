@@ -445,6 +445,9 @@ export const nodes: AtlasNode[] = [
     '[B,Tq,1024]',
     '[B,Tq,3072]',
     'gate用の重みで幅を広げる。',
+    'process',
+    'upと同じ正規化後の入力を、別の重みで変換します。この結果にSiLUを適用し、upの対応成分へ掛けます。upの出力を順番に処理する枝ではありません。',
+    'transformer-block',
   ),
   node(
     'silu',
@@ -453,6 +456,9 @@ export const nodes: AtlasNode[] = [
     'gate [B,Tq,3072]',
     '[B,Tq,3072]',
     '値に応じて通し方を変える。',
+    'process',
+    '重みを持たない固定の関数です。例えば入力2なら約1.7616、−2なら約−0.2384。出力は負にも1より大きくもなり、0〜1の確率ではありません。',
+    'transformer-block',
   ),
   node(
     'up-proj',
@@ -461,6 +467,9 @@ export const nodes: AtlasNode[] = [
     '[B,Tq,1024]',
     '[B,Tq,3072]',
     'gateと同じ入力から、別の重みで特徴を作る。',
+    'process',
+    '各Tokenの1024成分を重み付きで組み合わせ、3072成分の中間表現を作ります。Token数を増やす処理ではなく、別のToken位置も直接混ぜません。',
+    'transformer-block',
   ),
   node(
     'multiply',
@@ -470,6 +479,8 @@ export const nodes: AtlasNode[] = [
     '[B,Tq,3072]',
     '行列積ではなく、同じ場所の要素同士を掛ける。',
     'join',
+    'upの値が2なら、SiLU(gate)が約1.7616の成分は約3.5232になります。この段階では成分を足し合わせず、続くdown_projで混ぜます。',
+    'transformer-block',
   ),
   node(
     'down-proj',
@@ -478,6 +489,9 @@ export const nodes: AtlasNode[] = [
     '[B,Tq,3072]',
     '[B,Tq,1024]',
     'MLPで作った特徴をモデル幅へ戻す。',
+    'process',
+    '3072成分を学習済みの重みで組み合わせ、1024成分を作ります。先頭1024成分の切り出しではありません。この出力を、MLP前のNormより前の値へ足します。',
+    'transformer-block',
   ),
   node(
     'residual-mlp',
@@ -487,6 +501,8 @@ export const nodes: AtlasNode[] = [
     '層の出力 [B,Tq,1024]',
     '元の経路を残しながら、MLPの変化を加える。',
     'join',
+    '足す相手は1回目の残差加算後の値です。MLPもその値を正規化した入力から計算しているので、AttentionとMLPを独立に計算して足す構造ではありません。',
+    'transformer-block',
   ),
   node(
     'next-layer',

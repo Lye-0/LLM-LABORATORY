@@ -3,7 +3,7 @@ title: "Transformerブロック"
 description: "Attention・MLP・Residual・Normを、一つの計算としてつなぐ。"
 stage: "representation"
 order: 15
-minutes: 18
+minutes: 22
 eyebrow: "INSIDE A BLOCK"
 prerequisites: ["attention","position"]
 labs: ["model"]
@@ -47,6 +47,8 @@ tensor([[1.2000, 1.7000]])
 ## RMSNorm — スケールを整える
 
 特徴軸の二乗平均から得た大きさで割り、学習可能な係数を掛けます。LayerNormのように平均を引く操作とは区別します。epsilonはゼロ除算を避けるための小さな値です。
+
+RMSはRoot Mean Square（二乗平均平方根）の略です。この正規化は入力のスケールを整える計算で、optimizerが学習中に重みを更新する「最適化」とは別です。
 
 `yᵢ = weightᵢ × xᵢ / √(mean(x²) + ε)`。例えばεとweightを省いた`[1,2,2]`の正規化なら、RMSは√3で、結果は約`[0.577,1.155,1.155]`です。必ず値を小さくする処理でも、0〜1へ収める処理でもありません。
 
@@ -110,6 +112,41 @@ Qwen3-0.6BのMLPでは、gateとupは同じ正規化後の入力から分岐し�
 
 SiLUの値は負にも1より大きくもなるので、gateは0〜1の確率ではありません。Token数は7のままで、同じMLPを各位置へ適用します。
 
+### up・gate・SiLUは何をしている？
+
+Attentionが位置同士から情報を集めるのに対し、MLPは**各位置に集まった情報の、成分の組み合わせを変える**処理です。Attention後の入力なので、MLPも文脈を反映した値を扱っています。
+
+| 部品 | 役割 | 区別する点 |
+|---|---|---|
+| up_proj | 入力の1024成分を組み合わせ、3072成分の中間表現を作る | 成分をコピーして増やす処理ではない |
+| gate_proj → SiLU | 同じ入力から、upの各成分に掛ける値を作る | upの結果を読んで判断する枝ではない |
+| 要素積 | upとSiLU(gate)の対応成分を掛ける | この段階では成分同士を足し合わせない |
+| down_proj | 3072成分を重み付きで組み合わせ、1024成分へ戻す | 先頭1024成分だけを残す処理ではない |
+
+**upとgateは並列**です。別々の学習済み重みで同じ入力を変換し、gate側だけにSiLUを適用してから掛け合わせます。SiLU自体は固定の関数で、学習する重みは持ちません。「通す量」は直感的な呼び方で、人間が理解する重要度や確率そのものではありません。
+
+### 1成分だけで見る、小さな計算例
+
+以下は仕組みを説明する仮の値です。実際のモデルの観測値ではありません。
+
+| upの値 | gate_projの値 g | SiLU(g) = g × sigmoid(g) | SiLU(g) × up |
+|---|---|---|---|
+| 2 | 2 | 約1.7616 | 約3.5232 |
+| 2 | −2 | 約−0.2384 | 約−0.4768 |
+
+同じupの値でも、gate側の値によって大きさや符号が変わります。実際には3072成分それぞれでこの計算を行い、その後down_projが成分を混ぜます。特定の成分が必ず「文法」「天気」など一つの意味を担当する、という対応は保証されません。
+
+<details>
+<summary>幅を広げることと、非線形にすることは別</summary>
+
+幅を広げると、中間表現を作る成分数が増えます。ただし、新しい情報を外から追加するわけでも、幅が3倍なら能力も3倍になるわけでもありません。
+
+線形変換だけを重ねた`(x @ W₁) @ W₂`は、`x @ (W₁ @ W₂)`という一つの線形変換にまとめられます。SwiGLUではSiLUと、入力に依存する二つの枝の掛け合わせにより、この形では表せない変換を作ります。SiLUだけを外しても、gateとupの要素積が残るので全体が線形になるわけではありません。
+
+</details>
+
+ここまでのgate・up・SiLU・要素積・downを含む部品が`layer.mlp`で、その実行結果のTensorが`mlp_output`です。MLP前のNormと、次の残差加算はMLPモジュールの外側にあります。[行列積・要素積・加算の比較](../linear/#行列積要素積加算を区別する)も併せて確認できます。
+
 ## 2回の残差接続をコードで区別する
 
 ```text
@@ -119,6 +156,8 @@ y = a + MLP(post_attention_layernorm(a))
 ```
 
 1回目で足すのは`x`、2回目で足すのは`a`です。それぞれのNorm後の値を残差として足すのではありません。
+
+式を展開すると「層の入力 + Attentionの出力 + MLPの出力」ですが、MLPは**1回目の加算結果aを正規化した値**から計算します。三つを独立に計算して最後に足す構造ではありません。
 
 <details>
 <summary>Attention観察の続きでMLPと残差を確認する</summary>
@@ -144,8 +183,19 @@ MLP単体を同じ入力で比べる検証と、Layer全体を`outputs.hidden_st
 
 一つのブロックの入力と出力が同じshapeでも、中の数値は変わります。28層なら同じ構造の計算を28回重ねますが、各層のパラメータが全部同じという意味ではありません。位置ごとのhidden stateが段階的に変換されます。
 
+| 観察位置 | outputs.hidden_statesとの対応 |
+|---|---|
+| Layer 0の入力 | `[0]`：Embedding後 |
+| Layer 0の1回目の残差加算後 a | 層の途中の値。通常のhidden_states tupleには個別に入らない |
+| Layer 0の出力 y → Layer 1の入力 | `[1]` |
+| Layer 1の出力 → Layer 2の入力 | `[2]` |
+
+このページの`x・a・y`は1層の途中経過を区別する名前です。`hidden_states[0]・[1]・[2]`という層ごとの記録番号とは区別してください。
+
 [実際のQwenを観察する](../qwen/)では、`hidden_states[0]`（Embedding後）と`hidden_states[1]`（Layer 0後）の同じ位置を比べます。どちらも`[1,7,1024]`ですが、数値は異なります。今回のQwen3では最後の`hidden_states[-1]`に全28層の後の最終RMSNormも含まれるため、最後のLayerだけの出力とは区別します。上の1ブロック内の二つのNormと、この最終Normは別の部品です。
 
 ## 改造の入口
 
 層を外したり、MLPを置換したりするなら、Residualへ戻すshape、dtype、deviceを維持する必要があります。実行できることと、品質が保たれることは別の検証です。
+
+実装の確認先：[Qwen3MLP / Qwen3DecoderLayer（Transformers v5.18.0）](https://github.com/huggingface/transformers/blob/v5.18.0/src/transformers/models/qwen3/modeling_qwen3.py)、[PyTorchのSiLU](https://docs.pytorch.org/docs/2.14/generated/torch.nn.SiLU.html)。
