@@ -1,4 +1,18 @@
 import { test, expect } from '@playwright/test';
+test('複数入力は計算カードの別々の入口へ接続する', async ({ page }) => {
+  await page.goto('/LLM-LABORATORY/maps/structure/');
+  for (const target of ['scores', 'masked-scores', 'multiply']) {
+    const paths = page.locator(`.atlas-route[data-to="${target}"]`);
+    await expect(paths).toHaveCount(2);
+    const ends = await paths.evaluateAll((elements) => elements.map((element) => {
+      const path = element as SVGPathElement;
+      const end = path.getPointAtLength(path.getTotalLength());
+      return { x: end.x, y: end.y };
+    }));
+    expect(Math.abs(ends[0].x - ends[1].x)).toBeGreaterThan(20);
+    expect(Math.abs(ends[0].y - ends[1].y)).toBeLessThan(1);
+  }
+});
 test('接続線が別の地点を横切らず、補足による幅変更にも追従する', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('/LLM-LABORATORY/maps/');

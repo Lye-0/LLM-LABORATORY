@@ -169,7 +169,25 @@ export function initAtlas() {
         b = to.getBoundingClientRect();
       const x1 = a.left + a.width / 2 - bounds.left,
         y1 = a.bottom - bounds.top;
-      const x2 = b.left + b.width / 2 - bounds.left,
+      // Keep independent inputs separate until they reach the operation card.
+      // Residual/update paths retain their side entrances.
+      const inputs = edges
+        .filter(
+          (candidate) =>
+            candidate.to === edge.to &&
+            !candidate.kind &&
+            !groupedEdges.has(`${candidate.from}:${candidate.to}`) &&
+            byId.has(candidate.from),
+        )
+        .sort((left, right) => {
+          const l = byId.get(left.from)!.getBoundingClientRect();
+          const r = byId.get(right.from)!.getBoundingClientRect();
+          return l.left + l.width / 2 - r.left - r.width / 2 || left.from.localeCompare(right.from);
+        });
+      const inputIndex = inputs.indexOf(edge);
+      const port =
+        inputIndex >= 0 && inputs.length > 1 ? (inputIndex + 1) / (inputs.length + 1) : 0.5;
+      const x2 = b.left + b.width * port - bounds.left,
         y2 = b.top - bounds.top;
       let d: string;
       const fromBlock = from.closest('.atlas-block')!.getBoundingClientRect();
@@ -210,7 +228,7 @@ export function initAtlas() {
           d = `M${x1},${y1} V${exitY} H${rail} V${toBlock.top - bounds.top + 8} H${x2} V${y2}`;
         }
       } else {
-        const mid = Math.max(y1 + 10, y2 - 14);
+        const mid = Math.max(y1 + 10, y2 - 14 - Math.max(0, inputIndex) * 10);
         d = `M${x1},${y1} V${mid} H${x2} V${y2}`;
       }
       const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
