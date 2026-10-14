@@ -622,6 +622,8 @@ True
 
 ## Layerの内側へ進む
 
+全層をまとめて観察する続きは、[28層の連続処理と最終RMSNorm](../decoder-stack/)へ進みます。層ごとの重み、平均絶対変化量、最終Norm直前を取り出すHook、`model`と`outputs`の違いを扱います。
+
 Layer 0の内側へ進むときは、[RMSNormの再現](../transformer-block/#rmsnorm--スケールを整える) → [Q/K/VからRoPEまで](../position/#qwen3のコードへつなぐ) → [Attention・o_proj・残差加算](../attention/#rope後からの手動観察コード)の順にコードをつなげられます。Attention後の残差加算はまだMLP前で、`hidden_states[1]`との比較はLayer 0全体を終えてから行います。
 
 ## どのデータを保存するか

@@ -21,6 +21,7 @@ export const lessonLocations: Record<string, string> = {
   batch: 'batch',
   embedding: 'embedding',
   qwen: 'hidden-tuple',
+  'decoder-stack': 'final-norm',
   linear: 'q-proj',
   position: 'q-rope',
   attention: 'scores',

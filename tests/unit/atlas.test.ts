@@ -46,7 +46,7 @@ describe('atlas relations and migration', () => {
       );
       expect(new Set(ids).size).toBe(ids.length);
     }
-    expect(Object.keys(lessonLocations)).toHaveLength(29);
+    expect(Object.keys(lessonLocations)).toHaveLength(30);
     for (const id of Object.values(lessonLocations)) expect(overall).toContain(id);
   });
   it('Q/K/V are separate paths, V bypasses norm/RoPE, and residuals have real merges', () => {

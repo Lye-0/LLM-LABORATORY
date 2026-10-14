@@ -513,7 +513,7 @@ export const nodes: AtlasNode[] = [
     '28層で繰り返す。[1]〜[27]はLayer 0〜26後のhidden_states。',
     'process',
     'hidden_states[1]〜[27]はLayer 0〜26の出力。最後の[28]はLayer 27直後ではなく、最終Norm後です。',
-    'qwen',
+    'decoder-stack',
   ),
   node(
     'final-norm',
@@ -522,6 +522,9 @@ export const nodes: AtlasNode[] = [
     'Layer 27の出力',
     '[B,Tq,1024]',
     'hidden_states[28]はここで観察する。',
+    'process',
+    '外側のQwen3ForCausalLMをmodelとした場合、Pythonではmodel.model.normです。各層のpost_attention_layernormとは別の部品で、全28層の後に実行します。直前の値はForward Pre-Hookで取得できます。',
+    'decoder-stack',
   ),
   node(
     'lm-head',

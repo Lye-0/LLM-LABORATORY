@@ -47,7 +47,7 @@ for (const filename of html) {
   if (!body.includes('lang="ja"')) errors.push(`${filename}: lang missing`);
 }
 const lessons = await readdir('src/content/lessons');
-if (lessons.length !== 29) errors.push(`Expected 29 lessons, got ${lessons.length}`);
+if (lessons.length !== 30) errors.push(`Expected 30 lessons, got ${lessons.length}`);
 if (files.some((f) => f.replaceAll('\\', '/').startsWith('dist/docs/')))
   errors.push('docs must not be published');
 const js = files.filter((f) => f.endsWith('.js') && f.includes('_astro'));

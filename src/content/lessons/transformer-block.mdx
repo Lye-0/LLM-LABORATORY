@@ -196,6 +196,8 @@ MLP単体を同じ入力で比べる検証と、Layer全体を`outputs.hidden_st
 
 ## 改造の入口
 
+1層から全体へ進む場合は、[28層の連続処理と最終RMSNorm](../decoder-stack/)で、最後の層の出力と最終Norm後の値を分けて観察できます。
+
 層を外したり、MLPを置換したりするなら、Residualへ戻すshape、dtype、deviceを維持する必要があります。実行できることと、品質が保たれることは別の検証です。
 
 実装の確認先：[Qwen3MLP / Qwen3DecoderLayer（Transformers v5.18.0）](https://github.com/huggingface/transformers/blob/v5.18.0/src/transformers/models/qwen3/modeling_qwen3.py)、[PyTorchのSiLU](https://docs.pytorch.org/docs/2.14/generated/torch.nn.SiLU.html)。

@@ -1,0 +1,242 @@
+---
+title: "28層の連続処理と最終RMSNorm"
+description: "層ごとの重み・Hidden State・最終Normを分けて観察し、モデルと計算結果を結び付ける。"
+stage: "representation"
+order: 16.5
+minutes: 20
+eyebrow: "DECODER STACK"
+prerequisites: ["qwen", "transformer-block"]
+labs: ["model"]
+sources: ["qwen", "module"]
+tags: ["ModuleList", "hidden_states", "Forward Pre-Hook", "RMSNorm", "outputs", "named_modules"]
+question: "hidden_states[27]と[28]の差は、最後のDecoder Layerだけの変化ですか？"
+answer: "今回のQwen3では、Layer 27と最終RMSNormの両方の変化を含みます。分けて観察するには最終Norm直前の値も取得します。"
+---
+## 1層の内部から、28層のつながりへ
+
+[Transformerブロック](../transformer-block/)で追った1層の計算が、Qwen3-0.6Bでは28層続きます。**前の層の出力が次の層の入力になり、最後に層の外側のRMSNormを通ります。**
+
+```text
+Embedding → hidden_states[0]
+  ↓ Layer 0
+hidden_states[1]
+  ↓ Layer 1
+hidden_states[2]
+  ↓ … Layer 2〜26 …
+hidden_states[27]
+  ↓ Layer 27（最後の層）
+最後の層の出力 ← 今回Hookで取り出す場所
+  ↓ model.model.norm（全層の外側）
+hidden_states[28] = 最終Hidden State
+  ↓ model.lm_head
+logits
+```
+
+途中のHidden Stateはすべて`[B,T,1024]`。形が同じでも値は更新されます。最後の層も基本構造は同じで、最終NormがLayer 27の内部へ追加されているわけではありません。
+
+## 観察の準備
+
+[Qwenのモデル読み込み](../qwen/#モデル名クラス実物を分ける)を実行した同じ`torch・model・tokenizer`を使います。固定revision、CPU・bfloat16、評価モードという参照環境を引き継ぎます。GPUなど別の環境では数値が変わり得るので、比較時は入力・dtype・device・実装を記録してください。
+
+掲載コードは2026-10-15にPython 3.13.15・PyTorch 2.14.1+cu130・Transformers 5.18.0で実行確認しました。モデルの再読み込み設定は変更せず、このページのコードを上から順に実行できます。
+
+```python
+model.eval()
+text = "こんにちは、今日はいい天気ですね"
+inputs = tokenizer(text, return_tensors="pt")
+inputs = {key: value.to(model.device) for key, value in inputs.items()}
+with torch.no_grad():
+    outputs = model(**inputs, output_hidden_states=True, use_cache=False)
+hidden_states = outputs.hidden_states
+print(inputs["input_ids"].shape)
+print(len(hidden_states), hidden_states[-1].shape)
+```
+
+```text
+torch.Size([1, 7])
+29 torch.Size([1, 7, 1024])
+```
+
+`eval()`は評価モードへの切替、`no_grad()`は勾配計算用の記録を止める指定です。どちらもForward計算自体は止めません。
+
+## model・model.model・outputsの違い
+
+| 書き方 | 何を表すか／どこまで計算するか |
+|---|---|
+| `model` | `Qwen3ForCausalLM`の実物。部品・重み・メソッドを持つ |
+| `model.model` | 内側の`Qwen3Model`。Embedding・28層・最終Normなどを持つ |
+| `model.model(**inputs)` | 最終Hidden Stateまで計算する |
+| `model(**inputs)` | LM headまで計算し、次Token候補のスコアを返す |
+| `outputs` | 上の呼び出しから返された計算結果の容器 |
+| `model.generate(...)` | ForwardとToken選択を繰り返し、通常はToken ID列を返す |
+| `tokenizer.decode(...)` | ID列を表示用の文字列に戻す |
+
+外側の`model`は自分で付けた変数名、続く`.model`は属性名です。`print(model)`で内側に表示される`(norm)`へは、`model.model.norm`でアクセスします。`named_modules()`の名前`model.norm`は、外側の実物からの相対パスで、変数名まで含むPython式ではありません。
+
+### なぜoutputsに文章や部品が入っていない？
+
+`outputs`はモデル構造のコピーではなく、返すと指定された計算結果をまとめたものです。今回の条件では次の内容になります。
+
+| 属性 | 内容 |
+|---|---|
+| `logits` | `[1,7,151936]`。各入力位置での次Token候補のスコア。確率や選択済みIDではない |
+| `hidden_states` | 29個のTensor。`output_hidden_states=True`で要求した状態 |
+| `loss` | `None`。正解ラベルを渡していない |
+| `past_key_values` | `None`。`use_cache=False` |
+| `attentions` | `None`。Attention重みの出力を要求していない |
+
+`outputs.keys()`には値が`None`でない項目が並びます。Q/K/VやMLP途中のTensorがすべて入るわけではありません。`logits[0,-1]`は、このpaddingのない1件の入力の末尾から、**次に来るToken**を予測するスコアです。入力Token自体の採点結果という意味ではありません。
+
+<details>
+<summary>内側のモデルだけを実行し、結果を照合する</summary>
+
+```python
+with torch.no_grad():
+    base_outputs = model.model(
+        **inputs, output_hidden_states=True, use_cache=False
+    )
+print(type(outputs).__name__)
+print(list(outputs.keys()))
+print(type(base_outputs).__name__)
+print(list(base_outputs.keys()))
+print(torch.equal(base_outputs.last_hidden_state, hidden_states[-1]))
+```
+
+```text
+CausalLMOutputWithPast
+['logits', 'hidden_states']
+BaseModelOutputWithPast
+['last_hidden_state', 'hidden_states']
+True
+```
+
+同じ評価条件で2回計算した結果を比べています。`model.model`にはLM headが含まれないので、返り値の主役は`last_hidden_state`です。
+
+</details>
+
+## ModuleListは層を保持する容器
+
+`model.model.layers`は28個の計算部品を保持する`ModuleList`です。29個の計算結果を保持する`hidden_states`のtupleとは別物です。ModuleList自体が勝手に順番に計算するのではなく、Qwen3のForward処理が層を順に呼び出します。
+
+```python
+layers = model.model.layers
+print(type(layers).__name__, len(layers))
+w0 = layers[0].self_attn.q_proj.weight.detach()
+w1 = layers[1].self_attn.q_proj.weight.detach()
+print(w0.shape, w1.shape)
+print("同じParameterか:", layers[0].self_attn.q_proj.weight is layers[1].self_attn.q_proj.weight)
+print("値が完全一致するか:", torch.equal(w0, w1))
+print("平均絶対差:", (w1.float() - w0.float()).abs().mean().item())
+```
+
+同じ`[2048,1024]`のQ用重みでも、Layer 0と1は別のParameterで、値も異なります。この比較はこの二つの重みについての確認です。同じ構造を繰り返すことと、同じ重みを使い回すことを区別しましょう。
+
+<details>
+<summary>部品一覧とメソッド一覧を使い分ける</summary>
+
+| 調べ方 | 分かること |
+|---|---|
+| `print(model)` | 登録された部品の階層構造 |
+| `model.named_children()` | 直下の部品。今回は`model`と`lm_head` |
+| `model.named_modules()` | 自身と内部の部品の相対パス（既定では重複を除く） |
+| `model.named_parameters()` | 学習可能な重みなどの名前とParameter |
+| `dir(model)` | メソッドや設定も含む属性名の手掛かり |
+
+`generate()`や`eval()`はメソッドなので、部品の階層表示には出ません。`callable(model.generate)`で呼び出せることを確認できます。ただし部品も呼び出せるため、`callable()`だけでは部品とメソッドを分類できません。
+
+</details>
+
+## 全層の平均絶対変化量を読む
+
+```python
+for i in range(1, len(hidden_states)):
+    difference = hidden_states[i].float() - hidden_states[i - 1].float()
+    label = f"Layer {i - 1}"
+    if i == len(hidden_states) - 1:
+        label += " + 最終RMSNorm"
+    print(label, f"平均絶対変化量: {difference.abs().mean().item():.6f}")
+```
+
+これは`mean(abs(後 − 前))`で、今回なら全7168成分の差を平均します。**割合やパーセントではありません。** 大きさは入力や数値スケールにも依存するため、「大きい層ほど重要・優秀」とは判断できません。
+
+最後の比較だけはLayer 27と最終Normの両方を含みます。最後の層だけを比較したい場合は、次の観察が必要です。
+
+## 最後の層と最終Normを分けて観察する
+
+| 部品 | 実行する位置 |
+|---|---|
+| `layers[27].post_attention_layernorm` | Layer 27内。Attentionの残差加算後、MLPの前 |
+| `model.model.norm` | Layer 27のMLP・残差加算も終えた後。全層の外側 |
+
+各層にはHidden State用の二つのNormに加え、Attention内にQ用・K用のNormもあります。最終Normを「最後の層の3回目」と数えるより、**対象と所属を分ける**方が正確です。
+
+### Forward Pre-Hookで、計算直前の入力を保存する
+
+通常の`hidden_states`にはない「最後の層の生の出力」を、最終Normへ入る直前にコピーします。
+
+```python
+captured = {}
+
+def save_before_norm(module, args):
+    captured["before"] = args[0].detach().clone()
+
+handle = model.model.norm.register_forward_pre_hook(save_before_norm)
+try:
+    with torch.no_grad():
+        check_outputs = model(
+            **inputs, output_hidden_states=True, use_cache=False
+        )
+finally:
+    handle.remove()
+
+layer27_input = check_outputs.hidden_states[27]
+before_final_norm = captured["before"]
+after_final_norm = check_outputs.hidden_states[-1]
+print(before_final_norm.shape, after_final_norm.shape)
+with torch.no_grad():
+    print("最終Normの再計算と一致:", torch.equal(
+        model.model.norm(before_final_norm), after_final_norm
+    ))
+```
+
+| 書き方 | この例での役割 |
+|---|---|
+| `def save_before_norm(...)` | 保存する関数の定義。まだ保存は行わない |
+| `register_forward_pre_hook(...)` | Normの実行直前に関数が呼ばれるよう登録する |
+| `module` / `args[0]` | 対象のNorm / そこへ渡される位置引数の先頭、つまりHidden State |
+| `detach().clone()` | 勾配の履歴から切り離し、独立したデータのコピーを保存する |
+| `model(...)` | 実際に計算する。この途中でHookが呼ばれる |
+| `finally: handle.remove()` | 成功時も例外時もHookの登録を解除する |
+
+このHookは入力を書き換えず、戻り値も返さないので、観察だけを行います。`detach()`だけでは元のTensorとデータを共有します。今回は`no_grad()`も使いますが、コピーを明示するため`clone()`を付けています。`finally`は例外を無視する構文ではありません。
+
+### 二段階の変化量は、単純に足せない
+
+```python
+def mean_abs_change(before, after):
+    return (after.float() - before.float()).abs().mean().item()
+
+print("Layer 27:", mean_abs_change(layer27_input, before_final_norm))
+print("最終Norm:", mean_abs_change(before_final_norm, after_final_norm))
+print("両方を通過:", mean_abs_change(layer27_input, after_final_norm))
+print("先頭Token・先頭8成分（前）:", before_final_norm[0, 0, :8])
+print("先頭Token・先頭8成分（後）:", after_final_norm[0, 0, :8])
+```
+
+参照環境での平均絶対変化量は次のとおりです。入力1件・7位置・1024成分全体を対象とした値で、先頭8成分だけの平均ではありません。
+
+| 比較 | 平均絶対変化量（小数6桁） |
+|---|---:|
+| Layer 27の入力 → 出力 | 8.340266 |
+| 最終Normの入力 → 出力 | 9.393472 |
+| Layer 27の入力 → 最終Norm後 | 7.284595 |
+
+説明用に1成分が`10 → 20 → 13`と変わる場合、各段階の絶対変化は10と7ですが、最初と最後の差は3です。方向が逆の変化が打ち消し合うため、二段階の平均絶対変化量を足しても全体の値にはなりません。
+
+Norm後に符号が変わる成分があっても、それだけで異常ではありません。RMSで割る共通の倍率の後に、成分ごとの学習済みweightを掛けるためです。[RMSNormの式](../transformer-block/#rmsnorm--スケールを整える)へ戻ると、観測値と計算を対応付けられます。
+
+## 次はスコアへ
+
+最終Hidden Stateまで追えたら、次は[LogitsとSoftmax](../logits/)です。[文章を通す地図](../../maps/inference/#n-final-norm)でも、最終NormからLM headへ進む場所を確認できます。
+
+仕様の確認先：[Qwen3の実装（Transformers v5.18.0）](https://github.com/huggingface/transformers/blob/v5.18.0/src/transformers/models/qwen3/modeling_qwen3.py)、[PyTorch ModuleとHook](https://docs.pytorch.org/docs/2.14/generated/torch.nn.Module.html#torch.nn.Module.register_forward_pre_hook)。
