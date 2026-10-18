@@ -68,7 +68,7 @@ test('接続線が別の地点を横切らず、補足による幅変更にも�
   expect(searchGeometry.gap).toBeGreaterThanOrEqual(8);
   expect(searchGeometry.offset).toBeLessThan(0);
   await expect.poll(collisionCheck).toEqual([]);
-  await page.locator('#n-q-proj summary').click();
+  await page.locator('#n-q-proj > .atlas-detail > summary').click();
   await expect.poll(collisionCheck).toEqual([]);
   await page.keyboard.press('Escape');
   await page.setViewportSize({ width: 768, height: 900 });

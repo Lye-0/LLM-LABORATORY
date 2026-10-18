@@ -51,7 +51,7 @@ test('全体地図には詳細な分岐が初期表示され、検索しても�
 test('補足は中央ポップアップで、URL復元・履歴・Escape・フォーカス復帰に対応', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(`${base}/maps/inference/`);
-  const opener = page.locator('#n-embedding summary');
+  const opener = page.locator('#n-embedding > .atlas-detail > summary');
   const originalWidth = (await page.locator('.atlas-canvas').boundingBox())!.width;
   await opener.click();
   const dialog = page.getByRole('dialog');
@@ -69,7 +69,7 @@ test('補足は中央ポップアップで、URL復元・履歴・Escape・フ�
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
   await expect(opener).toBeFocused();
-  await page.locator('#n-q-norm summary').click();
+  await page.locator('#n-q-norm > .atlas-detail > summary').click();
   await page.goBack();
   await expect(dialog).toBeHidden();
   await page.goForward();
@@ -78,7 +78,7 @@ test('補足は中央ポップアップで、URL復元・履歴・Escape・フ�
   await expect(dialog).toBeVisible();
   expect(await dialog.evaluate((el) => el.matches(':modal'))).toBeTruthy();
   await page.keyboard.press('Escape');
-  await expect(page.locator('#n-q-norm summary')).toBeFocused();
+  await expect(page.locator('#n-q-norm > .atlas-detail > summary')).toBeFocused();
 });
 test('8種類の地図は狭幅・明暗でも情報が欠けず、アクセシビリティ違反がない', async ({ page }) => {
   test.setTimeout(150000);

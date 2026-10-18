@@ -554,6 +554,15 @@
   padding-bottom: 12px;
   border-bottom: 1px solid var(--line);
 }
+.atlas-inspector-header::before {
+  content: '';
+  position: absolute;
+  top: -28px;
+  left: -28px;
+  right: -28px;
+  height: 28px;
+  background: var(--surface);
+}
 .atlas-inspector-header h2 {
   font-size: 13px;
   margin: 0;
@@ -564,6 +573,168 @@
 }
 .atlas-inspector::backdrop {
   background: rgb(0 0 0 / 0.65);
+}
+.atlas-calculation {
+  margin: 24px 0;
+  padding: 20px;
+  border-left: 3px solid var(--teal);
+  border-radius: 0 6px 6px 0;
+  background: var(--bg);
+  min-width: 0;
+}
+.atlas-calculation-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 14px;
+}
+.atlas-detail-body .atlas-calculation-heading :is(h4, h5) {
+  margin: 0;
+  font-size: 14px;
+}
+.atlas-calculation-heading > span {
+  color: var(--teal);
+  font-size: 11px;
+}
+.atlas-calculation .atlas-calculation-meaning {
+  margin: 10px 0 18px;
+  color: var(--text);
+}
+.atlas-calculation-formulas {
+  display: grid;
+  gap: 12px;
+}
+.atlas-calculation-formula {
+  min-width: 0;
+}
+.atlas-calculation-formula > span {
+  font-size: 11px;
+  color: var(--muted);
+}
+.atlas-math-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 8px 2px 12px;
+}
+.atlas-math-scroll math {
+  width: max-content;
+  min-width: 0;
+  margin: 0;
+  font-family: 'Cambria Math', 'STIX Two Math', math;
+  font-size: 19px;
+  line-height: normal;
+  text-align: left;
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+.atlas-calculation .atlas-calculation-scope {
+  margin: 18px 0 8px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.atlas-calculation-symbols {
+  margin: 14px 0 0;
+  border-top: 1px solid var(--line);
+}
+.atlas-calculation-symbols > div {
+  display: grid;
+  grid-template-columns: minmax(76px, 24%) minmax(0, 1fr);
+  gap: 8px 14px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+}
+.atlas-calculation-symbols dt {
+  color: var(--teal);
+  font-weight: 600;
+}
+.atlas-detail-body .atlas-calculation-symbols dd {
+  margin: 0;
+  color: var(--text);
+}
+.atlas-calculation-symbols code {
+  display: block;
+  padding: 0;
+  margin-top: 3px;
+  background: transparent;
+  color: var(--accent);
+  font-size: 11px;
+}
+.atlas-calculation :is(.atlas-calculation-key, .atlas-calculation-note) {
+  font-size: 11px;
+  line-height: 1.8;
+  margin: 12px 0 0;
+}
+.atlas-calculation-key {
+  color: var(--muted);
+}
+.atlas-calculation-example {
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  margin: 16px 0 0;
+  padding: 8px 0 0;
+}
+.atlas-calculation-example[open] > summary {
+  margin-bottom: 4px;
+}
+.atlas-detail-body .atlas-calculation-example > summary {
+  color: var(--accent);
+  padding: 8px 0;
+  font-size: 12px;
+}
+.atlas-calculation-example > summary span {
+  margin-left: 8px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.atlas-calculation-example p {
+  font-size: 12px;
+}
+.atlas-calculation-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.atlas-calculation table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.atlas-calculation caption {
+  text-align: left;
+  font-size: 11px;
+  color: var(--muted);
+  padding-bottom: 8px;
+}
+.atlas-calculation :is(th, td) {
+  padding: 6px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.atlas-calculation th {
+  font-weight: 600;
+}
+@media (max-width: 540px) {
+  .atlas-inspector {
+    padding: 16px;
+  }
+  .atlas-inspector-header::before {
+    top: -16px;
+    left: -16px;
+    right: -16px;
+    height: 16px;
+  }
+  .atlas-calculation {
+    padding: 14px 12px;
+  }
+  .atlas-math-scroll math {
+    font-size: 18px;
+  }
+  .atlas-calculation-symbols > div {
+    grid-template-columns: minmax(60px, 22%) minmax(0, 1fr);
+    gap: 10px;
+  }
 }
 .atlas-guide {
   padding-top: 32px;

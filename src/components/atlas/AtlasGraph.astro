@@ -4,6 +4,7 @@ import { withBase } from '../../lib/paths';
 import { crossConnections } from '../../data/atlas/connections';
 import { supplements } from '../../data/atlas/supplements';
 import AtlasLayerStack from './AtlasLayerStack.astro';
+import AtlasCalculation from './AtlasCalculation.astro';
 interface Props {
   section: AtlasSection;
   map: AtlasMap;
@@ -202,6 +203,7 @@ const presentNode = (id: string) =>
                       <div class="atlas-detail-body">
                         <h4>{n.title}</h4>
                         <p>{n.detail || n.meaning}</p>
+                        <AtlasCalculation id={id} />
                         {['q-rope', 'k-rope', 'scores', 'position'].includes(id) && (
                           <p>
                             <a href={withBase('/labs/rope/')}>

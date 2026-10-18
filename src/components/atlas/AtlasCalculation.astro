@@ -1,0 +1,109 @@
+---
+import { calculations } from '../../data/atlas/calculations';
+interface Props {
+  id: string;
+}
+const calculation = calculations[Astro.props.id];
+---
+
+{calculation && (
+  <section class="atlas-calculation" aria-label="計算を読む">
+    <header class="atlas-calculation-heading">
+      <h5>計算を読む</h5>
+      <span>{calculation.kind}</span>
+    </header>
+    <p class="atlas-calculation-meaning">{calculation.meaning}</p>
+    <div class="atlas-calculation-formulas">
+      {calculation.formulas.map((formula) => (
+        <div class="atlas-calculation-formula">
+          <span>{formula.label}</span>
+          <div class="atlas-math-scroll" role="region" aria-label={formula.label} tabindex="0">
+            <math
+              xmlns="http://www.w3.org/1998/Math/MathML"
+              display="block"
+              aria-label={formula.reading}
+              set:html={formula.math}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+    {calculation.formulas.some((formula) => formula.math.includes('<mo>∑</mo>')) && (
+      <p class="atlas-calculation-key">
+        Σは、下に書かれた番号から上の番号まで、右の項を計算して足し合わせる記号です。
+      </p>
+    )}
+    {calculation.formulas.some((formula) => formula.math.includes('<mi>exp</mi>')) && (
+      <p class="atlas-calculation-key">
+        exp(x)はeのx乗（e ≈ 2.718）。大きいスコアほど大きな正の値に変えます。
+      </p>
+    )}
+    {calculation.scope && <p class="atlas-calculation-scope">{calculation.scope}</p>}
+    <dl class="atlas-calculation-symbols">
+      {calculation.symbols.map((symbol) => (
+        <div>
+          <dt>{symbol.name}</dt>
+          <dd>
+            {symbol.meaning}
+            {symbol.shape && <code>{symbol.shape}</code>}
+          </dd>
+        </div>
+      ))}
+    </dl>
+    <p class="atlas-calculation-key">
+      B＝入力数 · T＝ID列の長さ · Tq＝今回計算する位置数 · Tkv＝参照する位置数 ·
+      V＝語彙幅。添字は0始まり（別記がある場合を除く）。
+    </p>
+    {calculation.note && <p class="atlas-calculation-note">{calculation.note}</p>}
+    {calculation.example && (
+      <details class="atlas-calculation-example">
+        <summary>
+          小さな数値例を見る <span>説明用</span>
+        </summary>
+        <p>{calculation.example.intro}</p>
+        {calculation.example.formulas?.map((formula) => (
+          <div class="atlas-calculation-formula">
+            <span>{formula.label}</span>
+            <div class="atlas-math-scroll" role="region" aria-label={formula.label} tabindex="0">
+              <math
+                xmlns="http://www.w3.org/1998/Math/MathML"
+                display="block"
+                aria-label={formula.reading}
+                set:html={formula.math}
+              />
+            </div>
+          </div>
+        ))}
+        {calculation.example.table && (
+          <div
+            class="atlas-calculation-table-scroll"
+            role="region"
+            aria-label={calculation.example.table.caption}
+            tabindex="0"
+          >
+            <table>
+              <caption>{calculation.example.table.caption}</caption>
+              <thead>
+                <tr>
+                  {calculation.example.table.columns.map((column) => (
+                    <th scope="col">{column}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {calculation.example.table.rows.map((row) => (
+                  <tr>
+                    {row.map((cell, i) =>
+                      i === 0 ? <th scope="row">{cell}</th> : <td>{cell}</td>,
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {calculation.example.note && <p>{calculation.example.note}</p>}
+      </details>
+    )}
+  </section>
+)}

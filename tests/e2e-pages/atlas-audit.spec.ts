@@ -10,7 +10,7 @@ test('全地点の補足を末尾まで読んでも閉じる操作と横幅を�
       .evaluateAll((es) => es.map((e) => (e as HTMLElement).dataset.node!));
     expect(ids).toHaveLength(114);
     for (const id of ids) {
-      await page.locator(`#n-${id} summary`).click();
+      await page.locator(`#n-${id} > .atlas-detail > summary`).click();
       const dialog = page.getByRole('dialog');
       await dialog.evaluate((e) => (e.scrollTop = e.scrollHeight));
       const geometry = await dialog.evaluate((e) => {
@@ -35,7 +35,7 @@ test('学習の章境界と保存後の分岐が本文と補足で一致する',
   await expect(
     page.locator('.atlas-cross-route[data-from="lm-head"][data-to="shift"]'),
   ).toHaveAttribute('data-direct', 'true');
-  await page.locator('#n-lm-head summary').click();
+  await page.locator('#n-lm-head > .atlas-detail > summary').click();
   await expect(
     page
       .getByRole('dialog')
@@ -73,7 +73,7 @@ test('改造候補は常時表示の選択領域にまとめ、外周の重複�
         );
       }
     }
-    await group.locator('#n-lora summary').click();
+    await group.locator('#n-lora > .atlas-detail > summary').click();
     await expect(
       page.getByRole('dialog').getByRole('link', { name: 'Baseline：変更前を記録', exact: true }),
     ).toBeVisible();
