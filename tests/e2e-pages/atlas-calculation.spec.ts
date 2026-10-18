@@ -61,14 +61,24 @@ test('計算・数値例は中央ポップアップで読み、狭幅でも地�
       await expect(dialog).toBeVisible();
       const calculation = dialog.getByRole('region', { name: '計算を読む', exact: true });
       await expect(calculation).toBeVisible();
+      const extra = calculation.locator('.atlas-calculation-extra');
+      await expect(extra).not.toHaveAttribute('open', '');
       await expect(dialog.locator('.atlas-calculation-formulas math').first()).toBeVisible();
+      const io = dialog.locator('.atlas-detail-io');
+      expect(
+        await io.evaluate((el) => el.nextElementSibling?.classList.contains('atlas-calculation')),
+      ).toBe(true);
       const example = dialog.locator('.atlas-calculation-example');
       if (await example.count()) {
         await expect(example).not.toHaveAttribute('open', '');
         await example.locator('summary').click();
         await expect(example).toHaveAttribute('open', '');
         await expect(example.locator('math,table').first()).toBeVisible();
+        await expect(extra).not.toHaveAttribute('open', '');
       }
+      await extra.locator('summary').click();
+      await expect(extra).toHaveAttribute('open', '');
+      await expect(extra.locator('.atlas-calculation-symbols')).toBeVisible();
       const geometry = await dialog.evaluate((element) => {
         const r = element.getBoundingClientRect();
         const scrollRegions = [
@@ -114,4 +124,43 @@ test('計算・数値例は中央ポップアップで読み、狭幅でも地�
   await expect(dialog.locator('.atlas-calculation')).toContainText('[151936,1024]');
   await dialog.getByRole('button', { name: '閉じる' }).click();
   await expect(dialog).not.toBeVisible();
+});
+
+test('入出力を先に読め、主要な式と計算の展開を別々に確認できる', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const dialog = page.locator('.atlas-inspector');
+  await page.goto('/LLM-LABORATORY/maps/inference/?detail=gate-proj#n-gate-proj');
+  await expect(dialog.locator('.atlas-detail-io')).toBeInViewport();
+  await expect(dialog.locator('.atlas-calculation-primary math')).toHaveCount(1);
+  await expect(dialog.locator('.atlas-calculation-extra math')).not.toBeVisible();
+  const height = await dialog
+    .locator('.atlas-calculation')
+    .evaluate((el) => el.getBoundingClientRect().height);
+  expect(height).toBeLessThan(360);
+  await expect(
+    dialog.getByRole('link', { name: 'RMSNorm：MLP前の正規化', exact: true }),
+  ).toBeInViewport();
+  await page.screenshot({ path: '.cache/calculation-placement-gate.png' });
+  const extra = dialog.locator('.atlas-calculation-extra');
+  await extra.locator('summary').focus();
+  await page.keyboard.press('Enter');
+  await expect(extra.locator('math')).toBeVisible();
+  await expect(dialog.locator('.atlas-calculation-example')).not.toHaveAttribute('open', '');
+  await page.keyboard.press('Enter');
+  await expect(extra).not.toHaveAttribute('open', '');
+  expect(
+    await dialog.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      return r.top >= 0 && r.bottom <= innerHeight;
+    }),
+  ).toBe(true);
+
+  for (const id of ['input-norm', 'q-rope', 'next-layer', 'sampling']) {
+    await page.goto(`/LLM-LABORATORY/maps/inference/?detail=${id}#n-${id}`);
+    await expect(dialog.locator('.atlas-calculation-primary math')).toHaveCount(2);
+    const primary = dialog.locator('.atlas-calculation-primary');
+    expect(
+      await primary.locator('math').evaluateAll((es) => es.every((el) => !el.closest('details'))),
+    ).toBe(true);
+  }
 });

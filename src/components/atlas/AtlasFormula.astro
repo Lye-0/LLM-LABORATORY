@@ -1,0 +1,19 @@
+---
+import type { CalculationFormula } from '../../data/atlas/calculations';
+interface Props {
+  formula: CalculationFormula;
+}
+const { formula } = Astro.props;
+---
+
+<div class="atlas-calculation-formula">
+  <span>{formula.label}</span>
+  <div class="atlas-math-scroll" role="region" aria-label={formula.label} tabindex="0">
+    <math
+      xmlns="http://www.w3.org/1998/Math/MathML"
+      display="block"
+      aria-label={formula.reading}
+      set:html={formula.math}
+    />
+  </div>
+</div>

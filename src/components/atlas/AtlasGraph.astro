@@ -203,6 +203,19 @@ const presentNode = (id: string) =>
                       <div class="atlas-detail-body">
                         <h4>{n.title}</h4>
                         <p>{n.detail || n.meaning}</p>
+                        <p>
+                          <code>{n.code}</code>
+                        </p>
+                        <dl class="atlas-detail-io">
+                          <div>
+                            <dt>入力</dt>
+                            <dd>{n.input}</dd>
+                          </div>
+                          <div>
+                            <dt>出力</dt>
+                            <dd>{n.output}</dd>
+                          </div>
+                        </dl>
                         <AtlasCalculation id={id} />
                         {['q-rope', 'k-rope', 'scores', 'position'].includes(id) && (
                           <p>
@@ -211,15 +224,6 @@ const presentNode = (id: string) =>
                             </a>
                           </p>
                         )}
-                        <p>
-                          <code>{n.code}</code>
-                        </p>
-                        <dl>
-                          <dt>入力</dt>
-                          <dd>{n.input}</dd>
-                          <dt>出力</dt>
-                          <dd>{n.output}</dd>
-                        </dl>
                         {incoming.length > 0 && (
                           <>
                             <h5>ここへ入る経路</h5>

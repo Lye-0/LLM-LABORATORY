@@ -87,7 +87,7 @@ test('同じ上部セクションでは一覧と詳細の左ナビが変わら�
 test('地図と教材の所属が明確で、モバイルでも地図の一覧が共通', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(base + '/maps/inference/');
-  await page.locator('#n-embedding summary').click();
+  await page.locator('#n-embedding > .atlas-detail > summary').click();
   await page.locator('.atlas-inspector a[href$="/learn/qwen/"]').first().click();
   await expect(page.locator('.top-nav a[aria-current]')).toHaveAttribute('href', base + '/learn/');
   await page.setViewportSize({ width: 390, height: 844 });

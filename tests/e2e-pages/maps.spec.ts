@@ -100,7 +100,7 @@ test('8種類の地図は狭幅・明暗でも情報が欠けず、アクセシ�
   await page.getByRole('button', { name: '明暗テーマを切り替える' }).click();
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.locator('#n-embedding summary').click();
+  await page.locator('#n-embedding > .atlas-detail > summary').click();
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.keyboard.press('Escape');
   await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -136,7 +136,7 @@ test('JavaScriptなしでも8地図・分岐の意味・補足を読める', asy
   await page.goto(`http://127.0.0.1:4323${base}/maps/inference/`);
   await expect(page.locator('#n-q-proj')).toBeVisible();
   await expect(page.locator('#n-v-transpose')).toContainText('RoPEを適用しない');
-  await page.locator('#n-embedding summary').click();
+  await page.locator('#n-embedding > .atlas-detail > summary').click();
   await expect(page.locator('#n-embedding .atlas-detail-body')).toBeVisible();
   await expect(page.locator('#n-embedding')).toContainText('get_input_embeddings');
   expect(

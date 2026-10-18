@@ -13,6 +13,9 @@ export interface CalculationTable {
 export interface AtlasCalculation {
   kind: string;
   meaning: string;
+  legend: string;
+  // Keep equations that form one operation together in the initial view.
+  primaryCount?: number;
   formulas: CalculationFormula[];
   symbols: { name: string; meaning: string; shape?: string }[];
   scope?: string;
@@ -111,6 +114,7 @@ function linear(
   return {
     kind: '行列積 · Linear',
     meaning,
+    legend: `${x}＝入力、W＝学習済みの重み [${output},${input}]、${y}＝出力。WᵀはWの転置。`,
     formulas: [
       formula(
         '全体の計算',
@@ -148,6 +152,8 @@ function linear(
 function norm(width: number, shape: string): AtlasCalculation {
   return {
     kind: '正規化 · RMSNorm',
+    primaryCount: 2,
+    legend: `x→y＝正規化前→後、r＝割る大きさ、D＝${width}、w＝学習済みの係数、ε＝微小値。Σは全成分の合計。`,
     meaning: `各Token${width === 128 ? '・各Head' : ''}の${width}成分から共通の大きさを求め、各成分を割ってから学習済みの係数を掛けます。`,
     formulas: [
       formula(
@@ -212,6 +218,7 @@ function norm(width: number, shape: string): AtlasCalculation {
 function residual(second: boolean): AtlasCalculation {
   return {
     kind: '要素ごとの加算 · Residual addition',
+    legend: `R＝保持した${second ? 'Attention後の値' : '層の入力'}、F＝${second ? 'MLP' : 'Attention'}出力、Y＝加算後の値。＋は同じ成分同士の加算。`,
     meaning: second
       ? '保持しておいたAttention後の値に、MLPの出力を同じ成分同士で足します。'
       : 'この層へ入ったhidden stateに、Self-Attentionの出力を同じ成分同士で足します。',
@@ -269,6 +276,7 @@ function rearrange(
 ): AtlasCalculation {
   return {
     kind: '形・軸の変更 · reshape / transpose',
+    legend: 'X→Y＝並べ替え前→後。b＝入力番号、t＝Token位置、h＝Head番号、d＝Head内の成分。',
     meaning,
     formulas: [formula('成分の対応', math, reading)],
     symbols: [
@@ -283,6 +291,8 @@ function rearrange(
 function rope(name: string, heads: number): AtlasCalculation {
   return {
     kind: '2成分ずつの回転 · RoPE',
+    primaryCount: 2,
+    legend: `x→x′＝${name}の回転前→後。iとi+64が1組（i＝0〜63）、θ＝位置に応じた回転角。`,
     meaning: `${name}の同じToken・Head内で、前半と後半の成分を組にして位置pに応じて回転します。`,
     formulas: [
       formula(
@@ -348,6 +358,7 @@ function rope(name: string, heads: number): AtlasCalculation {
 function softmax(attention: boolean): AtlasCalculation {
   return {
     kind: '確率への正規化 · Softmax',
+    legend: `s＝スコア、p＝割合、a＝行の最大スコア、N＝${attention ? '参照先の位置数' : '語彙幅'}。分母は全候補のexp（指数関数）の合計。`,
     meaning: attention
       ? 'Qの1位置・1Headごとに、参照先Kの位置全体で合計1になる割合を求めます。'
       : '1入力ごとに、語彙の候補全体で合計1になる確率を求めます。',
@@ -400,6 +411,7 @@ function softmax(attention: boolean): AtlasCalculation {
 export const calculations: Record<string, AtlasCalculation> = {
   embedding: {
     kind: '行の取り出し · Embedding lookup',
+    legend: 'I＝入力ID、E＝学習済みの重み表、H＝出力。b＝入力番号、t＝Token位置、d＝特徴成分。',
     meaning: '整数IDを重み表の行番号として使い、その行の1024成分を取り出します。',
     formulas: [
       formula(
@@ -449,6 +461,8 @@ export const calculations: Record<string, AtlasCalculation> = {
   'residual-mlp': residual(true),
   silu: {
     kind: '成分ごとの関数 · SiLU',
+    legend:
+      'g＝gateの1成分、σ＝sigmoid。gに0〜1の係数σ(g)を掛けるので、出力自体は0〜1とは限りません。',
     meaning: 'gateの各値に、その値から求めたsigmoidを掛けます。学習する重みはありません。',
     formulas: [
       formula(
@@ -491,6 +505,7 @@ export const calculations: Record<string, AtlasCalculation> = {
   },
   multiply: {
     kind: '要素ごとの積 · Hadamard product',
+    legend: 'G＝gate出力、U＝up出力、M＝積の結果。⊙は対応する成分同士の掛け算。',
     meaning: 'SiLUを通したgateとupを、同じ位置・同じ成分同士で掛けます。',
     formulas: [
       formula(
@@ -528,6 +543,8 @@ export const calculations: Record<string, AtlasCalculation> = {
   'k-rope': rope('K', 8),
   position: {
     kind: '回転角の準備 · RoPE cos / sin',
+    primaryCount: 2,
+    legend: 'p＝Token位置、i＝ペア番号、θ＝回転角。c・sは各層のQ・Kへ渡すcos・sinの係数。',
     meaning: '位置pとペア番号iから回転角を求め、Q・Kの回転に使うcosとsinを用意します。',
     formulas: [
       formula(
@@ -568,6 +585,7 @@ export const calculations: Record<string, AtlasCalculation> = {
   },
   'causal-mask': {
     kind: '参照可否の条件 · Causal / Padding mask',
+    legend: 'p＝問い合せ位置、t＝参照先位置、valid＝入力の有効位置。∧は両方の条件を満たすこと。',
     meaning: '参照先が未来でなく、paddingでもない場合だけ参照を許可します。',
     formulas: [
       formula(
@@ -599,6 +617,7 @@ export const calculations: Record<string, AtlasCalculation> = {
   },
   scores: {
     kind: '内積とスケーリング · Scaled dot product',
+    legend: 'Q・K＝比較する表現、S＝スコア。Kᵀは最後の2軸の転置。128は1 Headの成分数。',
     meaning: '1つのQ位置と各K位置の128成分を掛けて足し、√128で割ります。',
     formulas: [
       formula(
@@ -645,6 +664,7 @@ export const calculations: Record<string, AtlasCalculation> = {
   },
   'masked-scores': {
     kind: '参照禁止の反映 · Additive mask',
+    legend: 'S→S′＝mask適用前→後。Mは許可位置が0、禁止位置が−∞の加算型mask。',
     meaning: '許可された位置のスコアは保ち、参照禁止の位置を−∞にして、後のSoftmaxで0にします。',
     formulas: [
       formula(
@@ -673,6 +693,7 @@ export const calculations: Record<string, AtlasCalculation> = {
   probabilities: softmax(false),
   'weighted-sum': {
     kind: '行列積 · Vの加重和',
+    legend: 'A＝参照する割合、V＝集める情報、O＝出力。参照先の位置に沿って掛けて足します。',
     meaning: '各参照先のVに参照割合を掛け、参照先の軸に沿って足し合わせます。',
     formulas: [
       formula(
@@ -715,6 +736,7 @@ export const calculations: Record<string, AtlasCalculation> = {
   },
   'last-logits': {
     kind: '位置の選択 · Tensor slicing',
+    legend: 'Z＝全位置のlogits、s＝最後の位置のスコア。Tq−1が末尾、jは語彙候補のID。',
     meaning: '最後の入力位置の行を取り出します。語彙候補の軸はすべて残ります。',
     formulas: [
       formula(
@@ -732,6 +754,9 @@ export const calculations: Record<string, AtlasCalculation> = {
   },
   processors: {
     kind: '分布の調整 · Temperature / Top-k / Top-p',
+    primaryCount: 2,
+    legend:
+      's→s′＝調整前→後、τ＝温度。Top-pでは降順の確率p₍ᵢ₎を足し、累積がP以上になる最初の順位mまで残します。',
     meaning:
       'Temperatureでスコアを調整し、Top-k・Top-pで残す候補を絞ります。外した候補は−∞にします。',
     formulas: [
@@ -783,6 +808,8 @@ export const calculations: Record<string, AtlasCalculation> = {
   },
   greedy: {
     kind: '最大値の位置 · argmax',
+    legend:
+      's＝各候補のスコア。argmaxは最大の値そのものではなく、その候補のID（Index）を返します。',
     meaning: '最も高いスコアの場所を探し、そのIndexを次のToken IDにします。',
     formulas: [
       formula(
@@ -813,6 +840,9 @@ export const calculations: Record<string, AtlasCalculation> = {
   sampling: {
     ...softmax(false),
     kind: '確率を計算 → 抽選 · Sampling',
+    primaryCount: 2,
+    legend:
+      's＝調整済みスコア、p＝確率、a＝最大スコア。Softmax後、∼の右に示す分布からidを1個抽選します。',
     meaning: '調整済みスコアをSoftmaxで確率にし、その分布から1個のIDを抽選します。',
     formulas: [
       ...softmax(false).formulas,
@@ -842,6 +872,7 @@ export const calculations: Record<string, AtlasCalculation> = {
   },
   append: {
     kind: '列の連結 · concatenation',
+    legend: 'I＝現在のID列、id＝次のID、Y＝追加後の列。concatはToken軸に沿った連結。',
     meaning: '選んだIDを各入力列の末尾へ1つ追加します。',
     formulas: [
       formula(
@@ -858,6 +889,8 @@ export const calculations: Record<string, AtlasCalculation> = {
   },
   'next-layer': {
     kind: '層の反復 · Decoder Layer stack',
+    primaryCount: 2,
+    legend: 'ℓ＝層番号、Hℓ＝層の入力、Aℓ＝Attentionの残差加算後、Hℓ₊₁＝次の層へ渡す出力。',
     meaning:
       '各層は前の層の出力を受け取り、AttentionとMLPでhidden stateを更新します。重みは層ごとに別です。',
     formulas: [
@@ -881,6 +914,7 @@ export const calculations: Record<string, AtlasCalculation> = {
   },
   shift: {
     kind: '予測と正解の位置合わせ · causal shift',
+    legend: 'Z＝logits、L＝labels。位置tの予測を、次の位置t+1の正解IDと対応させます。',
     meaning: '位置tのlogitsに、位置t+1の正解IDを対応させます。',
     formulas: [
       formula(
@@ -897,6 +931,9 @@ export const calculations: Record<string, AtlasCalculation> = {
   },
   loss: {
     kind: '正解確率の損失 · Cross entropy',
+    primaryCount: 2,
+    legend:
+      'pₙ,ᵧₙ＝位置nの正解IDの確率、Lₙ＝その位置の損失、N＝有効位置数、L＝平均損失。logは自然対数。',
     meaning:
       '次の正解IDへ与えた確率が小さいほど、大きな損失になります。有効な予測位置で平均します。',
     formulas: [
@@ -940,6 +977,8 @@ export const calculations: Record<string, AtlasCalculation> = {
   },
   backward: {
     kind: '微分 · Backpropagation',
+    legend:
+      'L＝損失、θᵢ＝重みの1成分、gᵢ＝その勾配。∂L/∂θᵢは、重みを微小に変えたときの損失の変化率。',
     meaning: '損失が各重みの小さな変化でどれだけ変わるかを、計算グラフに沿って求めます。',
     formulas: [
       formula(
@@ -956,6 +995,7 @@ export const calculations: Record<string, AtlasCalculation> = {
   },
   optimizer: {
     kind: '重みの更新 · Optimizer',
+    legend: 'θold→θnew＝更新前→後、η＝学習率、g＝勾配。この式はmomentum・weight decayなしのSGD。',
     meaning: '計算済みの勾配とoptimizerのルールを使って、重みを更新します。',
     formulas: [
       formula(
@@ -982,6 +1022,8 @@ export const calculations: Record<string, AtlasCalculation> = {
   },
   lora: {
     kind: '低ランクの更新経路 · LoRA',
+    legend:
+      'X→Y＝入力→出力、W＝凍結した重み、A・B＝adapterの重み。α/rは更新経路のスケール、ᵀは転置。',
     meaning:
       '元の重みを凍結し、小さな2つの行列の経路を足します。行ベクトルの入力に合わせた式です。',
     formulas: [
@@ -1013,6 +1055,8 @@ export const calculations: Record<string, AtlasCalculation> = {
   },
   quantize: {
     kind: '丸めとスケール · Quantization',
+    primaryCount: 2,
+    legend: 'w→q→ŵ＝元の値→整数→近似値、s＝スケール。roundで丸め、clipで整数の範囲内に収めます。',
     meaning: '浮動小数点の値を、スケール付きの少ない整数で近似する基本例です。',
     formulas: [
       formula(
@@ -1111,6 +1155,7 @@ calculations['head-merge'] = rearrange(
 for (const name of ['K', 'V']) {
   calculations[`${name.toLowerCase()}-cache`] = {
     kind: 'Token軸での連結 · KV cache',
+    legend: `${name}past＝保存済み、${name}new＝今回の値、${name}all＝連結後。concatはToken軸に沿った連結。`,
     meaning: `過去に保存した${name}の後ろへ今回の${name}をつなぎます。各層はそれぞれのcacheを持ちます。`,
     formulas: [
       formula(
@@ -1132,6 +1177,7 @@ for (const name of ['K', 'V']) {
   };
   calculations[`${name.toLowerCase()}-gqa`] = {
     kind: 'Headの共有 · Grouped-query attention',
+    legend: `${name}→${name}′＝8 KV heads→16 Q headsへの対応。⌊h/2⌋はHead番号hを2で割った整数部分。`,
     meaning: `QのHead番号hに、${name}のHead番号⌊h/2⌋を対応させます。`,
     formulas: [
       formula(
