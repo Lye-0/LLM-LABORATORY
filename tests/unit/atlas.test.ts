@@ -6,6 +6,13 @@ import { lessonLocations } from '../../src/data/atlas/supplements';
 import measured from '../fixtures/qwen-atlas-reference.json';
 
 describe('atlas relations and migration', () => {
+  it('greedy bypasses sampling adjustments while sampling retains them', () => {
+    const edges = sectionById.generation.edges;
+    expect(edges).toContainEqual(expect.objectContaining({ from: 'last-logits', to: 'greedy' }));
+    expect(edges).toContainEqual(expect.objectContaining({ from: 'last-logits', to: 'processors' }));
+    expect(edges).toContainEqual(expect.objectContaining({ from: 'processors', to: 'sampling' }));
+    expect(edges.some((e) => e.from === 'processors' && e.to === 'greedy')).toBe(false);
+  });
   it('prefill precedes model computation; only continuation loops back after stopping decision', () => {
     const input = sectionById.input.blocks.flatMap((b) => b.lanes.flat());
     expect(input.indexOf('prefill')).toBeLessThan(input.indexOf('embedding'));

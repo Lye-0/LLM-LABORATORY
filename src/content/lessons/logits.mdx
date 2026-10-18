@@ -3,7 +3,7 @@ title: "Logitsと確率"
 description: "モデルの生のスコアを、比較できる確率へ変える。"
 stage: "generation"
 order: 17
-minutes: 8
+minutes: 16
 eyebrow: "SCORES → PROBABILITIES"
 prerequisites: ["linear","transformer-block"]
 labs: ["sampling"]
@@ -15,6 +15,44 @@ answer: "なりません。logitsは正規化されていないスコアです�
 ## 最後の層から語彙方向へ
 
 Transformerを通った表現をlm_headへ渡すと、各位置について出力候補のスコアが得られます。これをlogitsと呼びます。正にも負にもなり、確率ではありません。
+
+**LM headは計算する部品、logitsはその計算結果**です。Qwen3-0.6Bでは、最終RMSNorm後の`H [B,T,1024]`と重み`W [151936,1024]`から、`H @ W.T → [B,T,151936]`を計算します（biasなし）。一つのスコアは`logits[b,t,j] = sum(H[b,t,d] * W[j,d])`。特徴軸dに沿って掛けて足します。
+
+| 段階 | 第2軸 | 最後の軸 |
+|---|---|---|
+| Embedding後 | 入力Tokenの位置 | そのIDから引いた1024成分 |
+| Decoder・最終Norm後 | 同じ入力Tokenの位置 | その位置までの文脈を反映した1024成分 |
+| LM head後 | 同じ入力Tokenの位置 | 出力候補ごとの151936個のスコア |
+
+LM headはToken数を増やしたり、位置を1個へ絞ったりしません。例えば入力`A B C D`の位置2のHidden Stateは、Causal AttentionによりA・B・Cを参照できます。そこから求めるlogitsは「A B Cの次」の候補スコアです。未来のDを見て予測しているわけではありません。
+
+次Tokenを予測するように学習していることと、未来を見られない構造の両方が、この対応を作ります。学習では途中位置の予測も正解と比較できます。生成では通常、末尾位置のスコアを使います。
+
+<details>
+<summary>Qwen3のLM headを行列積で再現する</summary>
+
+[28層の観察の準備](../decoder-stack/#観察の準備)で作った`model・inputs・outputs・torch`を使います。同じ固定revision、CPU・bfloat16、Transformers 5.18.0の条件です。
+
+```python
+final_hidden = outputs.hidden_states[-1]
+with torch.no_grad():
+    via_layer = model.lm_head(final_hidden)
+    via_matmul = final_hidden @ model.lm_head.weight.T
+print(final_hidden.shape, via_matmul.shape)
+print(torch.equal(via_layer, outputs.logits))
+print(torch.equal(via_matmul, outputs.logits))
+print(model.get_input_embeddings().weight is model.lm_head.weight)
+```
+
+参照環境ではshapeは`[1,7,1024] → [1,7,151936]`で、三つの比較は`True`です。最後はEmbeddingとの重み共有の確認です。同じ重みでも、Embeddingは行のlookup、LM headは全行との内積であり、逆lookupではありません。モデル一般で必ず共有するわけではありません。
+
+1候補の内積をfloat32へ変換して計算すると、元のbfloat16出力と丸め差が出る場合があります。同じ入力・dtype・演算条件で比較してください。
+
+</details>
+
+### 151936はTokenizerの登録件数と同じではない
+
+参照モデルでは基本語彙が151643、追加分込みが151669、モデルの出力幅が151936です。すべての出力番号にTokenizerの登録Tokenがあるわけではありません。`softmax`は登録の有無を判断せず、渡された全スコアを計算に使います。[語彙数の実測](../qwen/#語彙数dtypedeviceを読む)と照合し、余った領域の用途を数の差だけで断定しないようにします。
 
 ## 小さなスコアを確率にする
 
@@ -33,6 +71,10 @@ tensor(1.)
 
 最も大きいlogitの候補は最も高い確率になります。ただし、それが常に選ばれるかはSamplingの規則によります。
 
+Softmaxは`pᵢ = exp(zᵢ) / sum(exp(zⱼ))`です。単に合計1にする処理の総称ではありません。同じ順位の`[2,1,0]`と`[20,10,0]`でも、後者は1位へ強く集中します。順位と確率の偏りは別です。最大候補だけを選ぶなら、logitsへ直接`argmax`を使えます。
+
+AttentionのSoftmaxは参照位置に沿って割合を求め、ここでは語彙候補に沿って確率を求めます。どちらもSoftmax自体に乱数はなく、Attentionは通常その割合でVを加重和します。
+
 ## 次を作るのは最後の位置
 
 ```python
@@ -43,6 +85,38 @@ print(next_logits.shape)
 ```
 
 通常の全位置を返すforwardの例です。入力が`[B,T]`なら、logitsは`[B,T,V]`、最後の位置を取ると`[B,V]`です。実装の最適化により返される位置を制限する場合は、その条件を確認します。
+
+この例はpaddingのない入力を前提にします。`logits[0,-1,:]`ならbatch軸も取り除いて`[V]`、`logits[:,-1,:]`なら`[B,V]`です。末尾位置を取り出す操作と、語彙から次IDを選ぶ操作は別です。
+
+### 値・Index・文字列を分ける
+
+```python
+scores = outputs.logits[0, -1, :].float()  # [V]
+probs = torch.softmax(scores, dim=-1)
+next_id = torch.argmax(scores).item()
+max_prob, max_id = torch.max(probs, dim=-1)
+print(next_id, probs[next_id].item())
+print(repr(tokenizer.decode([next_id])))
+
+# 表示用の上位5件。元のprobsや抽選候補は変更しない
+top_probs, top_ids = torch.topk(probs, k=5)
+for token_id, probability in zip(top_ids.tolist(), top_probs.tolist()):
+    print(f"{token_id:6d} {probability:.6f} {repr(tokenizer.decode([token_id]))}")
+```
+
+このコードでは上のモデル準備に加え、同じTokenizerを使います。
+
+| 書き方 | 役割 |
+|---|---|
+| `argmax(scores)` | 最大値のIndexを返す。同点なら最初のIndex |
+| `max(probs, dim=-1)` | 指定軸の最大値とIndexを返す |
+| `dim=-1` | 最後の軸。この`[V]`では`dim=0`と同じ。最後の要素という意味ではない |
+| `.item()` / `.tolist()` | 1要素をPython数値へ / Tensorの値をPythonのリストなどへ |
+| `zip(ids, probs)` | 同じ順位のIDと確率を組にする。`enumerate`は番号と要素の組 |
+| `decode([id])` / `repr(...)` | IDを文字列へ / 空白・改行も分かる表示へ |
+| `:6d` / `:.6f` | 整数の最小表示幅6 / 小数点以下6桁 |
+
+IndexがToken IDになるのは、元の語彙順の配列を対象にした場合です。並べ替え後のIndexは順位の位置なので、`sorted_ids`などで元のIDへ対応付けます。PyTorchの選択関数は語彙を知らず、文字列への変換はTokenizerの役割です。`decode`は整数・IDのlist・1次元Tensorなどを扱えます。複数文は`batch_decode`を使います。
 
 ## 一定の値を足しても確率は同じ
 

@@ -3,7 +3,7 @@ title: "Samplingと生成設定"
 description: "同じlogitsでも、候補の絞り方と選び方で結果が変わる。"
 stage: "generation"
 order: 18
-minutes: 9
+minutes: 18
 eyebrow: "CHOOSING THE NEXT TOKEN"
 prerequisites: ["logits"]
 labs: ["sampling"]
@@ -16,9 +16,32 @@ answer: "0で割れません。greedyは最大値を取る別の操作として�
 
 greedyは最大logitの候補を選びます。Samplingは確率分布から乱数で候補を選びます。確率が低い候補も、残っていれば選ばれる可能性があります。
 
+```text
+最後の位置のlogits
+  ├─ Greedy → argmax → 次Token ID
+  └─ Sampling → Temperature → Top-k → Top-p
+                  → 最終Softmax → multinomial → 次Token ID
+```
+
+Temperature・Top-k・Top-pは任意の調整です。この教材ではこの順に組み合わせます。Top-pの内部でも候補を決めるためにSoftmaxを使います。繰り返しペナルティなど、GreedyとSamplingの両方に作用する別の処理もあります。
+
+```python
+import torch
+scores = torch.tensor([2., 1., 0.])  # 説明用の3候補
+probs = torch.softmax(scores, dim=-1)
+print(torch.argmax(scores).item())  # 0：値2ではなくIndex
+generator = torch.Generator().manual_seed(42)
+for _ in range(5):
+    print(torch.multinomial(probs, 1, generator=generator).item())
+```
+
+この5回は同じ分布からの抽選です。Tokenを入力へ追加していないため、5 Tokenの文章生成ではありません。`multinomial`は非負・有限・合計が正の重みも扱えますが、ここでは合計1の確率を渡します。[PyTorchの仕様](https://docs.pytorch.org/docs/2.14/generated/torch.multinomial.html)
+
 ## Temperature
 
 logitsを正のtemperatureで割ってからsoftmaxへ渡します。1より小さいと分布が鋭く、1より大きいと平らになります。知識を増やす設定ではなく、候補の確率分布の変更です。
+
+全成分を同じ正の数で割る要素演算で、行列積ではありません。順位は変わらないので、通常のGreedyには不要です。温度0をこの割り算へ渡さず、Greedyの処理へ分けます。
 
 ```python
 import torch
@@ -42,6 +65,79 @@ tensor([0.5065, 0.3072, 0.1863])
 
 候補を除いた後は確率を再正規化します。複数のフィルターを組み合わせる場合、適用順序も結果へ影響するので、実装の条件を確認します。
 
+### 表示用のtopkと、候補制限は別
+
+`torch.topk(probs, 5)`は上位5件の値とIndexを取り出すだけで、元の分布は変えません。候補を制限するには、例えば残さないlogitを`-inf`にしてからSoftmaxを計算します。`exp(-inf)=0`なので、除外候補の確率が0になります。logitを0にするだけでは除外になりません。
+
+### Top-pは「加える直前」の累積を見る
+
+説明用に、降順の確率を`[0.60, 0.25, 0.10, 0.05]`、`top_p=0.8`とします。
+
+| 順位 | 確率 | cumsum：ここまでの合計 | 加える直前の合計 | 残す？ |
+|---|---:|---:|---:|---|
+| 1 | 0.60 | 0.60 | 0.00 | はい |
+| 2 | 0.25 | 0.85 | 0.60 | はい：ここで0.8に到達 |
+| 3 | 0.10 | 0.95 | 0.85 | いいえ |
+| 4 | 0.05 | 1.00 | 0.95 | いいえ |
+
+`cumsum`は先頭から足す累積和です。単に`cumulative < top_p`とすると、目標に到達させた2番目まで消えてしまいます。そこで`cumulative - sorted_probs < top_p`、つまり「加える直前はまだ足りなかったか」を判定します。
+
+残した2候補は合計0.85なので、再正規化後は約0.7059と0.2941です。**候補を決めるための確率**と、**最終的に抽選する確率**は異なります。
+
+### 処理を順につなぐコード
+
+次は説明用の5候補です。実モデルで使う場合は、最初の`scores`を`outputs.logits[0,-1,:].float()`に置き換えます。1件の1次元スコアを対象にしています。
+
+```python
+scores = torch.tensor([3., 8., 2., 6., 1.])
+temperature, top_k, top_p = 0.7, 3, 0.9
+assert temperature > 0 and 1 <= top_k <= scores.numel()
+assert 0 < top_p <= 1
+
+adjusted = scores.float() / temperature
+top_values, top_ids = torch.topk(adjusted, k=top_k)
+top_k_logits = torch.full_like(adjusted, float("-inf"))
+top_k_logits[top_ids] = top_values
+
+sorted_logits, sorted_ids = torch.sort(top_k_logits, descending=True)
+sorted_probs = torch.softmax(sorted_logits, dim=-1)
+cumulative = torch.cumsum(sorted_probs, dim=-1)
+# 直前の累積和。引き算で戻す代わりに1位置ずらす
+before = torch.cat([torch.zeros_like(cumulative[:1]), cumulative[:-1]])
+keep_mask = before < top_p
+if top_p == 1:
+    keep_mask = torch.ones_like(keep_mask)  # Top-pで除外しない
+keep_mask &= torch.isfinite(sorted_logits)
+keep_mask[0] = True
+keep_ids = sorted_ids[keep_mask]
+
+filtered = torch.full_like(adjusted, float("-inf"))
+filtered[keep_ids] = adjusted[keep_ids]
+final_probs = torch.softmax(filtered, dim=-1)
+generator = torch.Generator(device=final_probs.device).manual_seed(42)
+selected = torch.multinomial(final_probs, 1, generator=generator).item()
+print("残したID:", keep_ids.tolist())
+print("確率:", final_probs.tolist())
+print("選択ID:", selected)
+```
+
+この例ではID 1だけが残り、確率1で選ばれます。低温で1位へ集中した分布では、Top-pで候補が1個になることもあります。`top_p=1`ならTop-kで残した3候補を維持します。
+
+コードの`before`は、式`cumulative - sorted_probs`と数学的には同じです。累積和を1位置ずらすことで、引き算による丸め差を避けています。閾値ちょうどの扱い・同点候補・最小候補数は実装で差が出るため、これは`generate()`全体の完全再現ではありません。Top-kを先に適用すると、Top-pはその候補内で再正規化した分布を使います。
+
+<details>
+<summary>Tensorが全部-infに見えたら</summary>
+
+長いTensorの中央は`...`で表示が省略されます。先頭と末尾が`-inf`でも、中央の候補が残っている場合があります。`torch.isfinite(filtered).sum()`で残ったスコアの個数、`filtered[keep_ids]`で値を確認します。全候補が本当に`-inf`ならSoftmaxは有効な分布を作れません。
+
+</details>
+
+## 同じ重みで、選び方を変える
+
+量子化は重みなどの数値表現、Greedy／Samplingは推論時のToken選択方法です。方式ごとに別の重みを用意する必要はありません。Transformersでは`model.generation_config`を確認し、`generate()`の引数で設定を上書きできます。通常の1ビーム生成なら、Greedyは`num_beams=1, do_sample=False`、Samplingは`num_beams=1, do_sample=True`です。
+
+`model(**inputs)`はスコアを求めるForwardです。Temperatureなどの生成設定を変更しても、この呼び出しが自動でSamplingまで行うわけではありません。OllamaではModelfileや実行時オプションで生成設定を管理します。同じ名前のモデルでも、実行環境の既定値が同じとは限りません。
+
 ## 再現性を観察する
 
 ```python
@@ -56,6 +152,10 @@ torch.Size([1])
 ```
 
 同じ環境・同じgenerator状態なら再現できます。同じgeneratorを続けて使うと内部状態は進みます。異なるライブラリやGPUで同じseedなら完全一致するとは限りません。
+
+同じ入力・重み・計算条件で同じlogitsが得られても、抽選結果は変わり得ます。選んだTokenを入力に追加すると、次のForwardは入力自体が変わるため、その後のlogitsも変わります。
+
+「確率を計算すること」と「乱数で抽選すること」を区別してください。Softmax自体は抽選しません。Greedyは乱数を使いませんが、実行環境の非決定的な演算や丸め差による結果の違いまで、常に防げるわけではありません。
 
 ## いつ止めるか
 
