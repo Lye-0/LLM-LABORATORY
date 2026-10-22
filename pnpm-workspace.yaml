@@ -1,2 +1,6 @@
 allowBuilds:
   esbuild: true
+
+# Keep Astro React and its compiler on their shared supported OXC series.
+overrides:
+  "@astrojs/react>@vitejs/plugin-react": 6.1.1
