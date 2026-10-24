@@ -3,7 +3,7 @@ title: "推論時のメモリと速度"
 description: "重み・活性値・キャッシュを分けて、必要な資源を考える。"
 stage: "generation"
 order: 20
-minutes: 8
+minutes: 12
 eyebrow: "MEMORY & LATENCY"
 prerequisites: ["tensor","kv-cache"]
 sources: ["tensor","qwen"]
@@ -55,6 +55,66 @@ print(elapsed)
 ```
 
 CUDA上のモデルと入力があることが前提です。具体的な秒数は環境依存なので固定値を示しません。
+
+## Cacheの有無を同じ生成条件で測る
+
+[KV Cache教材](../kv-cache/)の`model`と`generate_tokens`を用意した後に実行する例です。モデルの読み込みは測定に含めず、両方式とも同じ個数を生成します。各呼び出しは空のcacheから始まります。
+
+```python
+import time
+
+def benchmark(generate_fn, num_runs=3):
+    if num_runs < 1:
+        raise ValueError("num_runsは1以上にします")
+    times = []
+    model_device = next(model.parameters()).device
+
+    def synchronize():
+        if model_device.type == "cuda":
+            torch.cuda.synchronize(model_device)
+
+    generate_fn()  # warmup：初回の準備を測定から外す
+    for _ in range(num_runs):
+        synchronize()
+        start = time.perf_counter()
+        result = generate_fn()
+        synchronize()
+        times.append((time.perf_counter() - start) * 1000)
+    return sum(times) / len(times), result
+
+num_new_tokens = 32
+plain_ms, (plain_ids, _) = benchmark(
+    lambda: generate_tokens(False, num_new_tokens),
+)
+cache_ms, (cached_ids, _) = benchmark(
+    lambda: generate_tokens(True, num_new_tokens),
+)
+print("なし / あり (ms):", plain_ms, cache_ms)
+print("速度比:", plain_ms / cache_ms)
+print("生成ID列が一致:", torch.equal(plain_ids, cached_ids))
+```
+
+`generate_fn`には**関数そのもの**を渡し、`generate_fn()`で実行します。`lambda`は引数を指定した呼び出しを、後で実行できる関数に包んでいます。`times`に各回の時間を入れ、平均を返します。表示・文字列への変換・ID比較は測定区間の外です。CPUでも使え、GPUでは処理完了を待ってから終了時刻を取る、実際の待ち時間の測定です。
+
+### CUDA Eventで測る場合の読み方
+
+CUDA Eventは、GPUのstream上に置いた2つの目印の間の経過時間を測ります。上の同期つき時計とは測定方法が異なるため、どちらを使ったか記録します。[PyTorchのEvent仕様](https://docs.pytorch.org/docs/2.14/generated/torch.cuda.Event.html)
+
+| 処理 | 意味 |
+|---|---|
+| `torch.cuda.synchronize()` | 前のGPU処理を終える |
+| `torch.cuda.Event(enable_timing=True)` | 時間を測れる目印を作る |
+| `start.record()` → 生成 → `end.record()` | 同じstreamへ開始・終了の目印を置く |
+| `end.synchronize()` | 終了の目印へ到達するまで待つ |
+| `start.elapsed_time(end)` | 2つの目印の間の経過時間をmsで取得 |
+
+### 計算量の減少と、速度比は同じではない
+
+cacheは過去位置の射影やMLPの再計算を省きますが、新しいQと過去Kの比較、Vの加重和、cacheの読み書きは残ります。短い生成ではPythonの呼び出しやGPUへの処理発行などの負担も効くため、**cacheありなら必ず何倍になる、とは決まりません**。
+
+まず同じ短い生成でID列と長さを確認し、その後に入力長・生成長を変えて比較します。大きく伸ばすと時間とメモリも増えます。Greedyでも演算精度などによって結果が分かれる場合があるので、一致しない結果を隠さず記録します。
+
+実験コードの`NUM_NEW_TOKENS`や`NUM_RUNS`も普通のPython変数です。大文字は「設定値として扱う」という慣習で、自動的に変更不可になるわけではありません。
 
 ## 指標をそろえる
 

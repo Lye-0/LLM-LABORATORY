@@ -114,7 +114,7 @@ function linear(
   return {
     kind: '行列積 · Linear',
     meaning,
-    legend: `${x}＝入力、W＝学習済みの重み [${output},${input}]、${y}＝出力。WᵀはWの転置。`,
+    legend: `${x}＝入力、W＝学習済みの重み [${output},${input}]、${y}＝出力。WᵀはWの転置。Tqは今回処理する位置数で、通常のcache付きDecodeでは1。`,
     formulas: [
       formula(
         '全体の計算',

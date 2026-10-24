@@ -291,6 +291,9 @@ export const nodes: AtlasNode[] = [
     '今回のK + 過去のK',
     'K [B,8,Tkv,128]',
     'cache使用時のみ蓄積。なしならTkv=Tq。',
+    'process',
+    '各Decoder Layerに別々のKを保存し、次のTokenを同じ層で処理するときに再利用します。Qwen3ではk_norm・RoPE後、GQAでHead数を対応させる前の値です。7位置のcacheに新しい1位置を足すと [B,8,8,128]。過去のQは新しい位置の問い合わせには使いません。',
+    'kv-cache',
   ),
   node(
     'k-gqa',
@@ -336,6 +339,9 @@ export const nodes: AtlasNode[] = [
     '今回のV + 過去のV',
     'V [B,8,Tkv,128]',
     'Kと同じ位置範囲の値を保持する。',
+    'process',
+    '新しいQとKから求めた割合で、過去も含むVを加重和します。各層のVを保存し、Qwen3ではVへNormやRoPEは適用しません。過去のgate・upは次の位置のMLPへ直接使わないため、通常のKV Cacheには保存しません。',
+    'kv-cache',
   ),
   node(
     'v-gqa',
@@ -604,6 +610,9 @@ export const nodes: AtlasNode[] = [
     '次ID [B,1] + K/V cache',
     'logits [B,1,V] / Tq=1、Tkv=蓄積長',
     '各層で過去のK/Vを再利用。位置情報とmaskも更新。',
+    'process',
+    'Tq=1は今回処理する位置が1つという意味です。Embedding・Norm・Q/K/V・MLPも新しい位置だけ計算し、Attentionはcache内の過去位置も参照します。past_key_valuesと未処理のIDを渡し、maskは過去＋今回の長さに合わせます。IDを選ぶだけではcacheは増えず、そのIDをForwardへ通したときに増えます。',
+    'kv-cache',
   ),
   node(
     'no-cache',

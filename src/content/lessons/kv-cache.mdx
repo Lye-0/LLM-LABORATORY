@@ -3,7 +3,7 @@ title: "自己回帰生成とKV Cache"
 description: "続きを一つずつ作る計算で、何を保存して再利用するのか。"
 stage: "generation"
 order: 19
-minutes: 12
+minutes: 22
 eyebrow: "PREFILL & DECODE"
 prerequisites: ["sampling","attention"]
 labs: ["generation"]
@@ -42,6 +42,33 @@ Prefillでは通常、入力されたTokenを行列演算でまとめて処理�
 
 T7を**選ぶ**段階と、そのIDを次の計算へ**入力する**段階は別です。KV Cacheありなら、通常は後者でT7だけを各層へ通します。cacheなしなら伸びた列全体を再計算します。`tokenizer.decode`によるID列から文字列への変換は、このDecodeという生成段階の名前とは別の操作です。
 
+## 1 Tokenだけ計算しても、文脈は残る
+
+地図の`Tq`は**今回のForwardで処理する位置数**、`Tkv`はAttentionが参照するK/Vの位置数です。7 Tokenから次のIDを選び、そのIDを入力する場合で比べます。
+
+| 呼び出し | 入力IDのshape | Tq / Tkv | gate・upの出力 | logits |
+|---|---|---|---|---|
+| 初回のPrefill | `[1,7]` | 7 / 7 | `[1,7,3072]` | `[1,7,151936]` |
+| 続行・cacheなし | `[1,8]` | 8 / 8 | `[1,8,3072]` | `[1,8,151936]` |
+| 続行・cacheあり | `[1,1]` ＋ 過去7位置のK/V | 1 / 8 | `[1,1,3072]` | `[1,1,151936]` |
+
+**列全体を計算してから最後の行だけ残すのではなく、cacheありの続行では最初から新しい位置だけを各層へ通します。** Embedding・Norm・Q/K/V射影・MLPも今回の1位置を計算します。Attentionでは、その新しいQが過去も含むK/Vを参照するので、1位置の入力でも過去の文脈を使えます。重みの行列サイズは変わりません。
+
+Prefillで最後のlogitsだけを使う場合も、過去位置の途中計算は必要です。その値から各層のK/Vが作られ、後の位置が参照します。
+
+### なぜQやgate・upは保存しないのか
+
+| 値 | 次のTokenの計算での使い方 |
+|---|---|
+| 過去のK | 新しいQと比較し、参照割合を求める |
+| 過去のV | その割合で情報を集める |
+| 過去のQ | 過去位置の問い合わせ。新しい位置には新しいQを作る |
+| 過去のgate・up | その位置のMLPで使用済み。新しい位置のMLPは新しい内部表現から作る |
+
+例えば`gate₄`は4番目の位置の1本のベクトルです。1〜4番目のgateを並べた行列とは区別します。Linearは特徴成分の軸で積和を取り、この処理だけで過去位置のgateを混ぜることはありません。文脈は前段のAttentionを通して内部表現へ反映されます。
+
+K/Vは**各Decoder Layerごとに別々**に保持します。Layer 0のcacheをLayer 1へ流用する仕組みではなく、次のTokenを処理するときに同じ層で再利用します。Qwen3のKはk_norm・RoPE後、VはHead分割・軸の並べ替え後の値で、GQAでQのHead数へ対応させる前に保存します。
+
 ## 入力済みなのに、なぜ未来を隠すのか
 
 プロンプトのT0から見たT1〜T6は、すでに入力済みです。計算できないのではなく、**各位置をそこまでのTokenだけに依存させる設計**です。
@@ -65,7 +92,25 @@ Qwen3では全28層と最終RMSNormを通った値が最終Hidden Stateです。
 
 「返答は続き」というのは、ユーザー文の続きを文法的に補うという意味ではありません。[会話テンプレート](../chat-template/)で役割・境界を含む1本の列へ整形し、assistantメッセージの続きを予測します。利用者から見ると、プロンプトと返答は別メッセージです。
 
-## 基本の使い方
+## コードで生成をつなぐ
+
+以下はQwen3-0.6Bの固定revision、Transformers **5.20.2**の例です。まずモデルを用意します。1件・paddingなしを対象とし、会話テンプレートを使わない文章の続きの実験です。
+
+```python
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+model_id = "Qwen/Qwen3-0.6B"
+revision = "c1899de289a04d12100db370d81485cdf75e47ca"
+device = "cuda" if torch.cuda.is_available() else "cpu"
+tokenizer = AutoTokenizer.from_pretrained(model_id, revision=revision)
+model = AutoModelForCausalLM.from_pretrained(
+    model_id, revision=revision, dtype="auto",
+).to(device).eval()
+inputs = tokenizer("こんにちは、今日はいい天気ですね", return_tensors="pt").to(device)
+```
+
+### generateに任せる
 
 ```python
 with torch.inference_mode():
@@ -78,7 +123,104 @@ with torch.inference_mode():
 print(result.shape[1] - inputs["input_ids"].shape[1])
 ```
 
-表示は新しく生成した個数です。32以下になり、EOSで早く終わることもあります。低レベルにcacheを渡すAPIは版ごとに異なるため、まずgenerateで有無の差を観察します。
+表示は新しく生成した個数です。32以下になり、EOSで早く終わることもあります。`model.generate()`は生成ループを実行し、通常はID列のTensorを返します。一方、`model()`は1回のForwardを実行し、`logits`や`past_key_values`を持つ出力を返します。
+
+### Forwardを自分で繰り返す
+
+この例は処理を比較するため、EOSで止めず、指定した個数だけGreedyで選びます。`generate()`の停止条件や全機能を再実装するものではありません。
+
+```python
+@torch.inference_mode()
+def generate_tokens(use_cache, new_tokens=5):
+    if new_tokens < 1:
+        raise ValueError("new_tokensは1以上にします")
+    generated_ids = inputs["input_ids"].clone()
+    attention_mask = inputs["attention_mask"].clone()
+    current_ids = generated_ids
+    cache = None  # 呼び出すたびに、新しい生成を始める
+
+    for step in range(new_tokens):
+        outputs = model(
+            input_ids=current_ids,
+            attention_mask=attention_mask,
+            past_key_values=cache,
+            use_cache=use_cache,
+        )
+        next_id = outputs.logits[:, -1, :].argmax(dim=-1, keepdim=True)
+        generated_ids = torch.cat([generated_ids, next_id], dim=1)
+        cache = outputs.past_key_values if use_cache else None
+        if step == new_tokens - 1:
+            break  # 最後に選んだIDの、次の予測は不要
+
+        attention_mask = torch.cat(
+            [attention_mask, torch.ones_like(next_id)], dim=1,
+        )
+        current_ids = next_id if use_cache else generated_ids
+
+    return generated_ids, cache
+
+plain_ids, _ = generate_tokens(False)
+cached_ids, cache = generate_tokens(True)
+print("生成ID列が一致:", torch.equal(plain_ids, cached_ids))
+print("生成後の長さ:", cached_ids.shape[1])
+print("cacheの長さ:", cache.get_seq_length())
+```
+
+固定モデルの検証では、ID列が一致し、生成後は12 Token、cacheは11 Tokenでした。浮動小数点の演算順序・精度によってlogitsには差が出る場合があり、あらゆる環境でのID一致を保証するものではありません。
+
+| 別々に追う値 | 更新の意味 |
+|---|---|
+| `generated_ids` | 表示・保存するID列。`cat(..., dim=1)`で末尾へ連結する |
+| `outputs` | 今回のForwardの結果。最後の位置のlogitsから次のIDを選ぶ |
+| `cache` | 各層で処理済みの位置のK/V。次のForwardへ渡す |
+
+`use_cache=True`だけで前回の計算が自動的に引き継がれるわけではありません。続行時には`past_key_values`を渡し、**cacheに入っていないIDだけ**を入力します。上の例ではattention_maskは過去＋今回の全位置を覆い、paddingなしの位置番号はモデルがcache長から進めます。
+
+### 生成列12、cache11になる理由
+
+```text
+入力7位置をForward → 8個目を選ぶ  → 生成列8 / cache7
+8個目だけForward  → 9個目を選ぶ  → 生成列9 / cache8
+                  …
+11個目だけForward → 12個目を選ぶ → 生成列12 / cache11 → 終了
+```
+
+最後に**選んだ**IDは、まだForwardへ**入力していない**のでcacheに入りません。このループでは入力P個・生成N個に対し、最後のcache長は`P + N − 1`です。さらに続けるなら、その最後のIDとcacheを渡します。
+
+## Cacheの中身を直接見る
+
+ここは独立した実験です。上の生成ループのcacheを使い回さず、元の7 Tokenから始めます。`layers[i].keys / values`はTransformers 5.20.2のDynamicCacheの読み方です。
+
+```python
+with torch.inference_mode():
+    outputs = model(**inputs, use_cache=True)
+    cache = outputs.past_key_values
+    old_length = cache.get_seq_length()
+    before_k = cache.layers[0].keys.clone()  # 比較前の値を保存
+    for i in (0, 1, 27):
+        layer = cache.layers[i]
+        print(i, layer.keys.shape, layer.values.shape)
+
+    next_id = outputs.logits[:, -1, :].argmax(dim=-1, keepdim=True)
+    mask = torch.cat([inputs["attention_mask"], torch.ones_like(next_id)], dim=1)
+    next_outputs = model(
+        input_ids=next_id, attention_mask=mask,
+        past_key_values=cache, use_cache=True,
+    )
+
+print("同じcacheオブジェクト:", next_outputs.past_key_values is cache)
+print("保存位置数:", old_length, "→", cache.get_seq_length())
+print("今回のlogits:", next_outputs.logits.shape)
+print("Layer 0の過去Kが不変:", torch.equal(
+    before_k, cache.layers[0].keys[:, :, :old_length, :],
+))
+```
+
+K/Vは各層とも`[1,8,7,128]`から`[1,8,8,128]`へ増えます。軸は**batch・KV Head・保存位置・Head内の成分**です。8はHead数、7→8はToken位置数で、GQA後のQ Head数16とは異なります。今回のlogitsは`[1,1,151936]`です。過去の値の一致を調べた行はLayer 0のKだけを対象にしています。
+
+DynamicCacheは渡したオブジェクト自体が更新されます。`outputs = next_outputs`と代入し直さなくても、同じcacheを参照していれば長さの増加が見えます。内部のK/V Tensorまで同一オブジェクトのままとは限りません。一方、`torch.cat`は新しいTensorを作るため、生成列への再代入が元の`inputs["input_ids"]`まで書き換えるわけではありません。
+
+APIと保存形式の根拠は[Qwen3実装](https://github.com/huggingface/transformers/blob/v5.20.2/src/transformers/models/qwen3/modeling_qwen3.py)と[Cache実装](https://github.com/huggingface/transformers/blob/v5.20.2/src/transformers/cache_utils.py)です。位置・maskの扱いは[公式のCache解説](https://huggingface.co/docs/transformers/cache_explanation)も参照できます。
 
 ## 保存する代わりにメモリを使う
 
@@ -89,3 +231,5 @@ K/Vは層数、KV head数、head_dim、batch、系列長に応じて大きくな
 ## 何を比較するか
 
 cache有無の速度だけでなく、同じ入力・生成長・dtypeの条件をそろえ、peak memoryも記録します。高速化とメモリの交換関係を見る実験になります。
+
+測定手順は[推論時のメモリと速度](../inference-memory/)へ続きます。計算を省けても、短い入力・短い生成では呼び出しなどの負担が大きく、時間差が小さい場合もあります。
