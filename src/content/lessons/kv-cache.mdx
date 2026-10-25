@@ -125,6 +125,27 @@ print(result.shape[1] - inputs["input_ids"].shape[1])
 
 表示は新しく生成した個数です。32以下になり、EOSで早く終わることもあります。`model.generate()`は生成ループを実行し、通常はID列のTensorを返します。一方、`model()`は1回のForwardを実行し、`logits`や`past_key_values`を持つ出力を返します。
 
+### model()は何を受け取り、何を返す？
+
+| 入力の名前 | この実験で渡すもの |
+|---|---|
+| `input_ids` | 今回処理するID列。初回は7 Token、cache付きの続行は未処理の1 Token |
+| `attention_mask` | 有効な位置を示す。続行時も過去＋今回の全位置を覆う |
+| `past_key_values` | 各層の過去K/Vを保持するcache。初回は未指定またはNone |
+| `use_cache` | この実験ではTrueでcacheを作成・更新して返す |
+
+返り値の`outputs`は、数値のTensorそのものではなく、結果をまとめた`CausalLMOutputWithPast`オブジェクトです。この例では次の2つの属性を使います。
+
+```text
+input_ids・attention_mask・過去のcache
+                 ↓ model(...)
+outputs
+  ├─ .logits           今回の各位置から次Tokenを予測するスコア
+  └─ .past_key_values  各層のK/Vを持つDynamicCache
+```
+
+`outputs = model(...)`を繰り返すと、outputsの参照先は今回の結果へ置き換わります。それとは別に、渡したDynamicCacheの内部にも今回のK/Vが追加されます。
+
 ### Forwardを自分で繰り返す
 
 この例は処理を比較するため、EOSで止めず、指定した個数だけGreedyで選びます。`generate()`の停止条件や全機能を再実装するものではありません。
@@ -175,6 +196,16 @@ print("cacheの長さ:", cache.get_seq_length())
 | `cache` | 各層で処理済みの位置のK/V。次のForwardへ渡す |
 
 `use_cache=True`だけで前回の計算が自動的に引き継がれるわけではありません。続行時には`past_key_values`を渡し、**cacheに入っていないIDだけ**を入力します。上の例ではattention_maskは過去＋今回の全位置を覆い、paddingなしの位置番号はモデルがcache長から進めます。
+
+### なぜlogitsの最後の行だけ選ぶ？
+
+| logitsの位置（1始まり） | その行が予測するもの |
+|---|---|
+| Prefillの1行目 | 1個目までの文脈から2個目 |
+| Prefillの7行目 | プロンプト7個すべての文脈から、続きの8個目 |
+| 次のDecodeの唯一の行 | 入力した8個目＋過去cacheの文脈から9個目 |
+
+`outputs.logits[:, -1, :]`は、最後の**ID**を取り出す処理ではなく、最後の位置の**候補スコア**を取り出す処理です。Prefillでは7行目、cache付きDecodeでは唯一の1行を同じ書き方で選べます。Prefillの他の行のlogitsは今回の次Token選択には使いませんが、それらの位置のDecoder内の計算は必要です。
 
 ### 生成列12、cache11になる理由
 
