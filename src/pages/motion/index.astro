@@ -1,0 +1,19 @@
+---
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import MotionLab from '../../components/labs/MotionLab';
+import '../../styles/motion.css';
+---
+
+<SiteLayout
+  title="動きで学ぶ"
+  description="文章からToken、ベクトル、Decoder Layer、次のTokenまでを、アニメーション・計算式・コードで追う。"
+  wide
+>
+  <MotionLab client:load />
+  <noscript>
+    <p class="notice">
+      動きの表示にはJavaScriptが必要です。<a href="../learn/kv-cache/">自己回帰生成の教材</a>、
+      <a href="../maps/inference/">全体地図</a>でも流れを確認できます。
+    </p>
+  </noscript>
+</SiteLayout>

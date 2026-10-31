@@ -5,6 +5,7 @@ import { crossConnections } from '../../data/atlas/connections';
 import { supplements } from '../../data/atlas/supplements';
 import AtlasLayerStack from './AtlasLayerStack.astro';
 import AtlasCalculation from './AtlasCalculation.astro';
+import { motionForNode, motionUrl } from '../../data/motion';
 interface Props {
   section: AtlasSection;
   map: AtlasMap;
@@ -271,6 +272,17 @@ const presentNode = (id: string) =>
                         )}
                         {n.lesson && (
                           <a href={withBase(`/learn/${n.lesson}/`)}>関連する教材を読む →</a>
+                        )}
+                        {motionForNode[n.id] && (
+                          <p>
+                            <a
+                              href={withBase(
+                                motionUrl(motionForNode[n.id], `${Astro.url.pathname}#n-${n.id}`),
+                              )}
+                            >
+                              この処理を動きで見る →
+                            </a>
+                          </p>
                         )}
                         <p class="atlas-evidence">
                           Qwen内部の寸法は固定モデルの構成・実装に基づく。外部連携や改造の枝は一般的な概念図。確認条件はページ末尾に記載。

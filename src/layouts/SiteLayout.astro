@@ -7,6 +7,7 @@ import { topics } from '../data/topics';
 import { maps, mapUrl } from '../data/atlas';
 import { apiLibraries, apiClasses, getApiClass } from '../data/api-groups';
 import { apiEntries } from '../data/api';
+import { chapters, motionSteps, motionUrl } from '../data/motion';
 import '../styles/global.css';
 interface Props {
   title: string;
@@ -27,21 +28,24 @@ const path = withoutBase(Astro.url.pathname);
 const nav = [
   { href: '/maps/', label: '地図', no: '01' },
   { href: '/learn/', label: '学ぶ', no: '02' },
-  { href: '/labs/', label: '実験する', no: '03' },
-  { href: '/reference/', label: '調べる', no: '04' },
-  { href: '/projects/', label: '改造する', no: '05' },
+  { href: '/motion/', label: '動きで学ぶ', no: '03' },
+  { href: '/labs/', label: '実験する', no: '04' },
+  { href: '/reference/', label: '調べる', no: '05' },
+  { href: '/projects/', label: '改造する', no: '06' },
 ];
 const activeSection = path.startsWith('/maps/')
   ? '/maps/'
-  : path.startsWith('/labs/')
-    ? '/labs/'
-    : path.startsWith('/projects/')
-      ? '/projects/'
-      : path.startsWith('/reference/') || path.startsWith('/topics/')
-        ? '/reference/'
-        : path.startsWith('/learn/') || path.startsWith('/environment/')
-          ? '/learn/'
-          : '';
+  : path.startsWith('/motion/')
+    ? '/motion/'
+    : path.startsWith('/labs/')
+      ? '/labs/'
+      : path.startsWith('/projects/')
+        ? '/projects/'
+        : path.startsWith('/reference/') || path.startsWith('/topics/')
+          ? '/reference/'
+          : path.startsWith('/learn/') || path.startsWith('/environment/')
+            ? '/learn/'
+            : '';
 const apiDetail = apiEntries.find((e) => path === `/reference/api/${e.slug}/`);
 const detailClass = apiDetail ? getApiClass(apiDetail.owner) : undefined;
 interface SideGroup {
@@ -51,7 +55,26 @@ interface SideGroup {
 }
 let sidebarHome = { href: '/', label: 'サイトの案内' };
 let sidebarGroups: SideGroup[] = [];
-if (activeSection === '/maps/') {
+if (activeSection === '/motion/') {
+  sidebarHome = { href: '/motion/', label: '動きで学ぶ：文章から生成まで' };
+  sidebarGroups = [
+    {
+      title: '章を選ぶ',
+      links: chapters.map((c) => ({
+        href: motionUrl(motionSteps.find((s) => s.chapter === c.id)!.id),
+        label: c.title,
+      })),
+    },
+    {
+      title: '関連する見方',
+      links: [
+        { href: '/maps/inference/', label: '全体地図で流れを見る' },
+        { href: '/learn/', label: '教材を読む' },
+        { href: '/labs/', label: '入力を変えて実験する' },
+      ],
+    },
+  ];
+} else if (activeSection === '/maps/') {
   sidebarHome = { href: '/maps/', label: '全体地図' };
   sidebarGroups = [
     {
