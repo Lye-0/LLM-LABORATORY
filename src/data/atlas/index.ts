@@ -387,7 +387,8 @@ export const nodes: AtlasNode[] = [
     '割合 [B,16,Tq,Tkv]',
     '各問い合せ位置について、参照先の割合へ変換。',
     'process',
-    'eager参照経路はfloat32でsoftmaxを計算してQのdtypeへ戻します。学習時のdropoutは設定によります（参照configは0）。',
+    'outputs.attentions[layer]で観察するのは、このSoftmax後の参照割合です。軸はBatch・Query Head・Query位置・Key位置で、Vを混ぜた結果やHidden Stateとは別です。eager参照経路はfloat32でsoftmaxを計算してQのdtypeへ戻します。学習時のdropoutは設定によります（参照configは0）。',
+    'attention-heads',
   ),
   node(
     'weighted-sum',

@@ -1,0 +1,203 @@
+---
+title: "Attention Headを観察する"
+description: "参照割合の軸を読み、HeadとLayerを比べて、観察から言えることを整理する。"
+stage: "representation"
+order: 13.5
+minutes: 18
+eyebrow: "HEAD / LAYER / ATTENTION WEIGHTS"
+prerequisites: ["attention"]
+labs: ["attention"]
+sources: ["qwen","tensor"]
+tags: ["Attention Head","attentions","GQA","Attention Sink","Matplotlib"]
+question: "あるTokenへのAttention Weightが0.9なら、最終予測の90%をそのTokenが決めていますか？"
+answer: "そうとは言えません。WeightはVを混ぜる係数です。Vの大きさ・向き、o_proj、残差接続、後続層も最終予測に関わります。"
+---
+
+## Headは、割合を決めてVを集める計算単位
+
+1つのAttention Headは、QとKを比較し、Mask・Softmaxで参照割合を求め、その割合でVを集めます。**割合を作るだけでなく、Vの加重和を作るところまで**がHeadの計算です。Qwen3-0.6Bでは1層に16個のQuery Headがあり、各Headの出力は128成分です。
+
+```text
+Q・K → 内積・スケーリング → Mask → Softmax → 参照割合A
+                                                ↓ A × V
+                                           Headの出力O
+```
+
+このページで取り出す`outputs.attentions`は、**Vを混ぜる前の参照割合A**です。学習済みの`q_proj.weight`などのパラメータや、Headの出力O、Hidden Stateそのものとは別です。[一覧地図のSoftmax](../../maps/inference/#n-softmax)が、この観察地点に対応します。
+
+## 128成分の軸と、参照先の位置の軸
+
+以下は1件・paddingなし・7 TokenのPrefillです。GQAでHead数を対応させた後のshapeを示します。
+
+| 処理・データ | shape | 最後の軸の意味 |
+|---|---|---|
+| Q | `[1,16,7,128]` | Queryの128成分 |
+| Kの末尾2軸を転置 | `[1,16,128,7]` | 参照先の7位置 |
+| QとKの比較 → Mask → Softmax | `[1,16,7,7]` | 各Queryから各Keyへの参照割合 |
+| 参照割合 × V | `[1,16,7,128]` | 集めた情報の128成分 |
+
+**128成分を掛けて足すと、位置の組ごとにスコアが1つできます。** そのため、比較結果は「7位置 × 7位置」の表になります。Vを混ぜると、再び128成分の情報へ戻ります。
+
+`Tq`はQueryの位置数、`Tkv`はKey/Valueの位置数です。スコア計算ではVをまだ使いませんが、KとVは同じ位置数なので`Tkv`とまとめて呼べます。[KV Cache](../kv-cache/)を使い過去7位置に新しい1位置を追加するDecodeでは、参照割合は`[1,16,1,8]`になります。
+
+## 実モデルから参照割合を取り出す
+
+以下は観察用の設定です。ここではTransformers **v5.18.0のQwen3実装**を参照し、割合を取得できる`eager`経路と`eval()`を使います。利用中の版・dtype・deviceも実験ノートに残してください。別のAttention実装では、割合の出力をサポートしない場合があります。
+
+```python
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+model_id = "Qwen/Qwen3-0.6B"
+revision = "c1899de289a04d12100db370d81485cdf75e47ca"
+tokenizer = AutoTokenizer.from_pretrained(model_id, revision=revision)
+model = AutoModelForCausalLM.from_pretrained(
+    model_id, revision=revision,
+    dtype="auto", device_map="auto", attn_implementation="eager",
+)
+model.eval()
+
+text = "こんにちは、今日はいい天気ですね"
+inputs = tokenizer(text, return_tensors="pt")
+inputs = {key: value.to(model.device) for key, value in inputs.items()}
+with torch.no_grad():
+    outputs = model(**inputs, output_attentions=True, use_cache=False)
+
+attentions = outputs.attentions
+assert attentions is not None and attentions[0] is not None
+print("Layer数:", len(attentions))          # 28
+print("Layer 0:", attentions[0].shape)     # [1,16,7,7]
+layer0_attention = attentions[0]
+```
+
+指定名は**複数形**の`output_attentions`・`outputs.attentions`です。28層分を一度取得しているので、Layer 27を見るためにモデルをもう一度実行する必要はありません。
+
+### 添字で、どの範囲を見ているかを決める
+
+参照割合の軸は`[Batch, Query Head, Query位置, Key位置]`です。
+
+| 取り出す式 | shape | 見ている範囲 |
+|---|---|---|
+| `attentions[0]` | `[1,16,7,7]` | Layer 0の全Head・全位置 |
+| `attentions[0][0,0,:,:]` | `[7,7]` | Head 0の全Query × 全Key |
+| `attentions[0][0,0,-1,:]` | `[7]` | Head 0の最後のQueryから全Keyへ |
+| `attentions[0][0,:,-1,:]` | `[16,7]` | 全16 Headの最後のQueryから全Keyへ |
+| `attentions[27][0,:,-1,:]` | `[16,7]` | Layer 27について同じ範囲 |
+
+`-1`は最後の位置を1つ選び、`:`はその軸の全要素を残します。「全Query × 全Key」の表と「全Head × 全Key」の表は、**縦軸が違います**。
+
+今回、最後のQueryは位置6「ですね」です。表示でT1〜T7と呼んでも、Pythonの添字は0〜6です。
+
+## Headの違いとLayerの違いを分ける
+
+| 比較 | 固定する条件 | 変わるもの |
+|---|---|---|
+| Layer 0のHead 0とHead 1 | Layer・入力・Query位置 | HeadごとのQと参照割合 |
+| Layer 0とLayer 27 | 入力・Query位置・取り出すHead番号 | 層への入力表現、層固有の重み、Q/K/V |
+
+Qwen3のGQAでは、Head 0・1はKV Head 0を共有します。しかしQが異なるため、参照割合も異なり得ます。**KVの共有は同じ層内の話**で、別の層のK/Vを使い回すわけではありません。
+
+Layer 0とLayer 27のHead 0は、番号が同じでも別の計算単位です。同じ「ですね」の位置を選んでいても、Qベクトルの値まで同じではありません。
+
+### 行の合計とCausal Maskを確認する
+
+```python
+head0 = layer0_attention[0, 0].float()   # [Query位置, Key位置]
+print("各Queryの合計:", head0.sum(-1))
+print("最後のQuery:", head0[-1])
+```
+
+eval・paddingなしのこの例では、未来側の右上三角は0、各行の合計はおおむね1です。最後のQueryだけなら未来の位置がないため、**Maskの三角形を見るには全Queryの7×7表を使います**。
+
+bfloat16などで保存された割合は丸められており、合計が厳密な1にならないことがあります。`.float()`は集計時の精度を上げますが、すでに丸められた値を元の精度へ復元する操作ではありません。
+
+## 層を比べるグラフを作る
+
+同じ`outputs`から、Layer 0・27の全Headと、全層のHead平均を比較できます。色の範囲を0〜1に揃え、**Queryはどちらも最後の位置**に固定します。平均を取るとHeadごとの差は見えなくなるので、ヒートマップと併せて読みます。
+
+<details>
+<summary>Pythonでヒートマップと折れ線グラフを描く</summary>
+
+前のコードに続けて実行します。uv管理の実験プロジェクトでMatplotlibが未導入なら、`uv add matplotlib`で追加します。
+
+```python
+import matplotlib.pyplot as plt
+
+token_ids = inputs["input_ids"][0].tolist()
+labels = [f"{i}: {tokenizer.decode([tid])}" for i, tid in enumerate(token_ids)]
+last_query = len(token_ids) - 1
+last_rows = [a[0, :, last_query, :].float().cpu() for a in attentions]
+
+# 縦軸=Head、横軸=Key位置。両方の図で色の範囲を統一。
+fig_heads, axes = plt.subplots(1, 2, figsize=(14, 6), sharey=True,
+                              layout="constrained")
+for ax, layer_idx in zip(axes, [0, len(attentions) - 1]):
+    im = ax.imshow(last_rows[layer_idx].numpy(), vmin=0, vmax=1,
+                   cmap="viridis", aspect="auto")
+    ax.set_title(f"Layer {layer_idx} / Query position {last_query}")
+    ax.set_xlabel("Key position")
+    ax.set_xticks(range(len(labels)), labels, rotation=45, ha="right")
+    ax.set_yticks(range(last_rows[layer_idx].shape[0]))
+axes[0].set_ylabel("Query Head")
+fig_heads.colorbar(im, ax=axes.tolist(), label="Attention Weight")
+
+means = torch.stack(last_rows).mean(dim=1)  # Head軸で平均 → [Layer, Key位置]
+fig_layers, ax = plt.subplots(figsize=(10, 5))
+ax.plot(range(len(attentions)), means[:, 0].numpy(), marker="o", label="First Key")
+ax.plot(range(len(attentions)), means[:, -1].numpy(), marker="o", label="Last Key")
+ax.set_xlabel("Layer")
+ax.set_ylabel("Mean Attention Weight / last Query")
+ax.set_xticks(range(0, len(attentions), 3))
+ax.set_ylim(0, 1)
+ax.legend()
+ax.grid(True, alpha=0.3)
+fig_layers.tight_layout()
+plt.show()
+```
+
+この平均は「最後のQueryについて、各Keyへの割合を16 Headで平均」です。全Queryの平均ではありません。目盛りを3層おきにしても、描くデータは28層すべてです。
+
+`fig`は図全体のFigure、`ax`は1つの描画領域Axesを指す**慣例的な変数名**です。`axes`は複数のAxesです。描画・軸設定は`ax`、その図の配置調整は`fig.tight_layout()`、開いている図の表示は最後の`plt.show()`で行います。通常のスクリプトでは図ごとに`show()`を挟む必要はありません。日本語ラベルには、実行環境の日本語フォント設定が必要な場合があります。
+
+上のヒートマップでは、カラーバーも含めて配置を調整する`layout="constrained"`を使っています。折れ線グラフは`fig_layers.tight_layout()`で明示的に調整しています。
+
+[subplots](https://matplotlib.org/stable/api/_as_gen/matplotlib.pyplot.subplots.html)・[Figure.tight_layout](https://matplotlib.org/stable/api/_as_gen/matplotlib.figure.Figure.tight_layout.html)・[pyplot.show](https://matplotlib.org/stable/api/_as_gen/matplotlib.pyplot.show.html)
+
+</details>
+
+### 観察ログから、どこまで言えるか
+
+7 Tokenの同じ入力・最後のQueryについて、16 Headの平均を比較した観察ログの例です。**サイトでの再測定値ではありません。** モデルrevision・ライブラリの版・deviceなど、再現に必要な全条件が揃った検証fixtureとしては扱いません。
+
+| Layer | 先頭Keyへの平均 | 最後のKeyへの平均 |
+|---|---|---|
+| 0 | 0.0552 | 0.5462 |
+| 3 | 0.8585 | 0.0391 |
+| 27 | 0.8387 | 0.1264 |
+
+この記録ではLayer 3で先頭への割合が増えています。ただし「すべてのHeadが同じ割合」「後の層ほど単調に増える」「先頭の文字列が最重要」とは読めません。別の入力でも比較し、位置と文字列の影響を分けて考えます。
+
+## 大きな割合は、そのまま重要度ではない
+
+Headの出力は、各位置のVを割合で重み付けして足したベクトルです。**割合A、加えるベクトルA×V、最終予測への影響**を分けて考えます。
+
+| 説明用の位置 | 割合 | Vのベクトル長 | 加えるベクトルの長さ |
+|---|---|---|---|
+| 位置0 | 0.9 | 0.1 | 0.09 |
+| 位置1 | 0.1 | 5.0 | 0.50 |
+
+これは実測ではなく、違いを示す仮の数値です。割合が小さくても、Vが大きければ大きなベクトルが加わります。方向による打ち消しや、その後のo_proj・Residual・後続層もあるため、最終予測の寄与率にはなりません。
+
+### Attention Sink：先頭付近へ割合が集中することがある
+
+文章の意味的な重要性だけでは説明できないほど、先頭付近などへAttention Weightが集中する現象です。**集中があるだけで異常とも、そのTokenが最重要とも言えません。** 原因を確かめるには、入力・長さ・Query位置を変えるなどの比較が必要です。
+
+Softmaxが参照可能な位置へ合計1の割合を配ることは、この現象を考える手がかりです。ただし、それだけで個々のモデルの発生原因を証明できるわけではありません。
+
+[StreamingLLMの研究](https://arxiv.org/abs/2309.17453)では、直近のK/Vだけを残す方式が不安定になる例と、先頭付近のK/Vも保持する改善を報告しています。[KV Cacheの保存範囲](../kv-cache/#保存範囲を変えると計算も変わる)へつながる話で、単にcacheを削れば同じ計算を省ける、ということではありません。
+
+## 次に確かめること
+
+まず入力・Layer・Head・Query・Keyを指定して割合を観察し、次にVとの積を調べます。さらにHeadの出力を無効にしてLogitsなどを比較すれば、単なる分布の観察から、出力への影響を調べる実験へ進めます。1文のヒートマップだけでHeadの役割を固定しないことが大切です。
+
+割合を取得する地点・dtype・GQAの根拠は[Qwen3参照実装 v5.18.0](https://github.com/huggingface/transformers/blob/v5.18.0/src/transformers/models/qwen3/modeling_qwen3.py)です。このページのコードは実行例であり、特定の割合やグラフの形を再現する保証ではありません。

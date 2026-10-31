@@ -120,6 +120,8 @@ tensor([[2., 0.],
 
 ## 複数headとGQA
 
+Headごとの割合を実モデルから取り出す方法、`[1,16,7,7]`の読み方、Layer間の比較は、[Attention Headを観察する](../attention-heads/)でまとめて確認できます。
+
 headごとに別の表現で情報を集め、結合して出力へ写します。GQAでは複数のQuery headがKey/Value headを共有します。QとKVのhead数を同じと決めつけず、モデル設定から各shapeを読みます。
 
 Qwen3-0.6BではQが16 Head、KとVが各8 Head、1 Headは128次元です。
