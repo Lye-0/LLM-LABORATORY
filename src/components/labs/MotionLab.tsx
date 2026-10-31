@@ -1,4 +1,4 @@
-import { journeyPhaseLabel } from '../../lib/journey-timing';
+import { journeyPhaseLabel, LAYERS_START, LAYERS_END } from '../../lib/journey-timing';
 import { useEffect, useRef, useState } from 'react';
 import {
   journeyAt,
@@ -84,7 +84,8 @@ export default function MotionLab() {
       )
         t =
           journeyStarts[journeyIndex('layers')] +
-          (journeySteps[journeyIndex('layers')].duration * layer) / 28;
+          journeySteps[journeyIndex('layers')].duration *
+            (layer === 0 ? 0 : LAYERS_START + ((layer - 0.5) / 27) * (LAYERS_END - LAYERS_START));
       setTime(t);
       setRunning(false);
       const from = params.get('from');

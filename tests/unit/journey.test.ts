@@ -1,4 +1,4 @@
-import { projectionActors } from '../../src/lib/journey-actors';
+import { projectionActors, actorId } from '../../src/lib/journey-actors';
 import { describe, expect, it } from 'vitest';
 import {
   journeyAt,
@@ -15,6 +15,37 @@ import * as m from '../../src/lib/journey-model';
 import { nodeById } from '../../src/data/atlas';
 
 describe('一本の時間軸でつながる教材', () => {
+  it('新しい結果の後は保持・移動・到着を経てから次の計算を始める', () => {
+    for (const id of ['post-norm', 'down', 'layers']) {
+      const i = journeySteps.findIndex((s) => s.id === id);
+      const at = (p: number) => sampleJourney(journeyStarts[i] + journeySteps[i].duration * p);
+      const entityId =
+        id === 'post-norm'
+          ? actorId(id, 'attn')
+          : id === 'down'
+            ? projectionActors(id)!.input
+            : actorId(id, 'gate');
+      const initial = at(0).entities.find((e) => e.id === entityId)!;
+      const held = at(id === 'layers' ? 0.03 : 0.06).entities.find((e) => e.id === entityId)!;
+      expect([held.x, held.y, held.w, held.h]).toEqual([
+        initial.x,
+        initial.y,
+        initial.w,
+        initial.h,
+      ]);
+      const ready = at(id === 'layers' ? 0.19 : 0.64);
+      expect(ready.calculation).toBe(0);
+      const actor = ready.entities.find((e) => e.id === entityId)!;
+      expect([actor.x, actor.y, actor.w, actor.h]).toEqual([
+        actor.end.x,
+        actor.end.y,
+        actor.end.w,
+        actor.end.h,
+      ]);
+      expect(at(id === 'layers' ? 0.21 : 0.7).calculation).toBeGreaterThan(0);
+      if (id === 'layers') expect(ready.layer).toBe(0);
+    }
+  });
   it('完成した行列は図の表示領域に収まる', () => {
     journeySteps.forEach((s, i) => {
       const sample = sampleJourney(journeyStarts[i] + s.duration * 0.999);

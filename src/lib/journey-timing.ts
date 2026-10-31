@@ -8,6 +8,19 @@ export const ease = (p: number) => {
 export const CALCULATION_START = 0.58;
 export const movementProgress = (p: number) => ease(p / 0.6);
 export const calculationProgress = (p: number) => clamp((p - CALCULATION_START) / 0.28);
+const followsNewResult = (step: string) => ['post-norm', 'down'].includes(step);
+export const LAYERS_START = 0.2;
+export const LAYERS_END = 0.94;
+export const layerPosition = (p: number) =>
+  clamp((p - LAYERS_START) / (LAYERS_END - LAYERS_START)) * 27;
+export const stageMovement = (step: string, p: number) =>
+  step === 'layers'
+    ? ease((p - 0.04) / 0.12)
+    : followsNewResult(step)
+      ? ease((p - 0.08) / 0.56)
+      : movementProgress(p);
+export const stageCalculation = (step: string, p: number) =>
+  followsNewResult(step) ? clamp((p - 0.65) / 0.27) : calculationProgress(p);
 const groups: Record<string, string[]> = {
   text: ['token-'],
   tokenize: ['token-'],

@@ -1,7 +1,16 @@
 import { journeyAt, journeySteps } from '../data/journey';
 import { actorId, binaryActors } from './journey-actors';
 import * as m from './journey-model';
-import { clamp, ease, movementProgress, calculationProgress } from './journey-timing';
+import {
+  clamp,
+  ease,
+  movementProgress,
+  stageMovement,
+  stageCalculation,
+  layerPosition,
+  LAYERS_START,
+  LAYERS_END,
+} from './journey-timing';
 export interface Entity {
   id: string;
   x: number;
@@ -487,12 +496,12 @@ export function sampleJourney(time: number) {
     step = journeySteps[at.index];
   const before = at.index ? frames[at.index - 1] : initial,
     after = frames[at.index];
-  const p = movementProgress(at.progress);
+  const p = stageMovement(step.id, at.progress);
   let target = after;
   let layer = 0;
   if (step.id === 'layers') {
-    const position = clamp((at.progress - 0.08) / 0.78) * 27;
-    layer = at.progress <= 0.08 ? 0 : Math.min(27, Math.floor(position) + 1);
+    const position = layerPosition(at.progress);
+    layer = at.progress <= LAYERS_START ? 0 : Math.min(27, Math.floor(position) + 1);
     target = clone(after);
     const id = actorId(step.id, 'gate');
     target.entities[id] = {
@@ -700,12 +709,12 @@ export function sampleJourney(time: number) {
     layer,
     calculation:
       step.id === 'layers'
-        ? at.progress >= 0.86
+        ? at.progress >= LAYERS_END
           ? 1
-          : clamp(((clamp((at.progress - 0.08) / 0.78) * 27) % 1) / 0.8)
+          : clamp((layerPosition(at.progress) % 1) / 0.8)
         : step.id === 'embedding'
           ? clamp((at.progress - 0.8) / 0.13)
-          : calculationProgress(at.progress),
+          : stageCalculation(step.id, at.progress),
   };
 }
 export type JourneySample = ReturnType<typeof sampleJourney>;
