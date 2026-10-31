@@ -10,7 +10,7 @@
   align-items: flex-end;
   justify-content: space-between;
   gap: 24px;
-  margin: 0 0 32px;
+  margin: 0 0 14px;
 }
 .motion-eyebrow {
   font: 10px var(--mono);
@@ -18,7 +18,7 @@
   color: var(--teal);
 }
 .motion-intro h1 {
-  font-size: clamp(28px, 3vw, 42px);
+  font-size: clamp(23px, 2vw, 28px);
   font-weight: 600;
   letter-spacing: -0.03em;
   margin: 8px 0;
@@ -26,6 +26,7 @@
 .motion-intro p {
   color: var(--muted);
   margin: 0;
+  font-size: 12px;
 }
 .motion-intro-meta {
   display: grid;
@@ -43,7 +44,7 @@
   grid-template-columns: repeat(6, 1fr);
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
-  margin-bottom: 32px;
+  margin-bottom: 17px;
   gap: 6px;
 }
 .motion-chapters button {
@@ -82,7 +83,7 @@
   color: var(--faint);
 }
 .motion-current h2 {
-  font-size: clamp(20px, 2.1vw, 28px);
+  font-size: clamp(19px, 1.8vw, 24px);
   line-height: 1.5;
   margin: 9px 0 5px;
   font-weight: 600;
@@ -105,7 +106,7 @@
   display: flex;
   gap: 18px;
   align-items: baseline;
-  margin: 24px 0 18px;
+  margin: 12px 0;
   border-left: 2px solid var(--teal);
   padding: 8px 16px;
 }
@@ -163,6 +164,15 @@
 .motion-speed {
   margin-left: auto;
 }
+.motion-jump {
+  max-width: 100%;
+  min-width: 0;
+}
+.motion-jump select {
+  max-width: 170px;
+  min-width: 0;
+  font-family: var(--sans);
+}
 .motion-controls select,
 .motion-layer-selector select,
 .motion-step-index select {
@@ -201,6 +211,7 @@
   height: 20px;
 }
 .motion-stage {
+  scroll-margin-top: calc(var(--header) + 125px);
   background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 4%, var(--bg)), var(--bg));
   border-bottom: 1px solid var(--line);
   padding: 20px 14px 12px;
@@ -514,6 +525,16 @@
 .motion-reading code {
   font-family: var(--mono);
 }
+.motion-code-active {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--text);
+}
+.motion-reading .motion-current-equation {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--teal);
+  margin: 8px 0;
+}
 .motion-neighbors {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -668,6 +689,7 @@
   }
   .motion-stage {
     padding: 16px 0 8px;
+    scroll-margin-top: calc(var(--header) + 150px);
   }
   .motion-shapes {
     padding: 12px;

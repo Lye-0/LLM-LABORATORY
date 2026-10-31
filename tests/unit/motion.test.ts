@@ -2,7 +2,15 @@ import { describe, it, expect } from 'vitest';
 import { chapters, motionSteps, motionForNode, motionUrl } from '../../src/data/motion';
 import { nodeById } from '../../src/data/atlas';
 import reference from '../../src/data/motion-reference.json';
+import { exampleProduct, linearCell } from '../../src/lib/motion-math';
 describe('動きで学ぶの教材対応', () => {
+  it('積和の数値が行・列の選択と一致する', () => {
+    expect(exampleProduct).toEqual([
+      [1, -3],
+      [13, 2],
+    ]);
+    expect([0, 0.3, 0.6, 1].map((p) => linearCell(p).value)).toEqual([1, -3, 13, 2]);
+  });
   it('全段階に目的・入出力・式・コードと、実在する地図の地点がある', () => {
     expect(new Set(motionSteps.map((s) => s.id)).size).toBe(motionSteps.length);
     for (const s of motionSteps) {

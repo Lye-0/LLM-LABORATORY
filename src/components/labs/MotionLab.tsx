@@ -3,6 +3,7 @@ import { chapters, motionSteps } from '../../data/motion';
 import { withBase, withoutBase } from '../../lib/paths';
 import MotionScene from './MotionScene';
 import reference from '../../data/motion-reference.json';
+import { linearCell } from '../../lib/motion-math';
 
 const duration = 5600,
   movement = 3900;
@@ -21,6 +22,10 @@ export default function MotionLab() {
   const step = motionSteps[index],
     chapter = chapters.find((c) => c.id === step.chapter)!;
   const progress = reduced ? 1 : Math.min(1, elapsed / movement);
+  const cell = linearCell(progress);
+  function showScene() {
+    stage.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }
   function go(next: number, play = false) {
     setIndex(Math.max(0, Math.min(motionSteps.length - 1, next)));
     setElapsed(reduced ? duration : 0);
@@ -202,6 +207,20 @@ export default function MotionLab() {
         <strong>{step.purpose}</strong>
       </div>
       <div className="motion-controls" aria-label="再生の操作">
+        <label className="motion-jump">
+          段階
+          <select
+            aria-label="段階を直接選ぶ"
+            value={index}
+            onChange={(e) => go(Number(e.target.value))}
+          >
+            {motionSteps.map((s, i) => (
+              <option key={s.id} value={i}>
+                {String(i + 1).padStart(2, '0')} · {s.title}
+              </option>
+            ))}
+          </select>
+        </label>
         <button
           type="button"
           className="motion-previous"
@@ -223,6 +242,7 @@ export default function MotionLab() {
               if (elapsed >= duration) setElapsed(0);
               setAuto(true);
               setRunning(true);
+              showScene();
             }
           }}
         >
@@ -242,6 +262,7 @@ export default function MotionLab() {
             setElapsed(0);
             setRunning(true);
             setAuto(false);
+            showScene();
           }}
         >
           ↺ この動きを再生
@@ -340,6 +361,11 @@ export default function MotionLab() {
           <pre className="motion-equation">
             <code>{step.formula}</code>
           </pre>
+          {['linear', 'down', 'logits'].includes(step.kind) && (
+            <p className="motion-current-equation">
+              いまの小さな例：Y[{cell.row},{cell.column}] = {cell.terms.join(' + ')} = {cell.value}
+            </p>
+          )}
           <p>図のshapeは実モデルの寸法。小さな数値例では、計算を追えるサイズに縮めています。</p>
         </section>
         <section>
@@ -348,7 +374,21 @@ export default function MotionLab() {
             <h3>対応するコード</h3>
           </div>
           <pre>
-            <code>{step.code}</code>
+            <code>
+              {step.code.split('\n').map((line, i, lines) => (
+                <span
+                  key={i}
+                  className={
+                    i === Math.min(lines.length - 1, Math.floor(progress * lines.length))
+                      ? 'motion-code-active'
+                      : ''
+                  }
+                >
+                  {line}
+                  {i < lines.length - 1 ? '\n' : ''}
+                </span>
+              ))}
+            </code>
           </pre>
           <p>処理に対応する抜粋です。model・layer・mask等の準備は関連教材に記載しています。</p>
         </section>
@@ -387,16 +427,6 @@ export default function MotionLab() {
           再生は説明の時間です。ブラウザでQwen本体の推論を実行している表示ではありません。上下の分岐は依存関係を示し、GPUでの同時実行の保証ではありません。図にフォーカスした状態で左右キーで段階移動、Spaceでその動きの再生・停止ができます。
         </p>
       </details>
-      <div className="motion-step-index">
-        <label htmlFor="motion-step-select">段階を直接選ぶ</label>
-        <select id="motion-step-select" value={index} onChange={(e) => go(Number(e.target.value))}>
-          {motionSteps.map((s, i) => (
-            <option key={s.id} value={i}>
-              {String(i + 1).padStart(2, '0')} · {s.title}
-            </option>
-          ))}
-        </select>
-      </div>
       <p className="motion-screen-reader" role="status" aria-live="polite">
         {step.title}。{step.purpose}
       </p>

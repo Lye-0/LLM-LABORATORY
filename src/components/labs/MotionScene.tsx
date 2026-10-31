@@ -1,18 +1,14 @@
 import reference from '../../data/motion-reference.json';
 import type { MotionStep } from '../../data/motion';
+import {
+  exampleInput as demoX,
+  exampleProduct as product,
+  linearCell,
+} from '../../lib/motion-math';
 export const pieces = ['こんにちは', '、', '今日は', 'いい', '天', '気', 'ですね'];
 const lerp = (a: number, b: number, p: number) => a + (b - a) * p;
 const smooth = (p: number) => p * p * (3 - 2 * p);
 const n = (v: number) => Number(v.toFixed(3)).toString();
-const demoX = [
-    [2, -1, 1],
-    [0, 3, 2],
-  ],
-  demoW = [
-    [1, 3, 2],
-    [-2, 0, 1],
-  ];
-const product = demoX.map((row) => demoW.map((w) => row.reduce((sum, x, i) => sum + x * w[i], 0)));
 function Matrix({
   data,
   x = 0,
@@ -22,6 +18,7 @@ function Matrix({
   activeCol = -1,
   tone = 'input',
   cell = 48,
+  rowHeight = cell,
 }: {
   data: (number | string)[][];
   x?: number;
@@ -31,6 +28,7 @@ function Matrix({
   activeCol?: number;
   tone?: string;
   cell?: number;
+  rowHeight?: number;
 }) {
   return (
     <g transform={`translate(${x},${y})`} className={`motion-matrix ${tone}`}>
@@ -39,14 +37,25 @@ function Matrix({
       </text>
       {data.map((row, i) =>
         row.map((value, j) => (
-          <g key={`${i}-${j}`} transform={`translate(${j * cell},${i * cell})`}>
+          <g key={`${i}-${j}`} transform={`translate(${j * cell},${i * rowHeight})`}>
             <rect
               width={cell - 5}
-              height={cell - 5}
+              height={rowHeight - 5}
               rx="6"
               className={i === activeRow || j === activeCol ? 'cell active' : 'cell'}
             />
-            <text x={(cell - 5) / 2} y={(cell - 5) / 2 + 5} textAnchor="middle">
+            <text
+              x={(cell - 5) / 2}
+              y={(rowHeight - 5) / 2 + 5}
+              textAnchor="middle"
+              style={{
+                fontSize: Math.min(
+                  14,
+                  (cell - 13) /
+                    (String(typeof value === 'number' ? n(value) : value).length * 0.61),
+                ),
+              }}
+            >
               {typeof value === 'number' ? n(value) : value}
             </text>
           </g>
@@ -179,18 +188,21 @@ export default function MotionScene({
               const column = 66 + i * 126;
               const x =
                 step.kind === 'embedding'
-                  ? lerp(column, 115, t)
+                  ? lerp(column, 115, smooth(Math.max(0, Math.min(1, (p - 0.45) / 0.4))))
                   : step.kind === 'tokens'
                     ? lerp(start, column, t)
                     : column;
-              const y = step.kind === 'embedding' ? lerp(96, 62 + i * 48, t) : 114;
+              const y =
+                step.kind === 'embedding'
+                  ? lerp(96, 62 + i * 48, smooth(Math.min(1, p / 0.45)))
+                  : 114;
               return (
                 <g key={i} transform={`translate(${x},${y})`}>
                   <rect
                     x="-58"
-                    y="-30"
+                    y={step.kind === 'embedding' ? -23 : -30}
                     width="116"
-                    height="55"
+                    height={step.kind === 'embedding' ? 43 : 55}
                     rx="8"
                     className="motion-token"
                     opacity={step.kind === 'tokens' ? t : 1}
@@ -209,7 +221,7 @@ export default function MotionScene({
                     </g>
                   )}
                   {step.kind === 'embedding' && (
-                    <g opacity={t} transform="translate(90,0)">
+                    <g opacity={Math.max(0, (p - 0.85) / 0.15)} transform="translate(90,0)">
                       <text className="motion-id" y="4">
                         {ids[i]}
                       </text>
@@ -220,6 +232,7 @@ export default function MotionScene({
                         x={140}
                         y={-22}
                         cell={77}
+                        rowHeight={43}
                         data={[reference.vectors[i].map(n)]}
                         tone="output"
                       />
@@ -260,10 +273,12 @@ export default function MotionScene({
           {[1, 2, 3, 4, 5, 6].map((v, i) => {
             const r = Math.floor(i / 2),
               c = i % 2;
+            const travel = Math.max(0, Math.min(1, p * 6 - i));
             return (
               <g
                 key={v}
-                transform={`translate(${lerp(100 + c * 48, 580 + r * 48, t)},${lerp(100 + r * 48, 100 + c * 48, t)})`}
+                opacity={travel > 0 ? 1 : 0}
+                transform={`translate(${lerp(100 + c * 48, 580 + r * 48, smooth(Math.max(0, Math.min(1, (travel - 0.2) / 0.6))))},${travel < 0.2 ? lerp(100 + r * 48, 20, smooth(travel / 0.2)) : travel > 0.8 ? lerp(20, 100 + c * 48, smooth((travel - 0.8) / 0.2)) : 20})`}
                 className="motion-matrix output"
               >
                 <rect width="43" height="43" rx="6" className="cell active" />
@@ -283,12 +298,7 @@ export default function MotionScene({
       </>
     );
   if (['linear', 'down', 'logits'].includes(step.kind)) {
-    const q = Math.min(3, Math.floor(p * 4)),
-      r = Math.floor(q / 2),
-      c = q % 2,
-      terms = demoX[r].map(
-        (v, i) => `${v < 0 ? `(${v})` : v} × ${demoW[c][i] < 0 ? `(${demoW[c][i]})` : demoW[c][i]}`,
-      );
+    const { index: q, row: r, column: c, terms } = linearCell(p);
     return (
       <>
         <div className="motion-evidence-label">
@@ -301,7 +311,10 @@ export default function MotionScene({
                 : '実モデルの寸法とは別の計算例'}
           </span>
         </div>
-        <Canvas label={`行列積。出力${r + 1}行${c + 1}列は${product[r][c]}`}>
+        <Canvas
+          height={step.kind === 'down' ? 440 : 340}
+          label={`行列積。出力${r + 1}行${c + 1}列は${product[r][c]}`}
+        >
           <Matrix data={demoX} x={65} y={90} label="X [2,3]" activeRow={r} />
           <text x="265" y="140" className="motion-operator">
             ×
@@ -312,7 +325,7 @@ export default function MotionScene({
               [3, 0],
               [2, 1],
             ]}
-            x={330}
+            x={lerp(295, 330, t)}
             y={90}
             label="Wᵀ [3,2]"
             activeCol={c}
@@ -338,6 +351,25 @@ export default function MotionScene({
           <text x="450" y="310" textAnchor="middle" className="motion-caption">
             選択した入力の行 × 重みの列 → 出力の1成分
           </text>
+          {step.kind === 'down' && (
+            <g opacity={Math.max(0, (p - 0.65) / 0.35)}>
+              <text x="70" y="353" className="matrix-label">
+                続いてResidual ②：同じ位置・成分を足す（先頭行の例）
+              </text>
+              <Matrix data={[[2, 1]]} x={70} y={370} label="" rowHeight={43} />
+              <text x="200" y="398" className="motion-operator">
+                ＋
+              </text>
+              <Matrix data={[[1, -3]]} x={265} y={370} label="" rowHeight={43} />
+              <text x="395" y="398" className="motion-operator">
+                ＝
+              </text>
+              <Matrix data={[[3, -2]]} x={460} y={370} label="" rowHeight={43} tone="output" />
+              <text x="590" y="395" className="motion-caption">
+                保存したH₁ ＋ down出力 → H₂
+              </text>
+            </g>
+          )}
         </Canvas>
       </>
     );
@@ -430,11 +462,56 @@ export default function MotionScene({
     );
   }
   if (['scores', 'mask', 'softmax'].includes(step.kind)) {
-    const scores = [
-      [2, 1, -1],
-      [1, 3, 2],
-      [0, 1, 2],
+    const queries = [
+      [1, 0],
+      [1, 1],
+      [0, 1],
     ];
+    const scores = queries.map((q) =>
+      queries.map((k) => q.reduce((a, v, i) => a + v * k[i], 0) / Math.sqrt(2)),
+    );
+    if (step.kind === 'scores') {
+      const r = Math.min(2, Math.floor(p * 3));
+      return (
+        <>
+          <div className="motion-evidence-label">
+            3位置・1 Head・2成分の計算例 <span>この例のスケールは√2。実モデルでは√128。</span>
+          </div>
+          <Canvas label="Qの行とKの列の内積を取り、スケールを整える">
+            <Matrix data={queries} x={65} y={85} label="Q [3,2]" activeRow={r} />
+            <text x="242" y="160" className="motion-operator">
+              ×
+            </text>
+            <Matrix
+              data={[
+                [1, 1, 0],
+                [0, 1, 1],
+              ]}
+              x={320}
+              y={85}
+              label="Kᵀ [2,3]"
+              tone="weight"
+              activeCol={r}
+            />
+            <text x="520" y="160" className="motion-operator">
+              ÷ √2
+            </text>
+            <Matrix
+              data={scores}
+              x={665}
+              y={85}
+              label="scores [3,3]"
+              tone="output"
+              cell={55}
+              activeRow={r}
+            />
+            <text x="450" y="300" textAnchor="middle" className="motion-caption">
+              行＝問い合わせの位置 ／ 列＝参照先の位置
+            </text>
+          </Canvas>
+        </>
+      );
+    }
     const result = scores.map((row, i) =>
       row.map((v, j) =>
         step.kind === 'mask' && j > i && p > 0.3
@@ -453,10 +530,14 @@ export default function MotionScene({
         </div>
         <Canvas label={`${step.name}の行列。未来位置は右上にある`}>
           <Matrix
-            data={scores}
+            data={
+              step.kind === 'softmax'
+                ? scores.map((row, i) => row.map((v, j) => (j > i ? '−∞' : v)))
+                : scores
+            }
             x={120}
             y={85}
-            label="QとKからのスコア例"
+            label={step.kind === 'softmax' ? 'Mask適用済みのスコア' : 'QとKからのスコア例'}
             activeRow={Math.min(2, Math.floor(p * 3))}
           />
           <text x="400" y="164" className="motion-operator">
@@ -560,19 +641,21 @@ export default function MotionScene({
             x={50}
             y={60}
             cell={96}
+            rowHeight={55}
             label={step.kind === 'final' ? 'Layer 27直後' : `Layer ${layer}の入力`}
           />
           <FlowArrow
-            y={115}
-            length={45}
+            y={125}
+            length={35}
             label={step.kind === 'final' ? 'Final RMSNorm' : `Decoder Layer ${layer}`}
           />
           <g opacity={Math.min(1, p * 3)} transform={`translate(0,${lerp(-25, 0, t)})`}>
             <Matrix
               data={[after.map(n)]}
               x={50}
-              y={205}
+              y={190}
               cell={96}
+              rowHeight={55}
               label={step.kind === 'final' ? 'hidden_states[28]' : `Layer ${layer}の出力`}
               tone="output"
             />
@@ -608,20 +691,74 @@ export default function MotionScene({
         ))}
       </div>
     );
-  if (step.kind === 'append' || step.kind === 'cache')
+  if (step.kind === 'cache')
+    return (
+      <>
+        <div className="motion-evidence-label">
+          KV Cacheの構造図 <span>数値は省略・各マスは1位置の128成分</span>
+        </div>
+        <Canvas
+          height={450}
+          label="Layer 0、1から27まで、各層で過去7位置のKとVを保持し、新しい1位置だけ末尾へ追加する"
+        >
+          <text x="450" y="24" textAnchor="middle" className="matrix-label">
+            新しいID → Embedding → 各Decoder Layerで新しいQ・K・Vを作る
+          </text>
+          {[0, 1, 27].map((l, r) => (
+            <g key={l} transform={`translate(0,${65 + r * 125})`}>
+              <text x="35" y="33" className="matrix-label">
+                Layer {l}
+              </text>
+              {['K', 'V'].map((name, k) => (
+                <g key={name} transform={`translate(0,${k * 39})`}>
+                  <text x="145" y="23" className="motion-id">
+                    {name}
+                  </text>
+                  {Array.from({ length: 8 }, (_, c) => (
+                    <g
+                      key={c}
+                      transform={`translate(${195 + c * 64},${c === 7 ? lerp(-28, 0, t) : 0})`}
+                      opacity={c === 7 ? Math.max(0, (p - 0.25) / 0.75) : 1}
+                    >
+                      <rect
+                        width="56"
+                        height="32"
+                        rx="5"
+                        className={c === 7 ? 'motion-cache-new' : 'motion-token'}
+                      />
+                      <text x="28" y="21" textAnchor="middle" className="motion-caption">
+                        {c === 7 ? '新' : c}
+                      </text>
+                    </g>
+                  ))}
+                </g>
+              ))}
+              <text x="736" y="30" className="motion-caption">
+                過去は再計算しない
+              </text>
+              <text x="736" y="55" className="motion-caption">
+                新しいQが全位置を参照
+              </text>
+              {r === 1 && (
+                <text x="450" y="104" textAnchor="middle" className="motion-caption">
+                  ⋮ 同じ構造を各層に保持 ⋮
+                </text>
+              )}
+            </g>
+          ))}
+          <text x="450" y="438" textAnchor="middle" className="matrix-label">
+            各層のK / V： [1,8,7,128] → [1,8,8,128]（8 KV Heads）
+          </text>
+        </Canvas>
+      </>
+    );
+  if (step.kind === 'append')
     return (
       <>
         <div className="motion-evidence-label">
           生成ループの説明図 <span>追加するIDは固定モデルの観察例「。」= 1773</span>
         </div>
-        <Canvas
-          height={345}
-          label={
-            step.kind === 'cache'
-              ? '各層の過去7位置のK/Vに、新しい1位置を追加する'
-              : '7つのIDの末尾へ新しいIDを連結する'
-          }
-        >
+        <Canvas height={345} label="7つのIDの末尾へ新しいIDを連結する">
           {Array.from({ length: 8 }, (_, i) => (
             <g
               key={i}
@@ -643,14 +780,10 @@ export default function MotionScene({
             </g>
           ))}
           <text x="450" y="245" textAnchor="middle" className="matrix-label">
-            {step.kind === 'append'
-              ? '生成列 [1,7] → [1,8]'
-              : '各層の K/V [1,8,7,128] → [1,8,8,128]'}
+            生成列 [1,7] → [1,8]
           </text>
           <text x="450" y="286" textAnchor="middle" className="motion-caption">
-            {step.kind === 'append'
-              ? 'IDを選んで追加しただけでは、cacheはまだ増えない。'
-              : '新しいIDを全28層へ通す。新しいQは過去＋現在のK/Vを参照。'}
+            IDを選んで追加しただけでは、cacheはまだ増えない。
           </text>
         </Canvas>
       </>
@@ -727,9 +860,33 @@ export default function MotionScene({
             {d.op}
           </text>
         </g>
-        <g opacity={Math.min(1, p * 3)}>
+        <g opacity={Math.max(0, (p - 0.55) / 0.45)}>
           <Matrix data={d.right} x={580} y={100} label="出力" tone="output" />
         </g>
+        {(step.kind === 'residual' || step.kind === 'multiply') && (
+          <g className="motion-sum">
+            <text x="65" y="235">
+              {step.kind === 'residual' ? '2 ＋ 0.5 = 2.5' : '2 × 3 = 6'} → 先頭の成分
+            </text>
+            <path
+              d="M230,121 L310,121 M230,169 L310,169 M520,135 L565,135"
+              className="motion-operation-path"
+              fill="none"
+              stroke="var(--accent)"
+              markerEnd="url(#motion-arrow)"
+            />
+            {[0, 1].map((row) => (
+              <circle
+                key={row}
+                cx={lerp(235, 310, smooth(Math.min(1, p * 2)))}
+                cy={row === 0 ? 121 : 169}
+                r="4"
+                fill="var(--teal)"
+                opacity={p < 0.55 ? 1 : 0}
+              />
+            ))}
+          </g>
+        )}
         <text x="450" y="280" textAnchor="middle" className="motion-caption">
           {step.kind === 'multiply'
             ? '対応する要素だけを掛ける。内積や行列積とは別。'
