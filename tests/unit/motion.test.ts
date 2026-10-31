@@ -4,6 +4,12 @@ import { nodeById } from '../../src/data/atlas';
 import reference from '../../src/data/motion-reference.json';
 import { exampleProduct, linearCell } from '../../src/lib/motion-math';
 describe('動きで学ぶの教材対応', () => {
+  it('範囲外の進捗でも行列の存在しない行を参照しない', () => {
+    for (const p of [-0.00001, -1, NaN, Infinity, -Infinity]) {
+      expect(linearCell(p)).toMatchObject({ index: 0, row: 0, column: 0, value: 1 });
+    }
+    expect(linearCell(1.1)).toMatchObject({ index: 3, row: 1, column: 1, value: 2 });
+  });
   it('積和の数値が行・列の選択と一致する', () => {
     expect(exampleProduct).toEqual([
       [1, -3],

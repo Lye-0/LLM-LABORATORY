@@ -7,8 +7,10 @@ import { topics } from '../data/topics';
 import { maps, mapUrl } from '../data/atlas';
 import { apiLibraries, apiClasses, getApiClass } from '../data/api-groups';
 import { apiEntries } from '../data/api';
-import { chapters, motionSteps, motionUrl } from '../data/motion';
+import { motionUrl } from '../data/motion';
+import { journeyGroups } from '../data/journey';
 import '../styles/global.css';
+import '../styles/scrollbars.css';
 interface Props {
   title: string;
   description?: string;
@@ -60,9 +62,9 @@ if (activeSection === '/motion/') {
   sidebarGroups = [
     {
       title: '章を選ぶ',
-      links: chapters.map((c) => ({
-        href: motionUrl(motionSteps.find((s) => s.chapter === c.id)!.id),
-        label: c.title,
+      links: journeyGroups.map((c) => ({
+        href: motionUrl(c.first),
+        label: `${c.no} ${c.title}`,
       })),
     },
     {

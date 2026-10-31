@@ -355,8 +355,6 @@ kbd {
   overflow-y: auto;
   z-index: 20;
   padding: 28px 16px 24px 20px;
-  scrollbar-width: thin;
-  scrollbar-color: var(--line) transparent;
 }
 .sidebar-home {
   display: flex;
@@ -678,8 +676,6 @@ kbd {
 .table-scroll {
   max-width: 100%;
   overflow: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--faint) transparent;
 }
 .table-scroll table {
   min-width: 480px;
@@ -1154,8 +1150,6 @@ pre {
   line-height: 1.8;
   color: #d9e3eb;
   tab-size: 4;
-  scrollbar-width: thin;
-  scrollbar-color: var(--faint) transparent;
 }
 pre code {
   font: inherit;
@@ -1193,7 +1187,6 @@ pre code {
   padding-left: 20px;
   max-height: calc(100vh - 145px);
   overflow-y: auto;
-  scrollbar-width: thin;
 }
 .toc p {
   font-size: 9px;
@@ -2183,8 +2176,6 @@ pre code {
 }
 .select-viewport {
   max-height: min(330px, calc(var(--radix-select-content-available-height) - 54px));
-  scrollbar-width: thin;
-  scrollbar-color: var(--faint) transparent;
 }
 .select-option {
   display: flex;

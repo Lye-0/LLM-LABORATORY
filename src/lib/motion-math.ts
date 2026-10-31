@@ -10,7 +10,8 @@ export const exampleProduct = exampleInput.map((row) =>
   exampleWeight.map((w) => row.reduce((sum, x, i) => sum + x * w[i], 0)),
 );
 export function linearCell(progress: number) {
-  const index = Math.min(3, Math.floor(progress * 4)),
+  const safeProgress = Number.isFinite(progress) ? Math.max(0, Math.min(1, progress)) : 0;
+  const index = Math.min(3, Math.floor(safeProgress * 4)),
     row = Math.floor(index / 2),
     column = index % 2;
   const terms = exampleInput[row].map(
