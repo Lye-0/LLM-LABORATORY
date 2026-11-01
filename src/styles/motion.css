@@ -1092,12 +1092,15 @@ body:has(.journey) .page-content.wide {
   stroke-linejoin: round;
 }
 
-/* Only fixed slice axes belong here; operation details stay beside the matrices. */
+/* Slice coordinates stay centered while the Head labels travel into the second row. */
+.journey-slice-panel {
+  pointer-events: none;
+}
 .journey-slice-context {
   display: flex;
   align-items: baseline;
-  flex-wrap: wrap;
-  gap: 4px 12px;
+  justify-content: center;
+  gap: 12px;
   font: 12px/1.55 var(--sans);
   color: var(--text);
 }
@@ -1105,14 +1108,12 @@ body:has(.journey) .page-content.wide {
   color: var(--faint);
   font-size: 10px;
 }
-.slice-location,
-.slice-head-range {
+.slice-location {
   white-space: nowrap;
 }
-.slice-head-range {
-  color: var(--muted);
-  border-left: 1px solid var(--line);
-  padding-left: 12px;
+.slice-head-label {
+  font: 12px var(--sans);
+  fill: var(--muted);
 }
 
 .journey-tensor[data-entity='q-head-1'] rect,

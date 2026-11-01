@@ -15,10 +15,17 @@ import JourneyCanvas from './JourneyCanvas';
 import JourneyShapeCanvas from './JourneyShapeCanvas';
 import { shapeGuide, shapeOperations } from '../../lib/journey-shapes';
 const NumericJourneyCanvas = memo(
-  ({ sample }: { sample: ReturnType<typeof sampleJourney>; active: boolean }) => (
-    <JourneyCanvas sample={sample} />
-  ),
-  (previous, next) => !next.active || (previous.active && previous.sample === next.sample),
+  ({
+    sample,
+    reduced,
+  }: {
+    sample: ReturnType<typeof sampleJourney>;
+    active: boolean;
+    reduced: boolean;
+  }) => <JourneyCanvas sample={sample} reduced={reduced} />,
+  (previous, next) =>
+    !next.active ||
+    (previous.active && previous.sample === next.sample && previous.reduced === next.reduced),
 );
 
 export default function MotionLab() {
@@ -265,10 +272,10 @@ export default function MotionLab() {
         </aside>
         <div className="journey-canvas-scroll" ref={canvasScroll}>
           <div hidden={view !== 'numbers'}>
-            <NumericJourneyCanvas sample={sample} active={view === 'numbers'} />
+            <NumericJourneyCanvas sample={sample} active={view === 'numbers'} reduced={reduced} />
           </div>
           <div hidden={view !== 'shapes'}>
-            {view === 'shapes' && <JourneyShapeCanvas sample={sample} />}
+            {view === 'shapes' && <JourneyShapeCanvas sample={sample} reduced={reduced} />}
           </div>
         </div>
         <p className="journey-caption">

@@ -7,7 +7,13 @@ import { actorId } from '../../lib/journey-actors';
 import { shapeProcess } from '../../lib/journey-shape-process';
 import { mathDocument } from '../../lib/journey-formulas';
 
-export default function JourneyShapeCanvas({ sample }: { sample: JourneySample }) {
+export default function JourneyShapeCanvas({
+  sample,
+  reduced = false,
+}: {
+  sample: JourneySample;
+  reduced?: boolean;
+}) {
   const { step, progress: p, calculation: c } = sample;
   const actors = shapeActors(sample),
     operations = shapeOperations(step.id),
@@ -84,7 +90,7 @@ export default function JourneyShapeCanvas({ sample }: { sample: JourneySample }
           height={Math.max(430, ...stored.map((a) => a.pose!.cy + a.pose!.height / 2 + 45))}
         />
       )}
-      <JourneySliceContext sample={sample} view="shapes" />
+      <JourneySliceContext sample={sample} view="shapes" reduced={reduced} />
       <JourneyTokenCuts sample={sample} />
       {branches.map(([from, to]) => {
         const a = actors.find((a) => a.entity.id === from)?.pose,

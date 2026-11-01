@@ -87,12 +87,12 @@ test('形表示も表示中のHeadと全Headの結合を区別し、切替で時
   await expect(context).toHaveAttribute('data-head-state', 'joining');
   await seek(page, 'concat', 0.95);
   await expect(context).toHaveAttribute('data-head-state', 'joined');
-  await expect(context).not.toContainText('Head');
+  await expect(context.locator('[data-slice-head]').first()).toHaveAttribute('opacity', '0');
   await expect(context).toContainText('Batch 0 · Layer 0');
   const time = await page.getByRole('slider').inputValue();
   await page.getByRole('button', { name: '数値で見る', exact: true }).click();
   await expect(page.getByRole('slider')).toHaveValue(time);
-  await expect(page.locator('[data-slice-view="numbers"]')).toHaveText(
+  await expect(page.locator('[data-slice-view="numbers"] .journey-slice-context')).toHaveText(
     '表示スライスBatch 0 · Layer 0',
   );
 });
@@ -112,11 +112,12 @@ test('両ビューの表示範囲が収まり、分割と結合の途中でも�
         const panel = page.locator(`[data-slice-view="${view}"]`);
         await expect(panel).toBeVisible();
         await expect(panel).not.toContainText(/成分|Token位置|Query位置|処理|正規化/);
-        if (['qkv', 'concat', 'o-proj'].includes(stage))
-          await expect(panel).not.toContainText('Head');
+        if (['qkv', 'o-proj'].includes(stage) || (stage === 'concat' && p >= 0.2))
+          for (const label of await panel.locator('[data-slice-head]').all())
+            await expect(label).toHaveAttribute('opacity', '0');
         const fits = await panel.evaluate((el) => {
           const boundary = el.parentElement!.getBoundingClientRect();
-          return [...el.querySelectorAll('strong,span,small')].every((child) => {
+          return [...el.querySelectorAll('text,span')].every((child) => {
             const r = child.getBoundingClientRect();
             return r.right <= boundary.right + 1 && r.bottom <= boundary.bottom + 1;
           });
@@ -128,5 +129,152 @@ test('両ビューの表示範囲が収まり、分割と結合の途中でも�
             style: '.journey-dock{display:none!important}',
           });
       }
+  }
+});
+
+test('Head名は行列付近から上段へ移動し、中央配置・逆再生・動きを減らす設定を維持する', async ({
+  page,
+}) => {
+  await page.goto(root);
+  for (const view of ['numbers', 'shapes']) {
+    await page
+      .getByRole('button', {
+        name: view === 'numbers' ? '数値で見る' : '形と軸で見る',
+        exact: true,
+      })
+      .click();
+    const panel = page.locator(`[data-slice-view="${view}"]`);
+    const q = panel.locator('[data-slice-head="q"]');
+    const k = panel.locator('[data-slice-head="k"]');
+    await seek(page, 'heads', view === 'numbers' ? 0.55 : 0.74);
+    const originalY = Number(await k.getAttribute('y'));
+    expect(originalY).toBeGreaterThan(300);
+    await seek(page, 'heads', view === 'numbers' ? 0.8 : 0.86);
+    const midpoint = { x: await k.getAttribute('x'), y: await k.getAttribute('y') };
+    expect(Number(midpoint.y)).toBeLessThan(originalY);
+    expect(Number(midpoint.y)).toBeGreaterThan(60);
+    await seek(page, 'heads', 0.99);
+    await expect(q).toHaveAttribute('x', '415');
+    await expect(k).toHaveAttribute('x', '585');
+    await expect(q).toHaveAttribute('y', '60');
+    await expect(k).toHaveAttribute('y', '60');
+    await seek(page, 'heads', view === 'numbers' ? 0.8 : 0.86);
+    expect({ x: await k.getAttribute('x'), y: await k.getAttribute('y') }).toEqual(midpoint);
+    await seek(page, 'mask', 0.8);
+    const centering = await panel.evaluate((el) => {
+      const svg = el.closest('svg')!,
+        r = svg.getBoundingClientRect();
+      const line = el.querySelector('.journey-slice-context')!;
+      const pieces = [...line.children].map((n) => n.getBoundingClientRect());
+      return Math.abs((pieces[0].left + pieces.at(-1)!.right) / 2 - (r.left + r.right) / 2);
+    });
+    expect(centering).toBeLessThan(1);
+    await page.getByRole('checkbox', { name: '動きを減らす' }).check();
+    await seek(page, 'heads', view === 'numbers' ? 0.8 : 0.86);
+    await expect(k).toHaveAttribute('x', '585');
+    await expect(k).toHaveAttribute('y', '60');
+    await page.getByRole('checkbox', { name: '動きを減らす' }).uncheck();
+    expect({ x: await k.getAttribute('x'), y: await k.getAttribute('y') }).toEqual(midpoint);
+  }
+});
+
+test('移動するHead名が行列・数式・他の文字に重ならない', async ({ page }) => {
+  await page.goto(root);
+  for (const view of ['numbers', 'shapes']) {
+    await page
+      .getByRole('button', {
+        name: view === 'numbers' ? '数値で見る' : '形と軸で見る',
+        exact: true,
+      })
+      .click();
+    for (const p of [
+      0.4, 0.5, 0.6, 0.65, 0.7, 0.73, 0.75, 0.78, 0.8, 0.83, 0.86, 0.89, 0.92, 0.95, 0.99,
+    ]) {
+      await seek(page, 'heads', p);
+      const collisions = await page.locator(`[data-slice-view="${view}"]`).evaluate((panel) => {
+        const svg = panel.closest('svg')!;
+        const visible = (e: Element) => {
+          let n: Element | null = e;
+          while (n && n !== svg) {
+            if (Number(n.getAttribute('opacity') ?? 1) < 0.15) return false;
+            n = n.parentElement;
+          }
+          return true;
+        };
+        const labels = [...panel.querySelectorAll('[data-slice-head]')].filter(visible);
+        const obstacles = [
+          ...svg.querySelectorAll(
+            'text, .journey-operation-note, .shape-body, .journey-tensor rect, .journey-slice-context',
+          ),
+        ].filter(visible);
+        const hits: string[] = [];
+        for (const label of labels)
+          for (const obstacle of obstacles) {
+            if (obstacle === label || obstacle.contains(label)) continue;
+            const a = label.getBoundingClientRect(),
+              b = obstacle.getBoundingClientRect();
+            if (
+              Math.min(a.right, b.right) - Math.max(a.left, b.left) > 3 &&
+              Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 3
+            )
+              hits.push(`${label.textContent} / ${obstacle.textContent || obstacle.tagName}`);
+          }
+        return hits;
+      });
+      expect(collisions, `${view} ${p}`).toEqual([]);
+      if ([0.6, 0.75, 0.86, 0.95].includes(p))
+        await page.locator('.journey-theater').screenshot({
+          path: `.cache/slice-travel-${view}-${p}.png`,
+          style: '.journey-dock{display:none!important}',
+        });
+    }
+  }
+});
+
+test('通常再生でHead名が連続して進み、画面幅が変わっても表示の中心を保つ', async ({ page }) => {
+  await page.goto(root);
+  for (const view of ['numbers', 'shapes']) {
+    await page
+      .getByRole('button', {
+        name: view === 'numbers' ? '数値で見る' : '形と軸で見る',
+        exact: true,
+      })
+      .click();
+    const panel = page.locator(`[data-slice-view="${view}"]`);
+    await seek(page, 'heads', view === 'numbers' ? 0.6 : 0.74);
+    await page.getByRole('button', { name: '▶ 全体を再生', exact: true }).click();
+    const ys: number[] = [];
+    for (let i = 0; i < 6; i++) {
+      await page.waitForTimeout(220);
+      ys.push(Number(await panel.locator('[data-slice-head="k"]').getAttribute('y')));
+      await page
+        .locator('.journey-theater')
+        .screenshot({
+          path: `.cache/slice-play-${view}-${i}.png`,
+          style: '.journey-dock{display:none!important}',
+        });
+    }
+    await page.getByRole('button', { name: 'Ⅱ 一時停止', exact: true }).click();
+    expect(ys.at(-1)!).toBeLessThan(ys[0]);
+    for (let i = 1; i < ys.length; i++) expect(ys[i]).toBeLessThanOrEqual(ys[i - 1]);
+    await seek(page, 'mask', 0.8);
+    for (const width of [390, 1280, 1920]) {
+      await page.setViewportSize({ width, height: 900 });
+      const offset = await panel.evaluate((el) => {
+        const svg = el.closest('svg')!.getBoundingClientRect();
+        const spans = [...el.querySelectorAll('.journey-slice-context span')].map((n) =>
+          n.getBoundingClientRect(),
+        );
+        return Math.abs((spans[0].left + spans.at(-1)!.right) / 2 - (svg.left + svg.right) / 2);
+      });
+      expect(offset, `${view} ${width}`).toBeLessThan(1);
+      await page
+        .locator('.journey-theater')
+        .screenshot({
+          path: `.cache/slice-width-${view}-${width}.png`,
+          style: '.journey-dock{display:none!important}',
+        });
+    }
+    await page.setViewportSize({ width: 1280, height: 900 });
   }
 });

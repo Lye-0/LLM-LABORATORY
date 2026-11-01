@@ -345,7 +345,13 @@ function center(e: MovingEntity, side: 'left' | 'right') {
     y: e.y + ((e.transpose ? e.data[0].length : e.data.length) * e.h) / 2,
   };
 }
-export default function JourneyCanvas({ sample }: { sample: JourneySample }) {
+export default function JourneyCanvas({
+  sample,
+  reduced = false,
+}: {
+  sample: JourneySample;
+  reduced?: boolean;
+}) {
   const { step, entities, progress: p } = sample;
   const byId = Object.fromEntries(entities.map((e) => [e.id, e]));
   byId.attn = byId[actorId(step.id, 'attn')];
@@ -410,7 +416,7 @@ export default function JourneyCanvas({ sample }: { sample: JourneySample }) {
           <path d="M0 1 L9 5 L0 9" fill="none" stroke="currentColor" />
         </marker>
       </defs>
-      <JourneySliceContext sample={sample} view="numbers" />
+      <JourneySliceContext sample={sample} view="numbers" reduced={reduced} />
       <JourneyTokenCuts sample={sample} />
       {links.map(([from, to]) => {
         const a = byId[from],
