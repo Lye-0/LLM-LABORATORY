@@ -33,9 +33,11 @@ test('Qの6成分を2 Headへ分け、同じ値と位置から分割が始まる
   await seek(page, 'rope', 0.7);
   const context = page.locator('[data-slice-view="numbers"]');
   await expect(context).toContainText('Q Head 0');
-  await expect(context).toContainText('共有 KV Head 0');
-  await expect(context).toContainText('Token位置 0〜6');
-  await expect(context).toContainText('詳細計算');
+  await expect(context).toContainText('KV Head 0 / 全1');
+  await expect(context).toContainText('Q Head 0 / 全2');
+  await expect(context).toContainText('Batch 0 · Layer 0');
+  await expect(context).not.toContainText('Token位置');
+  await expect(context).not.toContainText('詳細計算');
 });
 test('2 Headの結果が各Tokenの横へ並び、その全6成分をo_projへ渡す', async ({ page }) => {
   await page.goto(root);
@@ -79,17 +81,20 @@ test('形表示も表示中のHeadと全Headの結合を区別し、切替で時
   await page.goto(root + '?view=shapes');
   await seek(page, 'heads', 0.95);
   const context = page.locator('[data-slice-view="shapes"]');
-  await expect(context).toContainText('Q 16 / KV 8');
-  await expect(context).toContainText('共有 KV Head 0 / 8');
+  await expect(context).toContainText('Q Head 0 / 全16');
+  await expect(context).toContainText('KV Head 0 / 全8');
   await seek(page, 'concat', 0.7);
   await expect(context).toHaveAttribute('data-head-state', 'joining');
   await seek(page, 'concat', 0.95);
   await expect(context).toHaveAttribute('data-head-state', 'joined');
-  await expect(context).toContainText('2048成分');
+  await expect(context).not.toContainText('Head');
+  await expect(context).toContainText('Batch 0 · Layer 0');
   const time = await page.getByRole('slider').inputValue();
   await page.getByRole('button', { name: '数値で見る', exact: true }).click();
   await expect(page.getByRole('slider')).toHaveValue(time);
-  await expect(page.locator('[data-slice-view="numbers"]')).toContainText('説明モデル Q 2 / KV 1');
+  await expect(page.locator('[data-slice-view="numbers"]')).toHaveText(
+    '表示スライスBatch 0 · Layer 0',
+  );
 });
 
 test('両ビューの表示範囲が収まり、分割と結合の途中でも読める', async ({ page }) => {
@@ -106,6 +111,9 @@ test('両ビューの表示範囲が収まり、分割と結合の途中でも�
         await seek(page, stage, p);
         const panel = page.locator(`[data-slice-view="${view}"]`);
         await expect(panel).toBeVisible();
+        await expect(panel).not.toContainText(/成分|Token位置|Query位置|処理|正規化/);
+        if (['qkv', 'concat', 'o-proj'].includes(stage))
+          await expect(panel).not.toContainText('Head');
         const fits = await panel.evaluate((el) => {
           const boundary = el.parentElement!.getBoundingClientRect();
           return [...el.querySelectorAll('strong,span,small')].every((child) => {
@@ -115,12 +123,10 @@ test('両ビューの表示範囲が収まり、分割と結合の途中でも�
         });
         expect(fits, `${view}:${stage}:${p}`).toBe(true);
         if (['heads', 'concat'].includes(stage))
-          await page
-            .locator('.journey-theater')
-            .screenshot({
-              path: `.cache/head-${view}-${stage}-${p}.png`,
-              style: '.journey-dock{display:none!important}',
-            });
+          await page.locator('.journey-theater').screenshot({
+            path: `.cache/head-${view}-${stage}-${p}.png`,
+            style: '.journey-dock{display:none!important}',
+          });
       }
   }
 });
