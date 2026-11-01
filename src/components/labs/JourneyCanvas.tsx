@@ -47,23 +47,21 @@ export function JourneyTensor({
   const splitLabel =
     step !== 'heads'
       ? null
-      : e.id === 'q-head-1'
-        ? b.label
-        : e.id === 'q'
-          ? progress < 0.08
-            ? a.label
-            : phase === 0
-              ? 'Q · 分割した3成分'
-              : phase < 1
-                ? 'Q · 正規化中'
-                : b.label.replace(' Head 0', '')
-          : e.id === 'k'
-            ? phase === 0
-              ? 'K · 3成分'
-              : phase < 1
-                ? 'K · 正規化中'
-                : b.label.replace('共有K Head 0', 'K')
-            : null;
+      : e.id === 'q'
+        ? progress < 0.08
+          ? a.label
+          : phase === 0
+            ? 'Q · 分割した3成分'
+            : phase < 1
+              ? 'Q · 正規化中'
+              : b.label.replace(' Head 0', '')
+        : e.id === 'k'
+          ? phase === 0
+            ? 'K · 3成分'
+            : phase < 1
+              ? 'K · 正規化中'
+              : b.label.replace('共有K Head 0', 'K')
+          : null;
 
   const rows = outputFrame ? b.data.length : Math.max(a.data.length, b.data.length),
     cols =
@@ -95,17 +93,7 @@ export function JourneyTensor({
       opacity={Math.max(0, Math.min(1, e.opacity))}
       className={`journey-tensor tone-${e.tone} ${active ? 'is-active' : 'is-support'}`}
     >
-      <text
-        y="-16"
-        className="tensor-label"
-        opacity={
-          step === 'heads' && e.id === 'q-head-1'
-            ? ease((progress - 0.08) / 0.1)
-            : saving
-              ? ease((progress - 0.44) / 0.16)
-              : 1
-        }
-      >
+      <text y="-16" className="tensor-label" opacity={saving ? ease((progress - 0.44) / 0.16) : 1}>
         {splitLabel !== null
           ? splitLabel
           : step === 'concat' && e.id === 'attn'

@@ -172,7 +172,6 @@ for (const s of journeySteps) {
     case 'heads':
       f.height = 900;
       hide(f, 'hidden', 'weight', 'weight-q', 'weight-k', 'weight-v');
-      put(f, 'q-head-1', m.firstLayer.qHeads[1], 40, 720, 'Q Head 1 · 分割時の値', 'q', 26, 18);
       change(f, 'q', { x: 430, data: m.firstLayer.qn, label: 'Q Head 0 · Head内正規化後' });
       change(f, 'k', { x: 430, data: m.firstLayer.kn, label: '共有K Head 0 · Head内正規化後' });
       change(f, 'v', { x: 40, y: 500, w: 30, h: 20, label: 'V · 加重和まで待機' });
@@ -180,7 +179,6 @@ for (const s of journeySteps) {
         'Qの6成分を2 Headsへ分割。各Headは3成分。共有K/V Head 0を使い、Q/KをHead内で正規化する。';
       break;
     case 'rope':
-      hide(f, 'q-head-1');
       change(f, 'q', { data: m.firstLayer.qr, label: 'Q′ · RoPE後' });
       change(f, 'k', { data: m.firstLayer.kr, label: 'K′ · RoPE後' });
       f.caption = '同じ位置のQ/Kを回す。小さな例は成分0・1を回転し、Vと成分2は保持。';
@@ -549,31 +547,6 @@ export function sampleJourney(time: number) {
   }
   const entities = Object.values(target.entities).map((end) => {
     let start = before.entities[end.id] ?? { ...end, opacity: 0 };
-    if (step.id === 'heads' && end.id === 'q-head-1') {
-      const source = before.entities.q;
-      const right = ease(at.progress / 0.15),
-        down = ease((at.progress - 0.15) / 0.22),
-        left = ease((at.progress - 0.37) / 0.23);
-      start = {
-        ...source,
-        id: end.id,
-        x: source.x + source.w * 3,
-        data: m.firstLayer.qHeads[1],
-        label: '',
-        opacity: 1,
-      };
-      return {
-        ...end,
-        start,
-        end,
-        blend: p,
-        opacity: 1,
-        x: start.x + (800 - start.x) * right + (end.x - 800) * left,
-        y: start.y + (end.y - start.y) * down,
-        w: start.w + (end.w - start.w) * p,
-        h: start.h + (end.h - start.h) * p,
-      };
-    }
     if (step.id === 'concat' && end.id === 'attn') {
       const move = ease(at.progress / 0.35);
       return {

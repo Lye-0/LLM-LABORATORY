@@ -8,23 +8,28 @@ async function seek(page: import('@playwright/test').Page, id: string, p: number
     .getByRole('slider')
     .fill(String(Math.round((journeyStarts[i] + journeySteps[i].duration * p) / 10) * 10));
 }
-test('Qの6成分を2 Headへ分け、同じ値と位置から分割が始まる', async ({ page }) => {
+test('Q Head 0を引き継ぎ、所属を上部表示に集約する', async ({ page }) => {
   await page.goto(root);
   await seek(page, 'qkv', 0.99);
-  const original = await page.locator('[data-cell="q:0:3"]').evaluate((e) => ({
+  const original = await page.locator('[data-cell="q:0:0"]').evaluate((e) => ({
     x: e.getAttribute('data-x'),
     y: e.getAttribute('data-y'),
     value: e.getAttribute('data-value'),
   }));
   await seek(page, 'heads', 0);
-  const split = await page.locator('[data-cell="q-head-1:0:0"]').evaluate((e) => ({
+  const split = await page.locator('[data-cell="q:0:0"]').evaluate((e) => ({
     x: e.getAttribute('data-x'),
     y: e.getAttribute('data-y'),
     value: e.getAttribute('data-value'),
   }));
   expect(split).toEqual(original);
   await expect(page.locator('[data-entity="q"] [data-cell]')).toHaveCount(21);
-  await expect(page.locator('[data-entity="q-head-1"] [data-cell]')).toHaveCount(21);
+  await expect(page.locator('[data-entity="q-head-1"]')).toHaveCount(0);
+  for (const p of [0, 0.25, 0.6, 0.95]) {
+    await seek(page, 'heads', p);
+    await expect(page.locator('[data-entity="q-head-1"]')).toHaveCount(0);
+    await expect(page.locator('[data-journey-scene]')).not.toContainText('分割時の値');
+  }
   await seek(page, 'heads', 0.25);
   await expect(page.locator('[data-slice-view="numbers"]')).toHaveAttribute(
     'data-head-state',
@@ -388,12 +393,10 @@ test('スライスが変わる前・途中・完了を両ビューで確認す�
       ['cache', 0.95],
     ] as const) {
       await seek(page, stage, p);
-      await page
-        .locator('.journey-theater')
-        .screenshot({
-          path: `.cache/slice-transfer-${view}-${stage}-${p}.png`,
-          style: '.journey-dock{display:none!important}',
-        });
+      await page.locator('.journey-theater').screenshot({
+        path: `.cache/slice-transfer-${view}-${stage}-${p}.png`,
+        style: '.journey-dock{display:none!important}',
+      });
     }
   }
 });
