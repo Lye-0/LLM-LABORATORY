@@ -212,7 +212,6 @@ export function JourneyTensor({
                   opacity={step === 'tokenize' ? ease((progress - 0.18) / 0.54) : 1}
                   className={
                     (i === 6 ? 'last-position ' : '') +
-                    (step === 'o-proj' && e.id === 'attn' && j >= 3 ? 'head-one-component ' : '') +
                     (step === 'cache' &&
                     (e.id.startsWith('cache-new-') || (e.id.startsWith('cache-') && j === 7))
                       ? 'new-cache-position '

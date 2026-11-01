@@ -125,7 +125,7 @@ test('要素積とResidualは入力を保持して別の結果を作り、その
   }
 });
 
-test('Headの識別色より計算中の強調色を優先し、全6成分を同じ色で示す', async ({ page }) => {
+test('連結後はHeadによる色分けを解消し、計算中の全6成分を同じ色で示す', async ({ page }) => {
   await page.goto(root);
   for (const p of [0.6, 0.72, 0.83]) {
     await seek(page, 'o-proj', p);
@@ -134,16 +134,28 @@ test('Headの識別色より計算中の強調色を優先し、全6成分を同
     const colors = await active.evaluateAll((es) => es.map((e) => getComputedStyle(e).stroke));
     expect(new Set(colors).size).toBe(1);
     expect(colors[0]).toBe('rgb(227, 190, 121)');
-    const idle = page
-      .locator('[data-entity="attn"] .head-one-component:not(.calculation-component)')
-      .first();
+    const idle = page.locator('[data-entity="attn"] rect:not(.calculation-component)').first();
     expect(await idle.evaluate((e) => getComputedStyle(e).stroke)).not.toBe(colors[0]);
-    await page
-      .locator('.journey-theater')
-      .screenshot({
-        path: `.cache/head-highlight-${p}.png`,
-        style: '.journey-dock{display:none!important}',
-      });
+    const idleRows = await page.locator('[data-entity="attn"] [data-cell]').evaluateAll((cells) => {
+      const result: Record<string, string[]> = {};
+      for (const cell of cells) {
+        const rect = cell.querySelector('rect')!;
+        if (rect.classList.contains('calculation-component')) continue;
+        const row = cell.getAttribute('data-cell')!.split(':')[1];
+        (result[row] ??= []).push(getComputedStyle(rect).stroke);
+      }
+      return Object.values(result);
+    });
+    for (const row of idleRows) {
+      expect(row).toHaveLength(6);
+      expect(new Set(row).size).toBe(1);
+    }
+    await expect(page.locator('[data-entity="attn"] .head-one-component')).toHaveCount(0);
+
+    await page.locator('.journey-theater').screenshot({
+      path: `.cache/head-highlight-${p}.png`,
+      style: '.journey-dock{display:none!important}',
+    });
   }
   await seek(page, 'o-proj', 0.95);
   await expect(focus(page, 'attn')).toHaveCount(0);
