@@ -138,7 +138,7 @@ test('全工程の移動中と完了時にラベル・軸・説明が重なら�
       const overlaps = await page.locator('[data-shape-scene]').evaluate((svg) => {
         const nodes = [
           ...svg.querySelectorAll(
-            'text, foreignObject.shape-badge-wrap, foreignObject.shape-explanation',
+            'text, foreignObject.shape-badge-wrap, foreignObject.shape-explanation, .journey-slice-context',
           ),
         ].filter((e) => {
           let a: Element | null = e;

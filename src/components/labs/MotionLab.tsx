@@ -239,7 +239,7 @@ export default function MotionLab() {
           <span className="journey-position-note">
             {view === 'numbers'
               ? '淡い枠は追跡位置。オレンジは今の処理対象。行列積は行×全列をまとめて進めます。'
-              : 'Qwen3-0.6Bの形と軸を表示 · B=1。寸法は正確、図の比率と区切りは模式的。色は処理対象で、参照割合の大小ではありません。'}
+              : 'Qwen3-0.6Bの形と軸を表示 · B=1。寸法は正確、図の比率は模式的。色は処理対象で、参照割合の大小ではありません。'}
           </span>
         </div>
         <span className="journey-count">
@@ -340,7 +340,8 @@ export default function MotionLab() {
       <details className="journey-guide">
         <summary>図の読み方・数値と省略について</summary>
         <p>
-          TokenとID、およびEmbeddingの先頭3成分は固定revisionのQwen3-0.6Bの観察値です。その後は、表示した3成分を全幅として扱う説明用の小さなモデルで、前の計算結果を次へ渡します。実モデルの1024成分や全151936候補の推論結果ではありません。7位置・1
+          TokenとID、およびEmbeddingの先頭3成分は固定revisionのQwen3-0.6Bの観察値です。その後は、表示した3成分を全幅として扱う説明用の小さなモデルで、前の計算結果を次へ渡します。実モデルの1024成分や全151936候補の推論結果ではありません。7位置・Q
+          2 Heads（各3成分）・共有KV 1
           Head・MLP幅6・候補3つへ縮め、数値は表示時のみ小数2桁へ丸めています。式とコードのshapeは実モデルに対応します。
         </p>
         <p>

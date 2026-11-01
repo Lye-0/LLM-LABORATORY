@@ -98,7 +98,7 @@ for (const s of journeySteps) {
   f.caption =
     s.group === 'input'
       ? 'TokenとID・Embeddingの先頭3成分は、固定モデルの観察例。'
-      : '前の結果を使う説明用モデル：7位置・幅3 ／ MLP幅6 ／ 1 Head。';
+      : '前の結果を使う説明用モデル：7位置・幅3 ／ MLP幅6 ／ Q 2 Heads・KV 1 Head。';
   switch (s.id) {
     case 'text':
       break;
@@ -166,17 +166,21 @@ for (const s of journeySteps) {
           32,
         ),
       );
+      change(f, 'weight-q', { x: 390, w: 30 });
       f.caption = 'Q・K・Vは同じ入力から別の重みで作る。保存した入力は迂回したまま残る。';
       break;
     case 'heads':
       f.height = 900;
       hide(f, 'hidden', 'weight', 'weight-q', 'weight-k', 'weight-v');
-      change(f, 'q', { x: 430, data: m.firstLayer.qn, label: 'Q · Head内正規化後' });
-      change(f, 'k', { x: 430, data: m.firstLayer.kn, label: 'K · Head内正規化後' });
+      put(f, 'q-head-1', m.firstLayer.qHeads[1], 40, 720, 'Q Head 1 · 分割時の値', 'q', 26, 18);
+      change(f, 'q', { x: 430, data: m.firstLayer.qn, label: 'Q Head 0 · Head内正規化後' });
+      change(f, 'k', { x: 430, data: m.firstLayer.kn, label: '共有K Head 0 · Head内正規化後' });
       change(f, 'v', { x: 40, y: 500, w: 30, h: 20, label: 'V · 加重和まで待機' });
-      f.caption = '説明用は1 Head。実モデルはQが16 Heads、K/Vが8 Heads。Q/KだけをHead内で正規化。';
+      f.caption =
+        'Qの6成分を2 Headsへ分割。各Headは3成分。共有K/V Head 0を使い、Q/KをHead内で正規化する。';
       break;
     case 'rope':
+      hide(f, 'q-head-1');
       change(f, 'q', { data: m.firstLayer.qr, label: 'Q′ · RoPE後' });
       change(f, 'k', { data: m.firstLayer.kr, label: 'K′ · RoPE後' });
       f.caption = '同じ位置のQ/Kを回す。小さな例は成分0・1を回転し、Vと成分2は保持。';
@@ -213,14 +217,47 @@ for (const s of journeySteps) {
       change(f, 'score', { x: 220, y: 175, w: 32, h: 31 });
       change(f, 'skip', { x: 40, y: 200, h: 18 });
       change(f, 'v', { x: 495, y: 175, w: 44, h: 31, label: 'V · 渡す情報' });
-      put(f, 'attn', m.firstLayer.context, 735, 175, 'C · 集めた情報', 'output', 44, 31);
+      f.height = 920;
+      put(
+        f,
+        'context-head-1',
+        m.firstLayer.contextHeads[1],
+        40,
+        720,
+        'C Head 1 · 別経路の結果',
+        'output',
+        26,
+        18,
+      );
+      put(f, 'attn', m.firstLayer.context, 735, 175, 'C Head 0 · 集めた情報', 'output', 44, 31);
       break;
     case 'concat':
       hide(f, 'score', 'v');
-      change(f, 'attn', { x: 435, y: 160, w: 44, h: 34, label: 'C · Head連結後' });
+      change(f, 'attn', {
+        x: 300,
+        y: 180,
+        w: 44,
+        h: 31,
+        data: m.firstLayer.joined,
+        label: 'C · 全Head連結後',
+      });
+      change(f, 'context-head-1', { x: 432, y: 180, w: 44, h: 31, label: 'Head 1の結果' });
+      f.caption =
+        '同じToken位置のHead 0・1の3成分を横に連結する。Tokenは7行のまま、各行が6成分になる。';
       break;
     case 'o-proj':
-      put(f, 'operand-o-proj', m.firstLayer.context, 240, 160, 'C · 今回の入力', 'input', 44, 32);
+      hide(f, 'context-head-1');
+      put(
+        f,
+        'operand-o-proj',
+        m.firstLayer.joined,
+        210,
+        160,
+        'C · 全Head連結した入力',
+        'input',
+        32,
+        32,
+      );
       change(f, 'attn', {
         x: 760,
         y: 160,
@@ -230,7 +267,7 @@ for (const s of journeySteps) {
         data: m.firstLayer.attention,
       });
       weight(f, m.firstLayer.wo, 'Woᵀ', 224);
-      change(f, 'weight', { x: 510, w: 44, h: 32 });
+      change(f, 'weight', { x: 490, y: 176, w: 38, h: 32 });
       f.caption = '左のCは入力として保持。Cの行と重みの列から、右にAttention出力Aを作る。';
       break;
     case 'residual-attn':
@@ -512,6 +549,60 @@ export function sampleJourney(time: number) {
   }
   const entities = Object.values(target.entities).map((end) => {
     let start = before.entities[end.id] ?? { ...end, opacity: 0 };
+    if (step.id === 'heads' && end.id === 'q-head-1') {
+      const source = before.entities.q;
+      const right = ease(at.progress / 0.15),
+        down = ease((at.progress - 0.15) / 0.22),
+        left = ease((at.progress - 0.37) / 0.23);
+      start = {
+        ...source,
+        id: end.id,
+        x: source.x + source.w * 3,
+        data: m.firstLayer.qHeads[1],
+        label: '',
+        opacity: 1,
+      };
+      return {
+        ...end,
+        start,
+        end,
+        blend: p,
+        opacity: 1,
+        x: start.x + (800 - start.x) * right + (end.x - 800) * left,
+        y: start.y + (end.y - start.y) * down,
+        w: start.w + (end.w - start.w) * p,
+        h: start.h + (end.h - start.h) * p,
+      };
+    }
+    if (step.id === 'concat' && end.id === 'attn') {
+      const move = ease(at.progress / 0.35);
+      return {
+        ...end,
+        start,
+        end,
+        blend: move,
+        opacity: 1,
+        x: start.x + (end.x - start.x) * move,
+        y: start.y + (end.y - start.y) * move,
+        w: start.w + (end.w - start.w) * move,
+        h: start.h + (end.h - start.h) * move,
+      };
+    }
+    if (step.id === 'concat' && end.id === 'context-head-1') {
+      const across = ease(at.progress / 0.35),
+        rise = ease((at.progress - 0.35) / 0.25);
+      return {
+        ...end,
+        start,
+        end,
+        blend: p,
+        opacity: 1,
+        x: start.x + (end.x - start.x) * across,
+        y: start.y + (end.y - start.y) * rise,
+        w: start.w + (end.w - start.w) * p,
+        h: start.h + (end.h - start.h) * p,
+      };
+    }
     if (step.id === 'layers' && end.id === actorId(step.id, 'gate') && layer > 0)
       start = { ...start, data: m.layerStates[layer] };
     if (step.id === 'tokenize' && end.id.startsWith('token-')) {

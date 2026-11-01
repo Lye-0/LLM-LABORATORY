@@ -70,7 +70,8 @@ export function journeyPhaseLabel(id: string, p: number, c: number) {
       : p < 0.72
         ? '同じ文字をTokenに分ける'
         : '分割結果を確認';
-  if (id === 'concat') return '1 Headなので値はそのまま · 配置を確認';
+  if (id === 'concat')
+    return p < 0.6 ? '同じToken位置のHeadの結果を横へ連結' : '全Head連結済み · Tokenの行数は維持';
   if (id === 'sampling')
     return p < 0.43
       ? '末尾の行を選択'

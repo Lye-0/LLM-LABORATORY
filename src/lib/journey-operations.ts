@@ -109,13 +109,13 @@ export function journeyOperations(sample: JourneySample) {
         symbol(
           `equals-${id}`,
           '＝',
-          (weight.x + weight.w * 3 + result.x) / 2,
+          (weight.x + weight.w * weight.data[0].length + result.x) / 2,
           result.y + result.h * 3.5,
         );
       });
       break;
     case 'heads':
-      rms('q-norm', f.q, f.qn, 750, 145, true);
+      rms('q-norm', f.qHeads[0], f.qn, 750, 145, true);
       rms('k-norm', f.k, f.kn, 750, 465, true);
       break;
     case 'rope':
@@ -214,17 +214,24 @@ export function journeyOperations(sample: JourneySample) {
         'concat',
         'Head concatenation',
         'Headを並べて、ひとつの表現にする',
-        ['説明用は1 Headなので、値は変わらない', '実モデル：16×128 → 2048成分'],
+        [
+          '説明モデル：同じTokenのHead 0・1を横へ連結',
+          '3成分 ＋ 3成分 → 6成分。Tokenは7行のまま',
+          '実モデル：16×128 → 2048成分',
+        ],
         650,
         225,
       );
+      notes.at(-1)!.formula = [
+        '<mrow><mi>C</mi><mo>=</mo><mo>[</mo><msub><mi>C</mi><mn>0</mn></msub><mo>|</mo><msub><mi>C</mi><mn>1</mn></msub><mo>]</mo></mrow>',
+      ];
       break;
     case 'o-proj':
       note(
         'o-proj',
         'Output projection',
         `位置${row}の行 × 出力射影の重み`,
-        product(f.context, f.wo, f.attention, row),
+        product(f.joined, f.wo, f.attention, row),
         240,
         440,
       );

@@ -60,16 +60,15 @@ export function layoutJourneyNotes(sample: JourneySample, source: OperationNote[
           : note.x >= 740
             ? 250
             : 300;
-    const detailCount =
-      sample.step.id === 'down'
-        ? 7
-        : sample.step.id === 'scores'
-          ? 5
-          : ['qkv', 'gate', 'o-proj', 'logits', 'rope'].includes(sample.step.id)
-            ? 4
-            : sample.step.id === 'silu'
-              ? 3
-              : 2;
+    const detailCount = ['down', 'o-proj'].includes(sample.step.id)
+      ? 7
+      : sample.step.id === 'scores'
+        ? 5
+        : ['qkv', 'gate', 'o-proj', 'logits', 'rope'].includes(sample.step.id)
+          ? 4
+          : sample.step.id === 'silu'
+            ? 3
+            : 2;
     const noteHeight =
       54 +
       note.formula.reduce(

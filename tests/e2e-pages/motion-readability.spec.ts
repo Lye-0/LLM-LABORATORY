@@ -71,7 +71,7 @@ test('移動開始時は元の値を保ち、到着直前から行ごとに更�
   await seek(page, 'qkv', 0.2);
   await expect(page.locator('[data-entity="q"] [data-ready="true"]')).toHaveCount(0);
   await seek(page, 'qkv', 0.95);
-  await expect(page.locator('[data-entity="q"] [data-ready="true"]')).toHaveCount(21);
+  await expect(page.locator('[data-entity="q"] [data-ready="true"]')).toHaveCount(42);
 });
 
 test('中心の処理を大きくし、並列と保存経路を残したまま強弱を付ける', async ({ page }) => {

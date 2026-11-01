@@ -1,3 +1,4 @@
+import JourneySliceContext from './JourneySliceContext';
 import { JourneyTensor, JourneyTokenCuts, JourneyStorage } from './JourneyCanvas';
 import type { JourneySample } from '../../lib/journey-scene';
 import { shapeActors, shapeOperations, shapeEquations, shapeGuide } from '../../lib/journey-shapes';
@@ -23,7 +24,10 @@ export default function JourneyShapeCanvas({ sample }: { sample: JourneySample }
   const scalarBottom = Math.max(
     0,
     ...actors
-      .filter((a) => !a.pose && a.entity.opacity > 0.02)
+      .filter(
+        (a) =>
+          !a.pose && a.entity.opacity > 0.02 && /^(token-|id-|chosen$|result$)/.test(a.entity.id),
+      )
       .map((a) => a.entity.y + a.entity.h + 45),
   );
   const noteY =
@@ -80,6 +84,7 @@ export default function JourneyShapeCanvas({ sample }: { sample: JourneySample }
           height={Math.max(430, ...stored.map((a) => a.pose!.cy + a.pose!.height / 2 + 45))}
         />
       )}
+      <JourneySliceContext sample={sample} view="shapes" />
       <JourneyTokenCuts sample={sample} />
       {branches.map(([from, to]) => {
         const a = actors.find((a) => a.entity.id === from)?.pose,
@@ -103,10 +108,10 @@ export default function JourneyShapeCanvas({ sample }: { sample: JourneySample }
         >
           <text y="-22">他の15 Headの出力も連結</text>
           {[0, 1, 2].map((i) => (
-            <g key={i} transform={`translate(${i * 8},${i * 16})`}>
+            <g key={i} transform={`translate(0,${i * 60})`}>
               <rect width="140" height="42" rx="3" />
               <text x="70" y="26" textAnchor="middle">
-                Head {i === 2 ? '…15' : i + 1} · 7 × 128
+                Head {i === 2 ? '3〜15' : i + 1} · {i === 2 ? '各' : ''}7 × 128
               </text>
             </g>
           ))}

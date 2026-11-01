@@ -1,3 +1,4 @@
+import { candidates, chosen, generated } from '../../src/lib/journey-model';
 import { test, expect } from '@playwright/test';
 import { journeySteps, journeyStarts } from '../../src/data/journey';
 import { projectionActors, actorId, binaryActors } from '../../src/lib/journey-actors';
@@ -59,7 +60,9 @@ test('末尾行から選択・追加・次のForwardへつながり、過去Cach
   await expect(page.locator('[data-entity="prob"] .tensor-label')).toContainText('確率');
   await expect(page.locator('[data-entity="chosen"]')).toHaveAttribute('opacity', '0');
   await seek(page, 'sampling', 0.95);
-  await expect(page.locator('[data-entity="chosen"] [data-cell] text')).toHaveText('1773');
+  await expect(page.locator('[data-entity="chosen"] [data-cell] text')).toHaveText(
+    String(candidates[chosen].id),
+  );
   await page.locator('.journey-theater').screenshot({
     path: '.cache/trace-selection.png',
     style: '.journey-dock{display:none!important}',
@@ -86,7 +89,7 @@ test('末尾行から選択・追加・次のForwardへつながり、過去Cach
   await expect(page.locator('[data-entity="result"] [data-cell] text')).toHaveText('こんにちは、');
   await seek(page, 'decode', 0.99);
   await expect(page.locator('[data-entity="result"] [data-cell] text')).toHaveText(
-    'こんにちは、今日はいい天気ですね。',
+    generated.pieces.join(''),
   );
 });
 
@@ -107,12 +110,10 @@ test('要素積とResidualは入力を保持して別の結果を作り、その
       await seek(page, id, p);
       expect(await input.allTextContents()).toEqual(values);
       expect(await second.allTextContents()).toEqual(other);
-      await page
-        .locator('.journey-theater')
-        .screenshot({
-          path: `.cache/binary-${id}-${p}.png`,
-          style: '.journey-dock{display:none!important}',
-        });
+      await page.locator('.journey-theater').screenshot({
+        path: `.cache/binary-${id}-${p}.png`,
+        style: '.journey-dock{display:none!important}',
+      });
     }
     expect((await result.locator('[data-cell] text').allTextContents()).includes('·')).toBe(false);
     const handle = await result.elementHandle();

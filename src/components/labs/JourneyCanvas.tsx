@@ -1,3 +1,4 @@
+import JourneySliceContext from './JourneySliceContext';
 import { actorId, projectionActors, binaryActors } from '../../lib/journey-actors';
 import { calculationFocus, completedRow, traceRow, rotationDegrees } from '../../lib/journey-trace';
 import type { Entity, JourneySample } from '../../lib/journey-scene';
@@ -24,6 +25,7 @@ export function JourneyTensor({
   calculation: number;
   view?: 'numbers' | 'shapes';
 }) {
+  if (step === 'o-proj' && e.id === 'context-head-1') return null;
   const active = activeEntities(step, e.id);
   const saving = (step === 'norm' || step === 'post-norm') && e.id.startsWith('skip');
   const a = e.start,
@@ -42,10 +44,34 @@ export function JourneyTensor({
   const isParameter = e.id === 'weight' || e.id.startsWith('weight-');
   const isOperand = projection?.input === e.id || binary?.input === e.id || binary?.second === e.id;
   const held = step === 'cache' || (step === 'append' && e.id.startsWith('id-'));
+  const splitLabel =
+    step !== 'heads'
+      ? null
+      : e.id === 'q-head-1'
+        ? b.label
+        : e.id === 'q'
+          ? progress < 0.08
+            ? a.label
+            : phase === 0
+              ? 'Q Head 0 · 分割した3成分'
+              : phase < 1
+                ? 'Q Head 0 · 正規化中'
+                : b.label
+          : e.id === 'k'
+            ? phase === 0
+              ? '共有K Head 0 · 3成分'
+              : phase < 1
+                ? '共有K Head 0 · 正規化中'
+                : b.label
+            : null;
+
   const rows = outputFrame ? b.data.length : Math.max(a.data.length, b.data.length),
-    cols = outputFrame
-      ? b.data[0].length
-      : Math.max(a.data[0]?.length ?? 0, b.data[0]?.length ?? 0);
+    cols =
+      (step === 'heads' && e.id === 'q') || (step === 'concat' && e.id === 'attn')
+        ? 3
+        : outputFrame
+          ? b.data[0].length
+          : Math.max(a.data[0]?.length ?? 0, b.data[0]?.length ?? 0);
   const get = (pose: Entity, i: number, j: number) => ({
     x: pose.transpose ? i * pose.w : j * pose.w,
     y: pose.transpose ? j * pose.h : i * pose.h,
@@ -69,20 +95,34 @@ export function JourneyTensor({
       opacity={Math.max(0, Math.min(1, e.opacity))}
       className={`journey-tensor tone-${e.tone} ${active ? 'is-active' : 'is-support'}`}
     >
-      <text y="-16" className="tensor-label" opacity={saving ? ease((progress - 0.44) / 0.16) : 1}>
-        {held
-          ? b.label
-          : step === 'sampling' && e.id === 'prob'
-            ? phase < 1
-              ? progress < 0.6
-                ? '末尾のLogits · 取り出し中'
-                : '末尾のLogits · Softmax中'
-              : b.label
-            : outputFrame
-              ? b.label + (phase < 1 ? (phase > 0 ? ' · 構築中' : ' · 計算待ち') : '')
-              : phase > 0
-                ? b.label + (updating && phase < 1 ? ' · 更新中' : '')
-                : a.label}
+      <text
+        y="-16"
+        className="tensor-label"
+        opacity={
+          step === 'heads' && e.id === 'q-head-1'
+            ? ease((progress - 0.08) / 0.1)
+            : saving
+              ? ease((progress - 0.44) / 0.16)
+              : 1
+        }
+      >
+        {splitLabel !== null
+          ? splitLabel
+          : step === 'concat' && e.id === 'attn'
+            ? 'Head 0の結果'
+            : held
+              ? b.label
+              : step === 'sampling' && e.id === 'prob'
+                ? phase < 1
+                  ? progress < 0.6
+                    ? '末尾のLogits · 取り出し中'
+                    : '末尾のLogits · Softmax中'
+                  : b.label
+                : outputFrame
+                  ? b.label + (phase < 1 ? (phase > 0 ? ' · 構築中' : ' · 計算待ち') : '')
+                  : phase > 0
+                    ? b.label + (updating && phase < 1 ? ' · 更新中' : '')
+                    : a.label}
       </text>
       {Array.from({ length: rows }, (_, i) =>
         Array.from({ length: cols }, (_, j) => {
@@ -169,6 +209,7 @@ export function JourneyTensor({
                   opacity={step === 'tokenize' ? ease((progress - 0.18) / 0.54) : 1}
                   className={
                     (i === 6 ? 'last-position ' : '') +
+                    (step === 'o-proj' && e.id === 'attn' && j >= 3 ? 'head-one-component ' : '') +
                     (step === 'cache' &&
                     (e.id.startsWith('cache-new-') || (e.id.startsWith('cache-') && j === 7))
                       ? 'new-cache-position '
@@ -369,6 +410,7 @@ export default function JourneyCanvas({ sample }: { sample: JourneySample }) {
           <path d="M0 1 L9 5 L0 9" fill="none" stroke="currentColor" />
         </marker>
       </defs>
+      <JourneySliceContext sample={sample} view="numbers" />
       <JourneyTokenCuts sample={sample} />
       {links.map(([from, to]) => {
         const a = byId[from],

@@ -1,4 +1,4 @@
-import reference from '../data/motion-reference.json';
+import reference from '../data/motion-reference.json' with { type: 'json' };
 export type Matrix = number[][];
 export const tokenPieces = ['こんにちは', '、', '今日は', 'いい', '天', '気', 'ですね'];
 export const tokenIds = reference.ids;
@@ -35,22 +35,35 @@ function weight(rows: number, cols: number, seed: number): Matrix {
 }
 export function decoder(input: Matrix, layer = 0) {
   const x = norm(input),
-    wq = weight(3, 3, layer + 0.1),
+    wq = weight(3, 6, layer + 0.1),
     wk = weight(3, 3, layer + 0.7),
     wv = weight(3, 3, layer + 1.4);
   const q = matmul(x, wq),
     k = matmul(x, wk),
-    v = matmul(x, wv),
-    qn = norm(q),
-    kn = norm(k),
-    qr = rope(qn),
+    v = matmul(x, wv);
+  // Two Query Heads share one KV Head, retaining the real model's 2:1 GQA ratio.
+  const qHeads = [0, 1].map((head) => q.map((row) => row.slice(head * 3, head * 3 + 3)));
+  const qnHeads = qHeads.map(norm),
+    qrHeads = qnHeads.map(rope);
+  const kn = norm(k),
     kr = rope(kn);
-  const scores = matmul(qr, transpose(kr)).map((row) => row.map((v) => v / Math.sqrt(3)));
-  const masked = scores.map((row, i) => row.map((v, j) => (j > i ? -Infinity : v))),
-    probabilities = softmax(masked),
-    context = matmul(probabilities, v);
-  const wo = weight(3, 3, layer + 2),
-    attention = matmul(context, wo),
+  const scoresHeads = qrHeads.map((head) =>
+    matmul(head, transpose(kr)).map((row) => row.map((value) => value / Math.sqrt(3))),
+  );
+  const maskedHeads = scoresHeads.map((head) =>
+    head.map((row, i) => row.map((value, j) => (j > i ? -Infinity : value))),
+  );
+  const probabilitiesHeads = maskedHeads.map(softmax);
+  const contextHeads = probabilitiesHeads.map((head) => matmul(head, v));
+  const [qn] = qnHeads,
+    [qr] = qrHeads,
+    [scores] = scoresHeads,
+    [masked] = maskedHeads,
+    [probabilities] = probabilitiesHeads,
+    [context] = contextHeads;
+  const joined = contextHeads[0].map((row, i) => [...row, ...contextHeads[1][i]]);
+  const wo = weight(6, 3, layer + 2),
+    attention = matmul(joined, wo),
     h1 = add(input, attention),
     post = norm(h1);
   const wg = weight(3, 6, layer + 3),
@@ -71,6 +84,14 @@ export function decoder(input: Matrix, layer = 0) {
     q,
     k,
     v,
+    qHeads,
+    qnHeads,
+    qrHeads,
+    scoresHeads,
+    maskedHeads,
+    probabilitiesHeads,
+    contextHeads,
+    joined,
     qn,
     kn,
     qr,

@@ -54,7 +54,7 @@ export const journeySteps: JourneyStep[] = [
   step('heads', 'Head・Q/K Norm', 'decoder', {
     code: 'q = q.view(B, Tq, 16, 128)\nk = k.view(B, Tq, 8, 128)\nq = layer.self_attn.q_norm(q).transpose(1, 2)\nk = layer.self_attn.k_norm(k).transpose(1, 2)\nv = v.view(B, Tq, 8, 128).transpose(1, 2)',
     action:
-      'Q/K/Vは同じ位置に保持。実モデルではHead軸へ分け、QとKだけにHead内のRMSNormを適用します。小さな例は1 Headです。',
+      'Q/K/Vは同じ位置に保持。実モデルではHead軸へ分け、QとKだけにHead内のRMSNormを適用します。説明モデルはQ 2 Heads・共有KV 1 Head、各3成分です。',
   }),
   step('rope', 'RoPE', 'decoder', {
     duration: 8500,
@@ -89,7 +89,7 @@ export const journeySteps: JourneyStep[] = [
     code: 'joined = head_output.transpose(1, 2).reshape(B, Tq, 2048)',
     node: 'head-merge',
     action:
-      '集めたVの情報をそのまま保持し、Headを連結。小さな例は1 Headのため並びは変わりません。実モデルでは16×128を2048成分へ連結します。',
+      '集めたVの情報をそのまま保持し、Headを連結。説明モデルでは2 Headの3成分ずつを連結して6成分にします。実モデルでは16×128を2048成分へ連結します。',
   }),
   step('o-proj', 'o_proj', 'decoder', {
     title: 'Attentionの結果を、残差に足せる幅へ',

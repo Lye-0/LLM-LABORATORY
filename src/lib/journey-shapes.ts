@@ -44,7 +44,7 @@ export function shapeSpec(step: string, id: string): ShapeSpec | null {
   if (id === 'attn')
     return {
       ...feature(
-        'C · Head出力',
+        i >= rank('concat') ? 'C · 全Head連結後' : 'C₀ · Head 0の結果',
         i >= rank('concat') ? 2048 : 128,
         i >= rank('concat') ? '16 Heads × 128成分を連結' : '1 Headを表示 / 全16 Heads',
       ),
@@ -350,8 +350,10 @@ export function shapeActors(sample: JourneySample) {
       movement: p,
       entity: e,
       spec:
-        (['heads', 'transpose'].includes(sample.step.id)
-          ? sample.calculation >= 0.5
+        (['heads', 'transpose', 'concat'].includes(sample.step.id)
+          ? sample.step.id === 'concat'
+            ? sample.calculation >= 1
+            : sample.calculation >= 0.5
           : sample.calculation > 0) || !before
           ? after
           : before,

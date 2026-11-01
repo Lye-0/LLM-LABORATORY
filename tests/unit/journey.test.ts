@@ -140,7 +140,7 @@ describe('一本の時間軸でつながる教材', () => {
   });
   it('射影は左に入力、中央に正しい重み、右に出力を保持し、演算記号の高さを揃える', () => {
     const operations = [
-      ['o-proj', 'attn', m.firstLayer.context, m.firstLayer.wo, m.firstLayer.attention],
+      ['o-proj', 'attn', m.firstLayer.joined, m.firstLayer.wo, m.firstLayer.attention],
       ['down', 'gate', m.firstLayer.mixed, m.firstLayer.wd, m.firstLayer.down],
       ['logits', 'gate', m.finalHidden, m.lmWeight, m.logits],
     ] as const;

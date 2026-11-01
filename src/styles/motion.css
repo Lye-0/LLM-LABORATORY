@@ -1091,3 +1091,76 @@ body:has(.journey) .page-content.wide {
   stroke-width: 3px;
   stroke-linejoin: round;
 }
+
+.journey-slice-context {
+  font: 12px/1.55 var(--sans);
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 9px;
+}
+.slice-location,
+.slice-head-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+.slice-location > span {
+  color: var(--faint);
+  font-size: 10px;
+}
+.slice-location strong {
+  color: var(--text);
+  font-weight: 500;
+}
+.slice-location small {
+  font-size: 11px;
+}
+.slice-head-row {
+  margin-top: 7px;
+}
+.slice-head-row > strong {
+  color: var(--journey-color);
+  font-size: 12px;
+}
+.slice-heads {
+  display: flex;
+  gap: 6px;
+}
+.slice-heads span {
+  border-bottom: 2px solid var(--line);
+  padding: 1px 6px;
+  font: 10px/1.7 var(--mono);
+  white-space: nowrap;
+}
+.slice-heads .is-current {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.slice-heads.is-joined span {
+  color: var(--teal);
+  border-color: var(--teal);
+}
+.slice-focus {
+  margin-top: 6px;
+  color: var(--text);
+}
+.slice-focus small {
+  color: var(--muted);
+  margin-left: 12px;
+  font-size: 10px;
+}
+
+.journey-tensor[data-entity='q-head-1'] rect,
+.journey-tensor[data-entity='context-head-1'] rect,
+.journey-tensor rect.head-one-component {
+  stroke: var(--violet);
+}
+.journey-tensor[data-entity='q-head-1'] text,
+.journey-tensor[data-entity='context-head-1'] text {
+  fill: var(--violet);
+}
+.slice-heads span:nth-child(2) {
+  color: var(--violet);
+  border-color: var(--violet);
+}
