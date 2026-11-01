@@ -392,6 +392,180 @@
   gap: 3px;
   margin-left: auto;
 }
+
+.journey-canvas-scroll [hidden] {
+  display: none !important;
+}
+.journey-view-switch {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  margin-inline: 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--bg);
+}
+.journey-transport .journey-view-switch button {
+  border: 0;
+  white-space: nowrap;
+  color: var(--muted);
+  min-height: 34px;
+}
+.journey-transport .journey-view-switch button[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--journey-color) 20%, var(--surface));
+  color: var(--text);
+  box-shadow: inset 0 -2px var(--journey-color);
+}
+.journey-transport button:focus-visible {
+  outline: 2px solid var(--journey-color);
+  outline-offset: 3px;
+}
+.journey-shape-svg {
+  --shape-matching: var(--amber, #e9bd71);
+}
+.journey[data-journey-view='shapes'] .journey-canvas-scroll {
+  padding-top: 90px;
+}
+@media (max-width: 700px) {
+  .journey[data-journey-view='shapes'] .journey-canvas-scroll {
+    padding-top: 0;
+  }
+}
+.journey-shape-svg .shape-name {
+  font-family: var(--sans);
+  font-weight: 650;
+  fill: var(--text);
+}
+.journey-shape-svg .shape-axis {
+  font: 12px var(--sans);
+  fill: var(--muted);
+}
+.journey-shape-svg .shape-badge {
+  font: 10px var(--sans);
+  fill: var(--muted);
+}
+.shape-body {
+  fill: color-mix(in srgb, var(--journey-color) 5%, var(--bg));
+  stroke: var(--journey-color);
+  stroke-width: 1.3;
+}
+.shape-cell {
+  fill: color-mix(in srgb, var(--journey-color) 6%, var(--bg));
+  stroke: color-mix(in srgb, var(--journey-color) 16%, transparent);
+  stroke-width: 0.6;
+}
+.shape-cell.is-complete {
+  fill: color-mix(in srgb, var(--journey-color) 14%, var(--bg));
+}
+.shape-cell.is-masked {
+  fill: url(#shape-mask-pattern);
+  stroke: var(--line);
+}
+.shape-mask-line {
+  stroke: var(--muted);
+  stroke-width: 0.7;
+  opacity: 0.4;
+}
+.shape-dimension-back {
+  fill: var(--bg);
+  opacity: 0.92;
+}
+.journey-shape-svg .shape-dimension {
+  fill: var(--text);
+  font-family: var(--mono);
+  font-weight: 600;
+}
+.shape-processing-row {
+  fill: color-mix(in srgb, var(--shape-matching) 9%, transparent);
+  stroke: var(--shape-matching);
+  stroke-width: 2;
+}
+.shape-contracted-edge {
+  stroke: var(--shape-matching);
+  stroke-width: 4;
+  fill: none;
+}
+.journey-shape-svg .shape-axis.is-matching {
+  fill: var(--shape-matching);
+  font-weight: 700;
+}
+.shape-operators text {
+  fill: var(--text);
+  font: 30px var(--sans);
+}
+.shape-token rect {
+  fill: var(--surface);
+  stroke: var(--journey-color);
+}
+.shape-token text {
+  font-family: var(--mono);
+}
+.shape-head-slices rect {
+  fill: var(--journey-color);
+  opacity: 0.55;
+}
+.shape-branch {
+  fill: none;
+  stroke: var(--journey-color);
+  stroke-width: 1;
+}
+.shape-extra-heads rect {
+  fill: var(--surface);
+  stroke: var(--journey-color);
+}
+.shape-extra-heads text {
+  font: 11px var(--sans);
+  fill: var(--muted);
+}
+.shape-swap {
+  fill: var(--shape-matching);
+  font-size: 26px;
+}
+.shape-story {
+  font: 14px var(--sans);
+  fill: var(--muted);
+}
+.shape-story path {
+  stroke: var(--journey-color);
+  stroke-width: 1.5;
+  fill: none;
+}
+.shape-explanation > div {
+  color: var(--muted);
+  font: 15px/1.7 var(--sans);
+}
+.shape-operation-title {
+  color: var(--journey-color);
+  font-weight: 650;
+  margin: 0 0 18px;
+}
+.shape-equation {
+  margin-bottom: 20px;
+}
+.shape-equation math {
+  font-size: 23px;
+  color: var(--text);
+}
+.shape-equation munder > mrow {
+  color: var(--journey-color);
+}
+.shape-equation > span {
+  display: block;
+  margin-top: 12px;
+  color: var(--shape-matching);
+  font-size: 12px;
+}
+.shape-equation p {
+  margin: 6px 0 0;
+}
+@media (max-width: 1100px) {
+  .journey-transport {
+    flex-wrap: wrap;
+  }
+  .journey-view-switch {
+    margin-inline: 0;
+  }
+}
 .journey-speed button {
   border: 0;
   color: var(--faint);
@@ -875,5 +1049,11 @@ body:has(.journey) .page-content.wide {
   stroke-width: 2.5;
 }
 
-.journey-tensor[data-entity='chosen'] rect {stroke:var(--teal);stroke-width:1.8;}
-.journey-tensor[data-entity='chosen'] rect.calculation-component {stroke:var(--amber);stroke-width:2.5;}
+.journey-tensor[data-entity='chosen'] rect {
+  stroke: var(--teal);
+  stroke-width: 1.8;
+}
+.journey-tensor[data-entity='chosen'] rect.calculation-component {
+  stroke: var(--amber);
+  stroke-width: 2.5;
+}

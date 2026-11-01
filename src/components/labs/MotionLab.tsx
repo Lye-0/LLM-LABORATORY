@@ -1,5 +1,5 @@
 import { journeyPhaseLabel, LAYERS_START, LAYERS_END } from '../../lib/journey-timing';
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import {
   journeyAt,
   journeyDuration,
@@ -12,9 +12,18 @@ import { sampleJourney } from '../../lib/journey-scene';
 import { withBase, withoutBase } from '../../lib/paths';
 import { operationFormulas, mathDocument } from '../../lib/journey-formulas';
 import JourneyCanvas from './JourneyCanvas';
+import JourneyShapeCanvas from './JourneyShapeCanvas';
+import { shapeGuide, shapeOperations } from '../../lib/journey-shapes';
+const NumericJourneyCanvas = memo(
+  ({ sample }: { sample: ReturnType<typeof sampleJourney>; active: boolean }) => (
+    <JourneyCanvas sample={sample} />
+  ),
+  (previous, next) => !next.active || (previous.active && previous.sample === next.sample),
+);
 
 export default function MotionLab() {
   const [time, setTime] = useState(0),
+    [view, setView] = useState<'numbers' | 'shapes'>('numbers'),
     [running, setRunning] = useState(false),
     [destination, setDestination] = useState<number | null>(null),
     [speed, setSpeed] = useState(1),
@@ -24,7 +33,7 @@ export default function MotionLab() {
   const rail = useRef<HTMLDivElement>(null),
     manualRailUntil = useRef(0);
   const canvasScroll = useRef<HTMLDivElement>(null);
-  const sample = sampleJourney(time),
+  const sample = useMemo(() => sampleJourney(time), [time]),
     { index, step } = sample,
     group = journeyGroups.find((g) => g.id === step.group)!;
   const previous = journeySteps[index - 1],
@@ -43,6 +52,13 @@ export default function MotionLab() {
     setRunning(false);
     setDestination(null);
     writePosition(safe);
+  }
+  function changeView(value: 'numbers' | 'shapes') {
+    setView(value);
+    const u = new URL(location.href);
+    if (value === 'shapes') u.searchParams.set('view', 'shapes');
+    else u.searchParams.delete('view');
+    history.replaceState(null, '', u);
   }
   function go(i: number) {
     const target = Math.max(0, Math.min(journeySteps.length - 1, i));
@@ -70,6 +86,7 @@ export default function MotionLab() {
     function restore() {
       const params = new URLSearchParams(location.search),
         raw = params.get('t');
+      setView(params.get('view') === 'shapes' ? 'shapes' : 'numbers');
       let t =
         raw !== null && Number.isFinite(Number(raw))
           ? journeyAt(Number(raw)).time
@@ -195,6 +212,7 @@ export default function MotionLab() {
       className="journey"
       data-motion-lab
       data-journey-time={time}
+      data-journey-view={view}
       style={{ '--journey-color': group.color } as React.CSSProperties}
     >
       <header className="journey-heading">
@@ -219,7 +237,9 @@ export default function MotionLab() {
             {journeyPhaseLabel(step.id, sample.progress, sample.calculation)}
           </span>
           <span className="journey-position-note">
-            淡い枠は追跡位置。オレンジは今の処理対象。行列積は行×全列をまとめて進めます。
+            {view === 'numbers'
+              ? '淡い枠は追跡位置。オレンジは今の処理対象。行列積は行×全列をまとめて進めます。'
+              : 'Qwen3-0.6Bの形と軸を表示 · B=1。寸法は正確、図の比率と区切りは模式的。色は処理対象で、参照割合の大小ではありません。'}
           </span>
         </div>
         <span className="journey-count">
@@ -244,9 +264,18 @@ export default function MotionLab() {
           <p>{next?.purpose ?? '終了条件までは、次のTokenを選ぶループへ戻ります。'}</p>
         </aside>
         <div className="journey-canvas-scroll" ref={canvasScroll}>
-          <JourneyCanvas sample={sample} />
+          <div hidden={view !== 'numbers'}>
+            <NumericJourneyCanvas sample={sample} active={view === 'numbers'} />
+          </div>
+          <div hidden={view !== 'shapes'}>
+            {view === 'shapes' && <JourneyShapeCanvas sample={sample} />}
+          </div>
         </div>
-        <p className="journey-caption">{sample.caption}</p>
+        <p className="journey-caption">
+          {view === 'numbers'
+            ? sample.caption
+            : shapeGuide(step.id) || shapeOperations(step.id)[0]?.text}
+        </p>
       </div>
       <div className="journey-action">
         <span>いま、起きていること</span>
@@ -273,7 +302,9 @@ export default function MotionLab() {
             }}
           />
           <p className="journey-formula-guide">
-            具体的な計算は、中央の行列に添えた「処理」で確認できます。
+            {view === 'numbers'
+              ? '具体的な計算は、中央の行列に添えた「処理」で確認できます。'
+              : '中央の図で、掛け合わせる軸と結果に残る軸を確認できます。実モデル全体の数値計算は実行していません。'}
           </p>
           <p className="journey-dimensions">
             実モデル：{step.input} → {step.output}
@@ -391,6 +422,22 @@ export default function MotionLab() {
                 {v}×
               </button>
             ))}
+          </div>
+          <div className="journey-view-switch" role="group" aria-label="行列の表示方法">
+            <button
+              type="button"
+              aria-pressed={view === 'numbers'}
+              onClick={() => changeView('numbers')}
+            >
+              数値で見る
+            </button>
+            <button
+              type="button"
+              aria-pressed={view === 'shapes'}
+              onClick={() => changeView('shapes')}
+            >
+              形と軸で見る
+            </button>
           </div>
           <label className="journey-reduce">
             <input
