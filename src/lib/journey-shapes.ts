@@ -2,7 +2,8 @@ import { journeySteps } from '../data/journey';
 import { actorId, binaryActors, projectionActors } from './journey-actors';
 import { journeyFrames, type Entity, type JourneySample } from './journey-scene';
 import { ease, stageMovement } from './journey-timing';
-import { tokenSliceMotion, cacheSliceMotion } from './journey-slices';
+import { splitHeadPose } from './journey-head-layout';
+import { headSliceMotion, tokenSliceMotion, cacheSliceMotion } from './journey-slices';
 
 export interface ShapeSpec {
   name: string;
@@ -332,6 +333,14 @@ export function shapeActors(sample: JourneySample) {
             height: a.height + (b.height - a.height) * p,
           }
         : null;
+    if (at && a && b && sample.step.id === 'heads' && ['q', 'k', 'v'].includes(e.id)) {
+      Object.assign(at, splitHeadPose(sample.progress, e.id, 0, a, b));
+    }
+    if (at && sample.step.id === 'concat' && e.id === 'attn') {
+      const merge = headSliceMotion(sample, 'shapes').merge;
+      at.width = 192 + 18 * merge;
+      at.height = 136 + ((210 * 136) / 192 - 136) * merge;
+    }
     // The existing probability actor begins at the last row of the existing Z.
     // No second full Z or comparison matrix is introduced.
     if (at && sample.step.id === 'sampling' && e.id === 'prob' && after) {
@@ -404,8 +413,10 @@ export function shapeActors(sample: JourneySample) {
           ? { ...after, rows: 8, badge: 'Layer 0 / KV Head 0 · 過去7位置 + 新しい1位置' }
           : (['heads', 'transpose', 'concat'].includes(sample.step.id)
                 ? sample.step.id === 'concat'
-                  ? sample.calculation >= 1
-                  : sample.calculation >= 0.5
+                  ? headSliceMotion(sample, 'shapes').merge >= 1
+                  : sample.step.id === 'heads'
+                    ? sample.progress >= 0.12
+                    : sample.calculation >= 0.5
                 : sample.calculation > 0) || !before
             ? after
             : before,
@@ -504,7 +515,7 @@ export function shapeGuide(step: string): string {
         embedding: '7つのIDから、それぞれ1024成分のEmbeddingを取り出す。各Tokenが行になる。',
         norm: '各Tokenの成分方向をRMSNormで正規化する。7位置と1024成分のshapeは変わらない。',
         heads:
-          'Qは16 Heads、K/Vは8 Headsに分け、1 Headは128成分。表示はQ Head 0と対応するKV Head 0。Q/KのみHead内で正規化する。',
+          'Qの16 Head、K/Vの各8 Headを表示した後、ほかのHeadを上部表示に集約し、Head 0へ注目する。1 Headは7位置×128成分。Q/KのみHead内で正規化する。',
         rope: '同じ位置のQとKへ位置に応じた回転を適用する。128成分という幅は変えず、Vには適用しない。',
         mask: '未来のKey位置を参照対象から外す。7×7の軸はそのまま。最後のQueryは7位置すべてを参照できる。',
         softmax:

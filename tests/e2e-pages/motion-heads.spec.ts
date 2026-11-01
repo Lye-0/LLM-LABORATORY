@@ -146,7 +146,7 @@ test('上部表示は固定し、両ビューの局所タグを行列付近で�
       })
       .click();
     const panel = page.locator(`[data-slice-view="${view}"]`);
-    for (const p of [0.3, 0.6, 0.75, 0.95]) {
+    for (const p of [0.3, 0.6, 0.75, 0.99]) {
       await seek(page, 'heads', p);
       await expect(panel.locator('[data-slice-head="q"]')).toHaveAttribute('x', '415');
       await expect(panel.locator('[data-slice-head="q"]')).toHaveAttribute('y', '60');
@@ -228,7 +228,11 @@ test('通常再生でHead名が連続して進み、画面幅が変わっても�
     const ys: number[] = [];
     for (let i = 0; i < 6; i++) {
       await page.waitForTimeout(220);
-      ys.push(Number(await panel.locator('[data-local-head="k"]').getAttribute('opacity')));
+      ys.push(
+        await panel
+          .locator('[data-local-head="k"]')
+          .evaluateAll((es) => (es.length ? Number(es[0].getAttribute('opacity')) : 0)),
+      );
       await page.locator('.journey-theater').screenshot({
         path: `.cache/slice-play-${view}-${i}.png`,
         style: '.journey-dock{display:none!important}',
@@ -270,14 +274,14 @@ test('結合の途中までHead名を保持して結合先へ戻し、各段階�
     await seek(page, 'weighted', 0.99);
     const q = panel.locator('[data-slice-head="q"]');
     await expect(q).toHaveAttribute('y', '60');
-    await seek(page, 'concat', view === 'numbers' ? 0.3 : 0.72);
+    await seek(page, 'concat', view === 'numbers' ? 0.3 : 0.48);
     expect(Number(await q.getAttribute('opacity'))).toBeGreaterThan(0);
     expect(Number(await q.getAttribute('y'))).toBeGreaterThan(60);
     await expect(q).toHaveText(view === 'numbers' ? 'Q Head 0 / 全2' : 'Q Head 0 / 全16');
     const mid = { x: await q.getAttribute('x'), y: await q.getAttribute('y') };
     await seek(page, 'concat', 0.99);
     await expect(q).toHaveAttribute('opacity', '0');
-    await seek(page, 'concat', view === 'numbers' ? 0.3 : 0.72);
+    await seek(page, 'concat', view === 'numbers' ? 0.3 : 0.48);
     expect({ x: await q.getAttribute('x'), y: await q.getAttribute('y') }).toEqual(mid);
     for (const stage of ['residual-attn', 'post-norm', 'multiply', 'residual-mlp']) {
       await seek(page, stage, 0.8);
@@ -415,4 +419,76 @@ test('冒頭からBatch 0を表示し、結合では完全なスライス名とH
       21,
     );
   }
+});
+
+test('形ビューはQを16 Head、K/Vを8 Headへ分け、注目するHeadと上部表示を引き継ぐ', async ({
+  page,
+}) => {
+  await page.goto(root + '?view=shapes');
+  const scene = page.locator('[data-shape-scene]');
+  const upper = page.locator('[data-slice-view="shapes"] [data-slice-head="q"]');
+  for (const p of [0.1, 0.25, 0.4, 0.55, 0.7, 0.8, 0.95, 0.99]) {
+    await seek(page, 'heads', p);
+    await expect(scene.locator('[data-head-partition^="q:"]')).toHaveCount(16);
+    await expect(scene.locator('[data-head-partition^="k:"]')).toHaveCount(8);
+    await expect(scene.locator('[data-head-partition^="v:"]')).toHaveCount(8);
+    const other = scene.locator('[data-head-partition="q:15"]');
+    if (p >= 0.4)
+      expect(
+        Number(await other.getAttribute('opacity')) + Number(await upper.getAttribute('opacity')),
+      ).toBeCloseTo(1, 8);
+    if (p === 0.4) {
+      await expect(other).toContainText('Head 15');
+      const bounds = await scene
+        .locator('[data-head-partition^="q:"]')
+        .evaluateAll((es) => es.map((e) => e.getBoundingClientRect()));
+      expect(new Set(bounds.map((b) => `${Math.round(b.x)},${Math.round(b.y)}`)).size).toBe(16);
+    }
+    if (p === 0.8) {
+      await expect(scene.locator('[data-shape-entity="q"]')).toHaveClass(/is-processing/);
+      await expect(scene.locator('[data-shape-entity="v"]')).not.toHaveClass(/is-processing/);
+    }
+    await page.locator('.journey-theater').screenshot({
+      path: `.cache/real-heads-split-${p}.png`,
+      style: '.journey-dock{display:none!important}',
+    });
+  }
+  await expect(page.locator('[data-slice-view="shapes"] [data-local-head="q"]')).toHaveAttribute(
+    'opacity',
+    '0',
+  );
+  await expect(scene.locator('[data-shape-entity="q"]')).toHaveAttribute('data-shape', '7x128');
+  await seek(page, 'heads', 0.55);
+  expect(
+    Number(await scene.locator('[data-head-partition="q:15"]').getAttribute('opacity')),
+  ).toBeGreaterThan(0);
+  await seek(page, 'rope', 0.1);
+  await expect(scene.locator('[data-head-partition]')).toHaveCount(0);
+});
+
+test('形ビューの連結で16個のHeadを復元し、7×2048の一つの行列へつなぐ', async ({ page }) => {
+  await page.goto(root + '?view=shapes');
+  const scene = page.locator('[data-shape-scene]');
+  for (const p of [0.2, 0.48, 0.6, 0.7, 0.8, 0.95, 0.99]) {
+    await seek(page, 'concat', p);
+    await expect(scene.locator('[data-merge-head]')).toHaveCount(16);
+    const label = page.locator('[data-slice-view="shapes"] [data-slice-head="q"]');
+    const head15 = scene.locator('[data-merge-head="15"]');
+    if (p <= 0.6)
+      expect(
+        Number(await label.getAttribute('opacity')) + Number(await head15.getAttribute('opacity')),
+      ).toBeCloseTo(1, 8);
+    if (p === 0.6) {
+      await expect(head15).toHaveAttribute('opacity', '1');
+      await expect(head15).toContainText('Head 15');
+    }
+    await page.locator('.journey-theater').screenshot({
+      path: `.cache/real-heads-merge-${p}.png`,
+      style: '.journey-dock{display:none!important}',
+    });
+  }
+  await expect(scene.locator('[data-shape-entity="attn"]')).toHaveAttribute('data-shape', '7x2048');
+  await expect(scene.locator('[data-merge-head="15"]')).toHaveAttribute('opacity', '0');
+  await seek(page, 'o-proj', 0);
+  await expect(scene.locator('[data-merge-head]')).toHaveCount(0);
 });

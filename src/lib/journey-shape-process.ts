@@ -19,7 +19,7 @@ const processes: Record<
     during: 'Head軸へ分け、QとKのHead内成分を正規化する',
     after: '1 Headあたり7位置×128成分。Vは正規化しない',
     meaning:
-      'Qは16 Heads、K/Vは8 Heads。QとKのRMSは別に求める。xは1 Headの成分、d=128、rはRMS、wは学習済み係数。εは計算を安定させる小さな値。表示は対応する1 Head。',
+      'Qは16 Heads、K/Vは8 Heads。QとKのRMSは別に求める。xは1 Headの成分、d=128、rはRMS、wは学習済み係数。εは計算を安定させる小さな値。全Headの分割を見てから、対応するHead 0を詳しく表示する。',
     keys: ['q-norm', 'k-norm'],
   },
   rope: {
@@ -112,11 +112,34 @@ export function shapeProcess(sample: JourneySample) {
         .filter((formula, i, all) => sample.step.id !== 'rope' || all.indexOf(formula) === i),
     ),
     status:
-      c === 0
-        ? process.before
-        : c >= 1
-          ? process.after
-          : `${process.during} · ${Math.round(c * 100)}%`,
-    phase: c === 0 ? '処理前' : c >= 1 ? '完了' : '処理中',
+      sample.step.id === 'heads'
+        ? sample.progress < 0.12
+          ? 'Q・K・VをHeadごとのまとまりへ分ける'
+          : sample.progress < 0.42
+            ? 'Qは16 Head、KとVは各8 Head。各Headは7位置×128成分'
+            : sample.progress < 0.7
+              ? 'ほかのHeadを上部のスライス表示に集約し、Head 0に注目する'
+              : sample.progress < 0.86
+                ? 'Head 0を中央へ引き継ぎ、Q/KのHead内の成分を正規化する'
+                : process.after
+        : c === 0
+          ? process.before
+          : c >= 1
+            ? process.after
+            : `${process.during} · ${Math.round(c * 100)}%`,
+    phase:
+      sample.step.id === 'heads'
+        ? sample.progress < 0.42
+          ? '分割中'
+          : sample.progress < 0.7
+            ? '表示の切替'
+            : sample.progress < 0.86
+              ? '処理中'
+              : '完了'
+        : c === 0
+          ? '処理前'
+          : c >= 1
+            ? '完了'
+            : '処理中',
   };
 }

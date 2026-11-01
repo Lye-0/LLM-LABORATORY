@@ -6,16 +6,16 @@ export type JourneyView = 'numbers' | 'shapes';
 export function headSliceMotion(sample: JourneySample, view: JourneyView) {
   const numeric = view === 'numbers',
     p = sample.progress;
-  const focus = ease((p - (numeric ? 0.28 : 0.58)) / (numeric ? 0.32 : 0.28));
-  const restore = ease((p - (numeric ? 0.32 : 0.52)) / (numeric ? 0.28 : 0.34));
+  const focus = ease((p - (numeric ? 0.28 : 0.42)) / (numeric ? 0.32 : 0.28));
+  const restore = ease((p - (numeric ? 0.32 : 0.35)) / (numeric ? 0.28 : 0.25));
   return {
     appear: focus,
     travel: 1,
-    local: ease(p / 0.12) * (1 - ease((p - 0.6) / 0.22)),
+    local: ease(p / 0.12) * (1 - ease((p - (numeric ? 0.6 : 0.86)) / (numeric ? 0.22 : 0.12))),
     other: 1 - focus,
-    returnToMatrix: ease(p / (numeric ? 0.32 : 0.52)),
+    returnToMatrix: ease(p / (numeric ? 0.32 : 0.35)),
     restore,
-    merge: numeric ? ease(p / 0.6) : ease(sample.calculation),
+    merge: numeric ? ease(p / 0.6) : ease((p - 0.6) / 0.3),
   };
 }
 export function layerSliceMotion(sample: JourneySample) {

@@ -1,4 +1,5 @@
 import JourneySliceContext from './JourneySliceContext';
+import JourneyShapeHeads from './JourneyShapeHeads';
 import { tokenSliceMotion, cacheSliceMotion, headSliceMotion } from '../../lib/journey-slices';
 import { JourneyTensor, JourneyTokenCuts, JourneyStorage } from './JourneyCanvas';
 import type { JourneySample } from '../../lib/journey-scene';
@@ -27,7 +28,9 @@ export default function JourneyShapeCanvas({
       .filter((a) => a.entity.end.opacity > 0 && a.pose)
       .map((a) => a.pose!.cy + a.pose!.height / 2 + 70),
   );
-  const stored = actors.filter((a) => a.pose && a.pose.width < 100 && a.entity.opacity > 0.02);
+  const stored = actors.filter(
+    (a) => a.pose && a.pose.width < 100 && a.pose.cx < 175 && a.entity.opacity > 0.02,
+  );
   const scalarBottom = Math.max(
     0,
     ...actors
@@ -43,7 +46,13 @@ export default function JourneyShapeCanvas({
       : step.id === 'gate'
         ? 990
         : Math.max(
-            step.id === 'embedding' ? 640 : step.id === 'layers' ? 550 : 490,
+            step.id === 'embedding'
+              ? 640
+              : step.id === 'layers'
+                ? 550
+                : step.id === 'concat'
+                  ? 720
+                  : 490,
             targetBottom + 40,
             scalarBottom + 40,
           );
@@ -107,23 +116,7 @@ export default function JourneyShapeCanvas({
           />
         );
       })}
-      {step.id === 'concat' && (
-        <g
-          className="shape-extra-heads"
-          opacity={headSliceMotion(sample, 'shapes').restore * (1 - ease(c))}
-          transform={`translate(${790 - 230 * c},${225 + 40 * c})`}
-        >
-          <text y="-22">他の15 Headの出力も連結</text>
-          {[0, 1, 2].map((i) => (
-            <g key={i} transform={`translate(0,${i * 60})`}>
-              <rect width="140" height="42" rx="3" />
-              <text x="70" y="26" textAnchor="middle">
-                Head {i === 2 ? '3〜15' : i + 1} · {i === 2 ? '各' : ''}7 × 128
-              </text>
-            </g>
-          ))}
-        </g>
-      )}
+      {step.id === 'heads' && <JourneyShapeHeads sample={sample} />}
       {actors.map(({ entity: e, spec, pose, moving, movement, rotation, turning }) => {
         if (step.id === 'decode' && e.id.startsWith('cache-new-')) return null;
         if (!spec || !pose) {
@@ -177,7 +170,8 @@ export default function JourneyShapeCanvas({
             </g>
           );
         }
-        const compact = pose.width < 100;
+        const headFocus = step.id === 'heads' && ['q', 'k', 'v'].includes(e.id);
+        const compact = pose.width < 100 && !(headFocus && p < 0.86);
         const result = outputIds.has(e.id);
         const born = e.start.opacity === 0;
         const isNew = (result && e.start.data !== e.end.data) || (result && born);
@@ -187,7 +181,7 @@ export default function JourneyShapeCanvas({
         const spinning = turning && c > 0 && c < 1;
         const physicalW = turning ? 192 : rotation === 90 ? h : w;
         const physicalH = turning ? 136 : rotation === 90 ? w : h;
-        const active = activeEntities(step.id, e.id);
+        const active = activeEntities(step.id, e.id) || (headFocus && p < 0.86);
         const storedLabel =
           e.id === 'skip'
             ? 'H₀ · Residual ①用'
@@ -214,13 +208,20 @@ export default function JourneyShapeCanvas({
         const cacheNew = step.id === 'cache' && e.id.startsWith('cache-new-');
         const cachePast = step.id === 'cache' && ['k', 'v'].includes(e.id);
         const cache = cacheSliceMotion(p);
-        const detailOpacity = cacheNew
-          ? 1 - ease(cache.join / 0.2)
-          : spinning
-            ? 0
-            : moving
-              ? 1 - ease((movement - 0.03) / 0.12) + ease((movement - 0.88) / 0.12)
-              : 1;
+        const concatMerge =
+          step.id === 'concat' && e.id === 'attn' ? headSliceMotion(sample, 'shapes').merge : 0;
+        const detailOpacity =
+          step.id === 'concat' && e.id === 'attn' && concatMerge > 0
+            ? 1 - ease(concatMerge / 0.2) + ease((p - 0.9) / 0.08)
+            : headFocus
+              ? 1 - ease(p / 0.1) + ease((p - 0.86) / 0.1)
+              : cacheNew
+                ? 1 - ease(cache.join / 0.2)
+                : spinning
+                  ? 0
+                  : moving
+                    ? 1 - ease((movement - 0.03) / 0.12) + ease((movement - 0.88) / 0.12)
+                    : 1;
         const appearance = cacheNew
           ? ease((p - 0.5) / 0.1)
           : step.id === 'sampling' && e.id === 'prob'
@@ -228,7 +229,12 @@ export default function JourneyShapeCanvas({
             : born
               ? ease((p - 0.5) / 0.1)
               : 1;
-        const processActive = active && process && !compact && !e.id.startsWith('weight');
+        const processActive =
+          active &&
+          process &&
+          !compact &&
+          !e.id.startsWith('weight') &&
+          !(headFocus && e.id === 'v');
         const progressTitles: Record<string, string> = {
           norm: 'H₀ → X · 正規化中',
           'post-norm': 'H₁ → Xₘ · 正規化中',
@@ -240,7 +246,14 @@ export default function JourneyShapeCanvas({
           heads: `${e.id.toUpperCase()} · Head分割・正規化中`,
           rope: `${e.id.toUpperCase()} · RoPE適用中`,
         };
-        const title = processActive && working ? (progressTitles[step.id] ?? baseTitle) : baseTitle;
+        const title =
+          step.id === 'concat' && e.id === 'attn' && concatMerge > 0 && concatMerge < 1
+            ? 'C · 全16 Headを連結中'
+            : headFocus && p < 0.86
+              ? spec.name
+              : processActive && working
+                ? (progressTitles[step.id] ?? baseTitle)
+                : baseTitle;
         const typeTransition =
           working && ((turning && e.id === 'k') || (step.id === 'heads' && active));
         const state = processActive
@@ -256,6 +269,8 @@ export default function JourneyShapeCanvas({
           <g
             key={e.id}
             data-shape-entity={e.id}
+            data-head-partition={headFocus ? `${e.id}:0` : undefined}
+            data-merge-head={step.id === 'concat' && e.id === 'attn' ? 0 : undefined}
             data-shape={`${spec.rows}x${spec.cols}`}
             data-shape-ready={ready}
             data-shape-contract={contract ?? ''}
@@ -278,7 +293,13 @@ export default function JourneyShapeCanvas({
             </title>
             <text
               className="shape-name"
-              opacity={cacheNew ? detailOpacity : 1}
+              opacity={
+                headFocus
+                  ? 1 - ease(p / 0.1) + ease((p - 0.8) / 0.06)
+                  : cacheNew
+                    ? detailOpacity
+                    : 1
+              }
               x={compact ? w / 2 : 0}
               textAnchor={compact ? 'middle' : undefined}
               y={compact ? -12 : -46}
@@ -351,20 +372,34 @@ export default function JourneyShapeCanvas({
             <text
               className="shape-dimension"
               opacity={
-                cacheNew
-                  ? detailOpacity
-                  : cachePast
-                    ? 1 - Math.sin(Math.PI * cache.settle)
-                    : typeTransition
-                      ? 1 - Math.sin(Math.PI * c)
-                      : 1
+                headFocus
+                  ? 1 - ease(p / 0.1) + ease((p - 0.28) / 0.12)
+                  : step.id === 'concat' && e.id === 'attn'
+                    ? headSliceMotion(sample, 'shapes').merge < 0.5
+                      ? 1 - ease(headSliceMotion(sample, 'shapes').merge / 0.5)
+                      : ease((p - 0.9) / 0.06)
+                    : cacheNew
+                      ? detailOpacity
+                      : cachePast
+                        ? 1 - Math.sin(Math.PI * cache.settle)
+                        : typeTransition
+                          ? 1 - Math.sin(Math.PI * c)
+                          : 1
               }
               x={w / 2}
               y={h / 2 + 1}
               dominantBaseline="middle"
               textAnchor="middle"
               fontSize={Math.min(
-                compact ? 12 : spec.cols === 151936 ? 23 : 26,
+                headFocus
+                  ? 26 -
+                      13 * ease(p / 0.1) +
+                      ((e.id === 'v' ? 12 : 26) - 13) * ease((p - 0.7) / 0.16)
+                  : compact
+                    ? 12
+                    : spec.cols === 151936
+                      ? 23
+                      : 26,
                 (w - 10) / (`${spec.rows} × ${spec.cols}`.length * 0.62),
               )}
             >
@@ -408,6 +443,7 @@ export default function JourneyShapeCanvas({
           </g>
         );
       })}
+      {step.id === 'concat' && <JourneyShapeHeads sample={sample} />}
       {operations
         .filter((op) => op.inputs.length === 2)
         .map((op) => {

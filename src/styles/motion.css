@@ -483,10 +483,6 @@
   fill: var(--surface);
   stroke: var(--journey-color);
 }
-.shape-extra-heads text {
-  font: 11px var(--sans);
-  fill: var(--muted);
-}
 .shape-story {
   font: 14px var(--sans);
   fill: var(--muted);
@@ -1151,4 +1147,29 @@ body:has(.journey) .page-content.wide {
 }
 .journey-tensor[data-entity='q-head-1'] text {
   fill: var(--violet);
+}
+
+.shape-head-part rect {
+  fill: var(--surface);
+  stroke: var(--accent);
+  stroke-width: 1.2;
+}
+.shape-head-partitions .tone-k rect {
+  stroke: var(--amber);
+}
+.shape-head-partitions .tone-output rect,
+.shape-extra-heads rect {
+  stroke: var(--teal);
+}
+.shape-head-index {
+  font: 10px var(--sans);
+  fill: var(--text);
+}
+.shape-head-type {
+  font: 12px var(--mono);
+  fill: var(--text);
+}
+.shape-head-group-label {
+  font: 13px var(--sans);
+  fill: var(--muted);
 }

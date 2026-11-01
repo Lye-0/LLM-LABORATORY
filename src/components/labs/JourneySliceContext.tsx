@@ -168,7 +168,7 @@ export default function JourneySliceContext({
         );
       })}
       {stage === 'heads' &&
-        ['q', 'k'].map((id, i) => {
+        (numeric ? ['q', 'k'] : ['q', 'k', 'v']).map((id, i) => {
           const e = sample.entities.find((entity) => entity.id === id)!;
           const pose = actors.find((actor) => actor.entity.id === id)?.pose;
           return (
@@ -177,7 +177,7 @@ export default function JourneySliceContext({
               className="slice-head-label"
               data-local-head={id}
               x={pose?.cx ?? e.x + 1.5 * e.w}
-              y={pose ? pose.cy - pose.height / 2 - 90 : e.y - 54}
+              y={pose ? pose.cy - pose.height / 2 - (15 + 75 * ease((p - 0.7) / 0.16)) : e.y - 54}
               textAnchor="middle"
               opacity={motion.local}
             >
