@@ -1,4 +1,5 @@
 import type { JourneySample } from '../../lib/journey-scene';
+import JourneyHeadDimensions from './JourneyHeadDimensions';
 import { shapeSize, shapeSpec, type ShapePose } from '../../lib/journey-shapes';
 import {
   splitHeadPose,
@@ -23,6 +24,11 @@ export default function JourneyShapeHeads({ sample }: { sample: JourneySample })
           };
           return (
             <g key={id} className={`tone-${id === 'v' ? 'output' : id}`}>
+              <JourneyHeadDimensions
+                progress={p}
+                heads={headCount(id)}
+                y={id === 'q' ? 135 : id === 'k' ? 415 : 605}
+              />
               <text
                 className="shape-head-group-label"
                 x="220"
@@ -74,6 +80,7 @@ export default function JourneyShapeHeads({ sample }: { sample: JourneySample })
     const motion = headSliceMotion(sample, 'shapes');
     return (
       <g className="shape-extra-heads tone-output">
+        <JourneyHeadDimensions progress={p} heads={16} merging y={690} />
         {Array.from({ length: 15 }, (_, j) => j + 1).map((i) => {
           const pos = mergeHeadPose(p, i);
           return (

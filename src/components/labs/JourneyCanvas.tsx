@@ -1,3 +1,5 @@
+import JourneyTensorShapes from './JourneyTensorShapes';
+import { SHAPE_HEADER_HEIGHT } from '../../lib/journey-tensor-shapes';
 import JourneySliceContext from './JourneySliceContext';
 import { actorId, projectionActors, binaryActors } from '../../lib/journey-actors';
 import { calculationFocus, completedRow, traceRow, rotationDegrees } from '../../lib/journey-trace';
@@ -396,7 +398,7 @@ export default function JourneyCanvas({
             : [];
   return (
     <svg
-      viewBox={`0 0 1000 ${noteLayout.height}`}
+      viewBox={`0 0 1000 ${noteLayout.height + SHAPE_HEADER_HEIGHT}`}
       className="journey-svg"
       role="img"
       aria-label={`${step.name}。${step.action}`}
@@ -424,212 +426,220 @@ export default function JourneyCanvas({
           <path d="M0 1 L9 5 L0 9" fill="none" stroke="currentColor" />
         </marker>
       </defs>
-      <JourneySliceContext sample={sample} view="numbers" reduced={reduced} />
-      <JourneyTokenCuts sample={sample} />
-      {links.map(([from, to]) => {
-        const a = byId[from],
-          b = byId[to];
-        if (!a || !b) return null;
-        const start = center(a, 'right'),
-          end = center(b, 'left');
-        return (
-          <path
-            key={from + to}
-            d={`M${start.x + 8},${start.y} C${(start.x + end.x) / 2},${start.y} ${(start.x + end.x) / 2},${end.y} ${end.x - 8},${end.y}`}
-            className="journey-link"
-            markerEnd="url(#journey-arrow)"
-          />
-        );
-      })}
-      {entities.map((e) => (
-        <g key={e.id} opacity={activeEntities(step.id, e.id) ? 1 : 0.72}>
-          <JourneyTensor entity={e} progress={p} calculation={sample.calculation} step={step.id} />
-        </g>
-      ))}
-      {step.id === 'scores' && (
-        <foreignObject
-          className="journey-score-scale"
-          x="648"
-          y="250"
-          width="40"
-          height="64"
-          opacity={ease((p - 0.54) / 0.06)}
-        >
-          <div
-            dangerouslySetInnerHTML={{
-              __html: mathDocument('<mfrac><mn>1</mn><msqrt><mi>d</mi></msqrt></mfrac>'),
-            }}
-          />
-        </foreignObject>
-      )}
-      {operation.symbols.map((symbol) => (
-        <text
-          key={symbol.key}
-          x={symbol.x}
-          y={symbol.y}
-          textAnchor="middle"
-          dominantBaseline="middle"
-          opacity={ease((p - 0.54) / 0.06)}
-          className={`journey-operator ${symbol.text.length > 2 ? 'is-weight-name' : ''}`}
-        >
-          {symbol.text}
-        </text>
-      ))}
-      {noteLayout.notes.map((note) => (
-        <foreignObject
-          key={note.key}
-          className="journey-operation-note"
-          opacity={note.opacity * (step.id === 'heads' ? ease((p - 0.58) / 0.08) : 1)}
-          data-owner={note.key}
-          x={note.x}
-          y={note.y}
-          width={note.width}
-          height={note.height}
-        >
-          <div className="operation-content">
-            <p className="operation-title">処理 · {note.title}</p>
-            <div
-              className="operation-formula"
-              dangerouslySetInnerHTML={{ __html: note.formula.map(mathDocument).join('') }}
-            />
-            <p className="operation-explanation">{note.explanation}</p>
-            <div
-              className="operation-detail"
-              dangerouslySetInnerHTML={{ __html: note.detail.map(mathDocument).join('') }}
-            />
-          </div>
-        </foreignObject>
-      ))}
-      {step.id === 'rope' &&
-        ['q', 'k'].map((id) => {
-          const e = byId[id],
-            row = traceRow(sample.calculation),
-            input = (id === 'q' ? model.firstLayer.qn : model.firstLayer.kn)[row],
-            fraction = sample.calculation >= 1 ? 1 : ease((sample.calculation * 7) % 1);
+      <JourneyTensorShapes sample={sample} view="numbers" />
+      <g transform={`translate(0,${SHAPE_HEADER_HEIGHT})`}>
+        <JourneySliceContext sample={sample} view="numbers" reduced={reduced} />
+        <JourneyTokenCuts sample={sample} />
+        {links.map(([from, to]) => {
+          const a = byId[from],
+            b = byId[to];
+          if (!a || !b) return null;
+          const start = center(a, 'right'),
+            end = center(b, 'left');
           return (
-            <JourneyRotationGlyph
-              key={id}
-              x={e.x - 80}
-              y={e.y + 58}
-              before={-rotationDegrees(input, row, 0)}
-              angle={-rotationDegrees(input, row, fraction)}
-              position={row}
-              marker="journey-arrow"
+            <path
+              key={from + to}
+              d={`M${start.x + 8},${start.y} C${(start.x + end.x) / 2},${start.y} ${(start.x + end.x) / 2},${end.y} ${end.x - 8},${end.y}`}
+              className="journey-link"
+              markerEnd="url(#journey-arrow)"
             />
           );
         })}
-      {step.id === 'layers' && (
-        <text x="470" y="440" className="journey-layer-label">
-          Layer {sample.layer} / 27{' '}
-          <tspan x="470" dy="28">
-            同じ7行のhidden state
-          </tspan>
-        </text>
-      )}
-      {step.id === 'sampling' && (
-        <g className="journey-story" opacity={ease((p - 0.4) / 0.12)}>
-          <path d="M496,374 V407" markerEnd="url(#journey-arrow)" />
-          <text x="530" y="400">
-            ① 末尾の行だけを使う
-          </text>
-          <text x="360" y="410">
-            ② Softmax
-          </text>
-          <g opacity={ease((p - 0.8) / 0.1)}>
-            <path d="M643,465 H689" markerEnd="url(#journey-arrow)" />
-            <text x="650" y="510">
-              ③ 最大の候補を選ぶ
-            </text>
+        {entities.map((e) => (
+          <g key={e.id} opacity={activeEntities(step.id, e.id) ? 1 : 0.72}>
+            <JourneyTensor
+              entity={e}
+              progress={p}
+              calculation={sample.calculation}
+              step={step.id}
+            />
           </g>
-        </g>
-      )}
-      {['append', 'cache', 'decode'].includes(step.id) && (
-        <g className="journey-story">
-          <text x="70" y={step.id === 'append' ? 240 : 155}>
-            {step.id === 'decode' ? '生成ID列 · 8個' : '保持していた入力ID · 7個'}
+        ))}
+        {step.id === 'scores' && (
+          <foreignObject
+            className="journey-score-scale"
+            x="648"
+            y="250"
+            width="40"
+            height="64"
+            opacity={ease((p - 0.54) / 0.06)}
+          >
+            <div
+              dangerouslySetInnerHTML={{
+                __html: mathDocument('<mfrac><mn>1</mn><msqrt><mi>d</mi></msqrt></mfrac>'),
+              }}
+            />
+          </foreignObject>
+        )}
+        {operation.symbols.map((symbol) => (
+          <text
+            key={symbol.key}
+            x={symbol.x}
+            y={symbol.y}
+            textAnchor="middle"
+            dominantBaseline="middle"
+            opacity={ease((p - 0.54) / 0.06)}
+            className={`journey-operator ${symbol.text.length > 2 ? 'is-weight-name' : ''}`}
+          >
+            {symbol.text}
           </text>
-          {step.id === 'append' && (
-            <>
-              <path d="M70,338 H790" />
-              <text x="805" y="355">
-                ＋ 1個
-              </text>
-            </>
-          )}
-          {step.id === 'append' &&
-            model.tokenPieces.map((piece, i) => (
-              <text key={i} x={70 + i * 105 + 47} y="355" textAnchor="middle">
-                {piece}
-              </text>
-            ))}
-          {step.id === 'append' && (
-            <text x="852" y="380" textAnchor="middle" opacity={ease((p - 0.75) / 0.15)}>
-              {model.candidates[model.chosen].text}
+        ))}
+        {noteLayout.notes.map((note) => (
+          <foreignObject
+            key={note.key}
+            className="journey-operation-note"
+            opacity={note.opacity * (step.id === 'heads' ? ease((p - 0.58) / 0.08) : 1)}
+            data-owner={note.key}
+            x={note.x}
+            y={note.y}
+            width={note.width}
+            height={note.height}
+          >
+            <div className="operation-content">
+              <p className="operation-title">処理 · {note.title}</p>
+              <div
+                className="operation-formula"
+                dangerouslySetInnerHTML={{ __html: note.formula.map(mathDocument).join('') }}
+              />
+              <p className="operation-explanation">{note.explanation}</p>
+              <div
+                className="operation-detail"
+                dangerouslySetInnerHTML={{ __html: note.detail.map(mathDocument).join('') }}
+              />
+            </div>
+          </foreignObject>
+        ))}
+        {step.id === 'rope' &&
+          ['q', 'k'].map((id) => {
+            const e = byId[id],
+              row = traceRow(sample.calculation),
+              input = (id === 'q' ? model.firstLayer.qn : model.firstLayer.kn)[row],
+              fraction = sample.calculation >= 1 ? 1 : ease((sample.calculation * 7) % 1);
+            return (
+              <JourneyRotationGlyph
+                key={id}
+                x={e.x - 80}
+                y={e.y + 58}
+                before={-rotationDegrees(input, row, 0)}
+                angle={-rotationDegrees(input, row, fraction)}
+                position={row}
+                marker="journey-arrow"
+              />
+            );
+          })}
+        {step.id === 'layers' && (
+          <text x="470" y="440" className="journey-layer-label">
+            Layer {sample.layer} / 27{' '}
+            <tspan x="470" dy="28">
+              同じ7行のhidden state
+            </tspan>
+          </text>
+        )}
+        {step.id === 'sampling' && (
+          <g className="journey-story" opacity={ease((p - 0.4) / 0.12)}>
+            <path d="M496,374 V407" markerEnd="url(#journey-arrow)" />
+            <text x="530" y="400">
+              ① 末尾の行だけを使う
             </text>
-          )}
-          {step.id === 'cache' && (
-            <g opacity={ease((p - 0.42) / 0.12)}>
-              <path
-                d="M852,230 V245 H680 V280"
-                strokeDasharray="4 6"
-                markerEnd="url(#journey-arrow)"
-              />
-              <text x="640" y="315">
-                次のForward
-              </text>
-              <text x="640" y="335">
-                新しい1位置だけ計算
-              </text>
-              <path
-                d="M680,350 V500 H277 V480 M680,500 H547 V480"
-                strokeDasharray="4 6"
-                markerEnd="url(#journey-arrow)"
-              />
-              <text x="710" y="480">
-                過去の7位置は再計算しない
+            <text x="360" y="410">
+              ② Softmax
+            </text>
+            <g opacity={ease((p - 0.8) / 0.1)}>
+              <path d="M643,465 H689" markerEnd="url(#journey-arrow)" />
+              <text x="650" y="510">
+                ③ 最大の候補を選ぶ
               </text>
             </g>
-          )}
-          {step.id === 'decode' && (
-            <>
-              <path d="M500,230 V245" markerEnd="url(#journey-arrow)" />
-              <text x="520" y="235">
-                同じ8個のIDから文字列へ
-              </text>
-            </>
-          )}
-        </g>
-      )}
-      {step.id === 'sampling' && (
-        <text x="360" y="535" className="journey-note">
-          候補：
-          {model.candidates
-            .map((c, i) =>
-              p > 0.76 ? `${c.text} ${(model.nextProbabilities[i] * 100).toFixed(1)}%` : c.text,
-            )
-            .join(' ／ ')}
-        </text>
-      )}
-      {step.id === 'cache' &&
-        ['k', 'v'].map((id) => {
-          const e = byId[`cache-new-${id}`];
-          return (
-            <text
-              key={id}
-              x={e.x + e.w * 3 + 12}
-              y={e.y + 16}
-              className="journey-note"
-              opacity={e.opacity}
-            >
-              {id === 'k' ? 'Knew' : 'Vnew'}
+          </g>
+        )}
+        {['append', 'cache', 'decode'].includes(step.id) && (
+          <g className="journey-story">
+            <text x="70" y={step.id === 'append' ? 240 : 155}>
+              {step.id === 'decode' ? '生成ID列 · 8個' : '保持していた入力ID · 7個'}
             </text>
-          );
-        })}
-      {step.id === 'cache' && (
-        <text x="190" y="805" className="journey-note">
-          ⋮ 中間の層も保持 ／ 新しいQは過去＋現在のK/Vへ
-        </text>
-      )}
+            {step.id === 'append' && (
+              <>
+                <path d="M70,338 H790" />
+                <text x="805" y="355">
+                  ＋ 1個
+                </text>
+              </>
+            )}
+            {step.id === 'append' &&
+              model.tokenPieces.map((piece, i) => (
+                <text key={i} x={70 + i * 105 + 47} y="355" textAnchor="middle">
+                  {piece}
+                </text>
+              ))}
+            {step.id === 'append' && (
+              <text x="852" y="380" textAnchor="middle" opacity={ease((p - 0.75) / 0.15)}>
+                {model.candidates[model.chosen].text}
+              </text>
+            )}
+            {step.id === 'cache' && (
+              <g opacity={ease((p - 0.42) / 0.12)}>
+                <path
+                  d="M852,230 V245 H680 V280"
+                  strokeDasharray="4 6"
+                  markerEnd="url(#journey-arrow)"
+                />
+                <text x="640" y="315">
+                  次のForward
+                </text>
+                <text x="640" y="335">
+                  新しい1位置だけ計算
+                </text>
+                <path
+                  d="M680,350 V500 H277 V480 M680,500 H547 V480"
+                  strokeDasharray="4 6"
+                  markerEnd="url(#journey-arrow)"
+                />
+                <text x="710" y="480">
+                  過去の7位置は再計算しない
+                </text>
+              </g>
+            )}
+            {step.id === 'decode' && (
+              <>
+                <path d="M500,230 V245" markerEnd="url(#journey-arrow)" />
+                <text x="520" y="235">
+                  同じ8個のIDから文字列へ
+                </text>
+              </>
+            )}
+          </g>
+        )}
+        {step.id === 'sampling' && (
+          <text x="360" y="535" className="journey-note">
+            候補：
+            {model.candidates
+              .map((c, i) =>
+                p > 0.76 ? `${c.text} ${(model.nextProbabilities[i] * 100).toFixed(1)}%` : c.text,
+              )
+              .join(' ／ ')}
+          </text>
+        )}
+        {step.id === 'cache' &&
+          ['k', 'v'].map((id) => {
+            const e = byId[`cache-new-${id}`];
+            return (
+              <text
+                key={id}
+                x={e.x + e.w * 3 + 12}
+                y={e.y + 16}
+                className="journey-note"
+                opacity={e.opacity}
+              >
+                {id === 'k' ? 'Knew' : 'Vnew'}
+              </text>
+            );
+          })}
+        {step.id === 'cache' && (
+          <text x="190" y="805" className="journey-note">
+            ⋮ 中間の層も保持 ／ 新しいQは過去＋現在のK/Vへ
+          </text>
+        )}
+      </g>
     </svg>
   );
 }

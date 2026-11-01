@@ -1173,3 +1173,46 @@ body:has(.journey) .page-content.wide {
   font: 13px var(--sans);
   fill: var(--muted);
 }
+
+/* Full tensor metadata is separate from the selected slice and the stage. */
+.journey-full-shapes text {
+  font: 11px var(--sans);
+  fill: var(--muted);
+}
+.journey-full-shapes .journey-shape-caption {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
+.journey-full-shapes .journey-shape-name {
+  fill: var(--text);
+  font-weight: 600;
+}
+.journey-full-shapes .tone-q .shape-axis-drawn {
+  fill: var(--accent);
+}
+.journey-full-shapes .tone-k .shape-axis-drawn {
+  fill: var(--amber);
+}
+.journey-full-shapes .tone-output .shape-axis-drawn {
+  fill: var(--teal);
+}
+.journey-head-dimensions text {
+  font: 22px var(--mono);
+  fill: var(--teal);
+}
+.journey-head-dimensions .dimension-axis {
+  font: 10px var(--sans);
+  fill: var(--muted);
+}
+
+.journey-head-dimensions .dimension-axis {
+  fill: var(--muted);
+}
+.tone-q > .journey-head-dimensions > text:not(.dimension-axis),
+.tone-q > .journey-head-dimensions > g > text:not(.dimension-axis) {
+  fill: var(--accent);
+}
+.tone-k > .journey-head-dimensions > text:not(.dimension-axis),
+.tone-k > .journey-head-dimensions > g > text:not(.dimension-axis) {
+  fill: var(--amber);
+}
