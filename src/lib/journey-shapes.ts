@@ -158,7 +158,7 @@ export function shapeSize(s: ShapeSpec): { width: number; height: number } {
   if (s.square || (s.rows === 7 && s.cols === 7)) return { width: 176, height: 176 };
   if (s.rows === 128 && s.cols === 7) return { width: 136, height: 192 };
   if (s.cols === 151936)
-    return { width: 230, height: s.rows === 1 ? 70 : s.rows === 7 ? 136 : 166 };
+    return { width: s.rows > 8 ? 210 : 230, height: s.rows === 1 ? 70 : s.rows === 7 ? 136 : 166 };
   if (s.cols >= 2048) return { width: 210, height: s.rows > 8 ? 166 : 136 };
   return { width: 192, height: s.rows > 8 ? 166 : s.rows === 1 ? 66 : 136 };
 }
@@ -173,6 +173,7 @@ function pose(step: string, e: Entity, s: ShapeSpec): ShapePose {
     binary = binaryActors(step);
   if (e.id.startsWith('skip') && binary?.second !== e.id && binary?.input !== e.id)
     return { cx: 88, cy: e.y + 62, width: 76, height: 80 };
+  if (step === 'embedding' && e.id === 'hidden') cx = 670;
   if (step === 'qkv') {
     if (e.id === 'hidden') {
       cx = 275;
@@ -180,7 +181,7 @@ function pose(step: string, e: Entity, s: ShapeSpec): ShapePose {
     }
     for (const [j, id] of ['q', 'k', 'v'].entries()) {
       if (e.id === `weight-${id}`) {
-        cx = 515;
+        cx = 540;
         cy = 250 + j * 320;
       }
       if (e.id === id) {
@@ -195,7 +196,7 @@ function pose(step: string, e: Entity, s: ShapeSpec): ShapePose {
     }
     for (const [j, id] of ['gate', 'up'].entries()) {
       if (e.id === `weight-${id}`) {
-        cx = 515;
+        cx = 540;
         cy = 250 + j * 540;
       }
       if (e.id === id) {
@@ -222,7 +223,7 @@ function pose(step: string, e: Entity, s: ShapeSpec): ShapePose {
       cy = 285;
     }
     if (e.id === (step === 'multiply' ? binary.second : binary.input)) {
-      cx = 535;
+      cx = 550;
       cy = 285;
     }
     if (e.id === binary.output) {
@@ -324,7 +325,19 @@ export function shapeActors(sample: JourneySample) {
             height: a.height + (b.height - a.height) * p,
           }
         : null;
+    // The retained Up value travels below Gate rather than crossing through it.
+    if (at && sample.step.id === 'multiply' && e.id === 'up') at.cy += 220 * Math.sin(Math.PI * p);
     return {
+      moving: Boolean(
+        a &&
+        b &&
+        Math.abs(a.cx - b.cx) +
+          Math.abs(a.cy - b.cy) +
+          Math.abs(a.width - b.width) +
+          Math.abs(a.height - b.height) >
+          1,
+      ),
+      movement: p,
       entity: e,
       spec: sample.calculation > 0 || !before ? after : before,
       target: after,

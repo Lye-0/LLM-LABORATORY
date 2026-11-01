@@ -43,12 +43,10 @@ test('全工程に図と説明があり、主要な形と軸を表示する', as
   for (const s of journeySteps) {
     await seek(page, s.id, 0.95);
     await expect(page.locator('[data-shape-scene]')).toBeVisible();
-    await page
-      .locator('.journey-canvas-scroll')
-      .screenshot({
-        path: `.cache/shape-${s.id}.png`,
-        style: '.journey-dock{display:none!important}',
-      });
+    await page.locator('.journey-canvas-scroll').screenshot({
+      path: `.cache/shape-${s.id}.png`,
+      style: '.journey-dock{display:none!important}',
+    });
     const overflow = await page.locator('.shape-explanation').evaluateAll((es) =>
       es.flatMap((e) => {
         const b = e.getBoundingClientRect();
@@ -83,4 +81,87 @@ test('全工程に図と説明があり、主要な形と軸を表示する', as
   );
   await expect(page.getByRole('button', { name: '形と軸で見る', exact: true })).toBeInViewport();
   expect(errors).toEqual([]);
+});
+
+test('共通のToken・ID・分割線は両ビューで同じ見た目と進行を保つ', async ({ page }) => {
+  await page.goto(root);
+  for (const stage of ['text', 'tokenize', 'ids', 'embedding', 'append', 'cache', 'decode']) {
+    for (const p of [0.25, 0.75]) {
+      await page.getByRole('button', { name: '数値で見る', exact: true }).click();
+      await seek(page, stage, p);
+      const inspect = (svg: Element) =>
+        [...svg.querySelectorAll('.journey-tensor')]
+          .filter((e) =>
+            /^(token|id)-/.test(
+              e.getAttribute('data-entity') ?? e.getAttribute('data-shape-entity') ?? '',
+            ),
+          )
+          .map((e) => ({
+            id: e.getAttribute('data-entity') ?? e.getAttribute('data-shape-entity'),
+            transform: e.getAttribute('transform'),
+            opacity: e.getAttribute('opacity'),
+            text: [...e.querySelectorAll('text')].map((n) => ({
+              text: n.textContent,
+              fill: getComputedStyle(n).fill,
+              font: getComputedStyle(n).fontSize,
+            })),
+            rects: [...e.querySelectorAll('rect')].map((n) => ({
+              width: n.getAttribute('width'),
+              height: n.getAttribute('height'),
+              fill: getComputedStyle(n).fill,
+              stroke: getComputedStyle(n).stroke,
+              opacity: n.getAttribute('opacity'),
+            })),
+          }));
+      const numbers = await page.locator('[data-journey-scene]').evaluate(inspect);
+      const cuts = await page
+        .locator('[data-journey-scene] .journey-cut')
+        .evaluateAll((es) => es.map((e) => e.outerHTML));
+      const time = await page.getByRole('slider').inputValue();
+      await page.getByRole('button', { name: '形と軸で見る', exact: true }).click();
+      expect(await page.locator('[data-shape-scene]').evaluate(inspect), stage).toEqual(numbers);
+      expect(
+        await page
+          .locator('[data-shape-scene] .journey-cut')
+          .evaluateAll((es) => es.map((e) => e.outerHTML)),
+      ).toEqual(cuts);
+      await expect(page.getByRole('slider')).toHaveValue(time);
+    }
+  }
+});
+
+test('全工程の移動中と完了時にラベル・軸・説明が重ならない', async ({ page }) => {
+  await page.goto(root + '?view=shapes');
+  for (const stage of journeySteps)
+    for (const p of [0.1, 0.25, 0.4, 0.55, 0.65, 0.75, 0.85, 0.95]) {
+      await seek(page, stage.id, p);
+      const overlaps = await page.locator('[data-shape-scene]').evaluate((svg) => {
+        const nodes = [
+          ...svg.querySelectorAll(
+            'text, foreignObject.shape-badge-wrap, foreignObject.shape-explanation',
+          ),
+        ].filter((e) => {
+          let a: Element | null = e;
+          while (a && a !== svg) {
+            if (Number(a.getAttribute('opacity') ?? 1) < 0.15) return false;
+            a = a.parentElement;
+          }
+          return Boolean(e.textContent?.trim());
+        });
+        const results: string[][] = [];
+        for (let i = 0; i < nodes.length; i++)
+          for (let j = i + 1; j < nodes.length; j++) {
+            const a = nodes[i],
+              b = nodes[j];
+            if (a.contains(b) || b.contains(a)) continue;
+            const x = a.getBoundingClientRect(),
+              y = b.getBoundingClientRect();
+            const w = Math.min(x.right, y.right) - Math.max(x.left, y.left);
+            const h = Math.min(x.bottom, y.bottom) - Math.max(x.top, y.top);
+            if (w > 3 && h > 3) results.push([a.textContent ?? '', b.textContent ?? '']);
+          }
+        return results;
+      });
+      expect(overlaps, `${stage.id} ${p}`).toEqual([]);
+    }
 });

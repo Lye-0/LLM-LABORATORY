@@ -1,3 +1,9 @@
+import {
+  JourneyTensor,
+  JourneyTokenCuts,
+  JourneyStorage,
+  JourneyRotationGlyph,
+} from './JourneyCanvas';
 import type { JourneySample } from '../../lib/journey-scene';
 import { shapeActors, shapeOperations, shapeEquations, shapeGuide } from '../../lib/journey-shapes';
 import { activeEntities, ease, clamp } from '../../lib/journey-timing';
@@ -17,9 +23,26 @@ export default function JourneyShapeCanvas({ sample }: { sample: JourneySample }
       .filter((a) => a.entity.end.opacity > 0 && a.pose)
       .map((a) => a.pose!.cy + a.pose!.height / 2 + 70),
   );
+  const stored = actors.filter((a) => a.pose && a.pose.width < 100 && a.entity.opacity > 0.02);
+  const scalarBottom = Math.max(
+    0,
+    ...actors
+      .filter((a) => !a.pose && a.entity.opacity > 0.02)
+      .map((a) => a.entity.y + a.entity.h + 45),
+  );
   const noteY =
-    step.id === 'qkv' ? 1040 : step.id === 'gate' ? 990 : Math.max(490, targetBottom + 40);
+    step.id === 'qkv'
+      ? 1040
+      : step.id === 'gate'
+        ? 990
+        : Math.max(
+            step.id === 'embedding' ? 640 : step.id === 'layers' ? 550 : 490,
+            targetBottom + 40,
+            scalarBottom + 40,
+          );
   const height = Math.max(sample.height, noteY + 180 + equations.length * 125);
+  const chosen = sample.entities.find((e) => e.id === 'chosen');
+  const leaving = actors.some((a) => a.entity.start.opacity > 0 && a.entity.end.opacity === 0);
   const row = traceRow(c),
     working = c > 0 && c < 1;
   const branches =
@@ -52,6 +75,14 @@ export default function JourneyShapeCanvas({ sample }: { sample: JourneySample }
           <path d="M0 1 L9 5 L0 9" fill="none" stroke="currentColor" />
         </marker>
       </defs>
+      {stored.length > 0 && (
+        <JourneyStorage
+          boundary={150}
+          textX={25}
+          height={Math.max(430, ...stored.map((a) => a.pose!.cy + a.pose!.height / 2 + 45))}
+        />
+      )}
+      <JourneyTokenCuts sample={sample} />
       {branches.map(([from, to]) => {
         const a = actors.find((a) => a.entity.id === from)?.pose,
           b = actors.find((a) => a.entity.id === to)?.pose;
@@ -69,7 +100,7 @@ export default function JourneyShapeCanvas({ sample }: { sample: JourneySample }
       {step.id === 'concat' && (
         <g
           className="shape-extra-heads"
-          opacity={1 - ease(c)}
+          opacity={ease((p - 0.52) / 0.06) * (1 - ease(c))}
           transform={`translate(${790 - 230 * c},${225 + 40 * c})`}
         >
           <text y="-22">他の15 Headの出力も連結</text>
@@ -83,7 +114,7 @@ export default function JourneyShapeCanvas({ sample }: { sample: JourneySample }
           ))}
         </g>
       )}
-      {actors.map(({ entity: e, spec, pose }) => {
+      {actors.map(({ entity: e, spec, pose, moving, movement }) => {
         if (!spec || !pose) {
           if (
             !e.id.startsWith('token-') &&
@@ -91,6 +122,21 @@ export default function JourneyShapeCanvas({ sample }: { sample: JourneySample }
             !['chosen', 'result'].includes(e.id)
           )
             return null;
+          // Token pieces and vocabulary IDs have identical meaning in both views.
+          // Reuse the numeric renderer without changing shape-specific matrix layouts.
+          if (e.id.startsWith('token-') || e.id.startsWith('id-')) {
+            return (
+              <g key={e.id} opacity={activeEntities(step.id, e.id) ? 1 : 0.72}>
+                <JourneyTensor
+                  entity={e}
+                  progress={p}
+                  calculation={c}
+                  step={step.id}
+                  view="shapes"
+                />
+              </g>
+            );
+          }
           const label =
             e.id === 'chosen'
               ? '次のID'
@@ -103,13 +149,15 @@ export default function JourneyShapeCanvas({ sample }: { sample: JourneySample }
               data-shape-entity={e.id}
               opacity={e.opacity}
               transform={`translate(${e.x},${e.y})`}
-              className="shape-token"
+              className={`shape-token journey-tensor tone-id is-active`}
             >
-              {!e.plain && <rect width={e.w} height={e.h} rx="5" />}
+              <text className="tensor-label" y="-16">
+                {e.id === 'chosen' ? 'next_id · 選んだID' : ''}
+              </text>
+              {!e.plain && <rect width={e.w - 4} height={e.h - 3} rx="4" />}
               <text
-                x={e.w / 2}
-                y={e.h / 2}
-                dominantBaseline="middle"
+                x={e.w / 2 - 2}
+                y={e.h / 2 + 4}
                 textAnchor="middle"
                 fontSize={e.id.startsWith('token-') ? 22 : 15}
               >
@@ -128,6 +176,12 @@ export default function JourneyShapeCanvas({ sample }: { sample: JourneySample }
         const w = pose.width,
           h = pose.height;
         const active = activeEntities(step.id, e.id);
+        const storedLabel =
+          e.id === 'skip'
+            ? 'H₀ · Residual ①用'
+            : e.id === 'skip2'
+              ? 'H₁ · Residual ②用'
+              : `${e.id.toUpperCase()} · 待機`;
         const op = operations.find((o) => o.kind === 'matmul' && o.inputs.includes(e.id));
         const contract = op ? (op.inputs[0] === e.id ? 'columns' : 'rows') : null;
         const keyTable = spec.square;
@@ -140,6 +194,10 @@ export default function JourneyShapeCanvas({ sample }: { sample: JourneySample }
               ? 'z_last · 末尾のスコア'
               : spec.name;
         const scansRows = !['transpose', 'concat', 'append', 'cache', 'decode'].includes(step.id);
+        const detailOpacity = moving
+          ? 1 - ease((movement - 0.03) / 0.12) + ease((movement - 0.88) / 0.12)
+          : 1;
+        const appearance = born ? ease((p - 0.5) / 0.1) : 1;
         const rightOperand = contract === 'rows';
         const rowY = rightOperand
           ? 0
@@ -163,21 +221,30 @@ export default function JourneyShapeCanvas({ sample }: { sample: JourneySample }
             transform={`translate(${pose.cx - w / 2},${pose.cy - h / 2})`}
             opacity={
               (e.start.opacity > 0 && e.end.opacity === 0
-                ? Math.min(e.opacity, 1 - clamp(p / 0.18))
-                : e.opacity) * (active ? 1 : 0.55)
+                ? Math.min(e.opacity, 1 - clamp(p / 0.1))
+                : e.opacity) *
+              appearance *
+              (active ? 1 : 0.72)
             }
-            className={`shape-matrix ${compact ? 'is-stored' : ''} ${result ? 'is-result' : ''} ${contract && working ? 'is-contracting' : ''}`}
+            className={`shape-matrix tone-${e.tone} ${compact ? 'is-stored' : ''} ${result ? 'is-result' : ''} ${contract && working ? 'is-contracting' : ''}`}
           >
             <title>
               {title}。[{spec.rows}×{spec.cols}]。縦：{spec.rowAxis}。横：{spec.colAxis}。
               {spec.badge}
             </title>
-            <text className="shape-name" y={compact ? -12 : -46} fontSize={compact ? 10 : 16}>
-              {compact ? spec.name.split(' · ')[0] : title}
+            <text
+              className="shape-name"
+              x={compact ? w / 2 : 0}
+              textAnchor={compact ? 'middle' : undefined}
+              y={compact ? -12 : -46}
+              fontSize={compact ? 10 : 16}
+            >
+              {compact ? storedLabel : title}
             </text>
             {!compact && (
               <>
                 <text
+                  opacity={detailOpacity}
                   className={`shape-axis shape-column-axis ${contract === 'columns' && working ? 'is-matching' : ''}`}
                   x={w / 2}
                   y="-15"
@@ -186,6 +253,7 @@ export default function JourneyShapeCanvas({ sample }: { sample: JourneySample }
                   {axLabel(spec.cols, spec.colAxis)}
                 </text>
                 <text
+                  opacity={detailOpacity}
                   className={`shape-axis shape-row-axis ${contract === 'rows' && working ? 'is-matching' : ''}`}
                   transform={`translate(-18,${h / 2}) rotate(-90)`}
                   textAnchor="middle"
@@ -243,23 +311,35 @@ export default function JourneyShapeCanvas({ sample }: { sample: JourneySample }
               y={h / 2 + 1}
               dominantBaseline="middle"
               textAnchor="middle"
-              fontSize={compact ? 12 : spec.cols === 151936 ? 23 : 26}
+              fontSize={Math.min(
+                compact ? 12 : spec.cols === 151936 ? 23 : 26,
+                (w - 10) / (`${spec.rows} × ${spec.cols}`.length * 0.62),
+              )}
             >
               {spec.rows} × {spec.cols}
             </text>
             {!compact && (
-              <text className="shape-badge" x={w / 2} y={h + 25} textAnchor="middle">
-                {spec.badge ??
-                  (result
-                    ? ready >= 1
-                      ? '計算結果を次へ渡す'
-                      : ready > 0
-                        ? '結果を行ごとに生成中'
-                        : '計算待ち'
-                    : spec.rows > 8 || spec.cols > 8
-                      ? '細かい区切りは省略'
-                      : '')}
-              </text>
+              <foreignObject
+                opacity={detailOpacity}
+                className="shape-badge-wrap"
+                x="-8"
+                y={h + 12}
+                width={w + 16}
+                height="44"
+              >
+                <div>
+                  {spec.badge ??
+                    (result
+                      ? ready >= 1
+                        ? '計算結果を次へ渡す'
+                        : ready > 0
+                          ? '結果を行ごとに生成中'
+                          : '計算待ち'
+                      : spec.rows > 8 || spec.cols > 8
+                        ? '細かい区切りは省略'
+                        : '')}
+                </div>
+              </foreignObject>
             )}
             {compact && (
               <text className="shape-badge" x={w / 2} y={h + 16} textAnchor="middle">
@@ -267,7 +347,7 @@ export default function JourneyShapeCanvas({ sample }: { sample: JourneySample }
               </text>
             )}
             {step.id === 'mask' && e.id === 'score' && (
-              <text className="shape-badge" x={w / 2} y={h + 43} textAnchor="middle">
+              <text className="shape-badge" x={w / 2} y={h + 78} textAnchor="middle">
                 斜線：未来のKey位置を除外
               </text>
             )}
@@ -314,10 +394,32 @@ export default function JourneyShapeCanvas({ sample }: { sample: JourneySample }
             </g>
           );
         })}
+      {step.id === 'rope' &&
+        actors
+          .filter((a) => ['q', 'k'].includes(a.entity.id) && a.pose)
+          .map((a) => (
+            <JourneyRotationGlyph
+              key={a.entity.id}
+              x={a.pose!.cx - a.pose!.width / 2 - 85}
+              y={a.pose!.cy - 8}
+              // First RoPE pair: omega_0 = 1. Both Q and K use the same position angle.
+              angle={((-row * 180) / Math.PI) * (c >= 1 ? 1 : ease((c * 7) % 1))}
+              position={row}
+              marker="shape-arrow"
+            />
+          ))}
+      {step.id === 'layers' && (
+        <text x="500" y="445" textAnchor="middle" className="journey-layer-label">
+          Layer {sample.layer} / 27
+          <tspan x="500" dy="25">
+            同じ7行のhidden stateを次の層へ
+          </tspan>
+        </text>
+      )}
       {step.id === 'sampling' && (
-        <g className="shape-story" opacity={ease((p - 0.43) / 0.15)}>
+        <g className="shape-story journey-story" opacity={ease((p - 0.43) / 0.15)}>
           <path d="M500,340 V430" markerEnd="url(#shape-arrow)" />
-          <text x="530" y="385">
+          <text x="530" y="415">
             末尾1行を取り出す
           </text>
           <path d="M625,535 H695" markerEnd="url(#shape-arrow)" />
@@ -327,18 +429,29 @@ export default function JourneyShapeCanvas({ sample }: { sample: JourneySample }
         </g>
       )}
       {step.id === 'append' && (
-        <g className="shape-story">
+        <g className="shape-story journey-story">
           <path d="M70,340 H790" />
           <text x="70" y="370">
-            保持した7つのID
+            保持していた入力ID · 7個
           </text>
-          <text x="805" y="370">
+          <text
+            x={chosen ? chosen.x + chosen.w / 2 : 852}
+            y={Math.max(370, chosen ? chosen.y + chosen.h + 25 : 370)}
+            textAnchor="middle"
+          >
             + 1位置
           </text>
         </g>
       )}
+      {['cache', 'decode'].includes(step.id) && (
+        <g className="journey-story">
+          <text x="70" y="155">
+            {step.id === 'decode' ? '生成ID列 · 8個' : '保持していた入力ID · 7個'}
+          </text>
+        </g>
+      )}
       {step.id === 'cache' && (
-        <g className="shape-story">
+        <g className="shape-story journey-story">
           <text x="180" y="710">
             各層・各KV Head： [7 × 128] + 新しい [1 × 128] → [8 × 128]
           </text>
@@ -353,6 +466,7 @@ export default function JourneyShapeCanvas({ sample }: { sample: JourneySample }
         width="770"
         height={height - noteY - 20}
         className="shape-explanation"
+        opacity={leaving ? ease((p - 0.1) / 0.08) : 1}
       >
         <div>
           <p className="shape-operation-title">

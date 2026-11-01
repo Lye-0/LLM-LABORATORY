@@ -11,16 +11,18 @@ export function numberLabel(v: number | string) {
   return typeof v === 'string' ? v : v === -Infinity ? '−∞' : Number(v.toFixed(2)).toString();
 }
 type MovingEntity = JourneySample['entities'][number];
-function Tensor({
+export function JourneyTensor({
   entity: e,
   progress,
   step,
   calculation,
+  view = 'numbers',
 }: {
   entity: MovingEntity;
   progress: number;
   step: string;
   calculation: number;
+  view?: 'numbers' | 'shapes';
 }) {
   const active = activeEntities(step, e.id);
   const saving = (step === 'norm' || step === 'post-norm') && e.id.startsWith('skip');
@@ -50,7 +52,8 @@ function Tensor({
   });
   return (
     <g
-      data-entity={e.id}
+      data-entity={view === 'numbers' ? e.id : undefined}
+      data-shape-entity={view === 'shapes' ? e.id : undefined}
       data-role={
         e.tone === 'saved'
           ? 'saved'
@@ -217,6 +220,84 @@ function Tensor({
     </g>
   );
 }
+/** Shared token boundaries retain the same cues in both representations. */
+export function JourneyTokenCuts({ sample }: { sample: JourneySample }) {
+  const { entities, progress: p } = sample;
+  const byId = Object.fromEntries(entities.map((e) => [e.id, e]));
+  return (
+    <>
+      {sample.step.id === 'tokenize' &&
+        entities
+          .filter((e) => e.id.startsWith('token-'))
+          .slice(1)
+          .map((e, i) => {
+            const left = byId[`token-${i}`];
+            const x = (left.x + left.w + e.x) / 2;
+            return (
+              <g
+                key={e.id}
+                className="journey-cut"
+                opacity={ease(p / 0.15) * (1 - clamp((p - 0.7) / 0.18))}
+              >
+                <path d={`M${x},${e.y - 9} v${e.h + 18}`} />
+                <circle cx={x} cy={e.y - 12} r="2.5" />
+              </g>
+            );
+          })}
+    </>
+  );
+}
+/** The same waiting-area language and separator are used with either matrix view. */
+export function JourneyStorage({
+  height,
+  boundary = 175,
+  textX = 35,
+}: {
+  height: number;
+  boundary?: number;
+  textX?: number;
+}) {
+  return (
+    <g className="journey-storage" aria-label="待機・保存中の値。現在の演算には含めない">
+      <path d={`M${boundary},135 V${height}`} />
+      <text x={textX} y="145">
+        待機・保存
+      </text>
+      <text x={textX} y="165" className="storage-caption">
+        ここでは計算しない
+      </text>
+    </g>
+  );
+}
+export function JourneyRotationGlyph({
+  x,
+  y,
+  before = 0,
+  angle,
+  position,
+  marker,
+}: {
+  x: number;
+  y: number;
+  before?: number;
+  angle: number;
+  position: number;
+  marker: string;
+}) {
+  return (
+    <g transform={`translate(${x},${y})`} className="journey-rotation">
+      <circle r="31" />
+      <path d="M0,0 H31" />
+      <path d="M0,0 H30" transform={`rotate(${before})`} opacity=".45" strokeDasharray="3 3" />
+      <g transform={`rotate(${angle})`}>
+        <path d="M0,0 H30" className="rotating-vector" markerEnd={`url(#${marker})`} />
+      </g>
+      <text y="55" textAnchor="middle">
+        位置{position}の成分ペア
+      </text>
+    </g>
+  );
+}
 function center(e: MovingEntity, side: 'left' | 'right') {
   return {
     x: e.x + (side === 'right' ? (e.transpose ? e.data.length : e.data[0].length) * e.w : 0),
@@ -274,17 +355,7 @@ export default function JourneyCanvas({ sample }: { sample: JourneySample }) {
             (e.id === 'up' && step.id === 'silu')) &&
           e.opacity > 0.01 &&
           e.x < 175,
-      ) && (
-        <g className="journey-storage" aria-label="待機・保存中の値。現在の演算には含めない">
-          <path d={`M175,135 V${Math.min(noteLayout.height - 50, 700)}`} />
-          <text x="35" y="145">
-            待機・保存
-          </text>
-          <text x="35" y="165" className="storage-caption">
-            ここでは計算しない
-          </text>
-        </g>
-      )}
+      ) && <JourneyStorage height={Math.min(noteLayout.height - 50, 700)} />}
       <defs>
         <marker
           id="journey-arrow"
@@ -298,24 +369,7 @@ export default function JourneyCanvas({ sample }: { sample: JourneySample }) {
           <path d="M0 1 L9 5 L0 9" fill="none" stroke="currentColor" />
         </marker>
       </defs>
-      {step.id === 'tokenize' &&
-        entities
-          .filter((e) => e.id.startsWith('token-'))
-          .slice(1)
-          .map((e, i) => {
-            const left = byId[`token-${i}`];
-            const x = (left.x + left.w + e.x) / 2;
-            return (
-              <g
-                key={e.id}
-                className="journey-cut"
-                opacity={ease(p / 0.15) * (1 - clamp((p - 0.7) / 0.18))}
-              >
-                <path d={`M${x},${e.y - 9} v${e.h + 18}`} />
-                <circle cx={x} cy={e.y - 12} r="2.5" />
-              </g>
-            );
-          })}
+      <JourneyTokenCuts sample={sample} />
       {links.map(([from, to]) => {
         const a = byId[from],
           b = byId[to];
@@ -333,7 +387,7 @@ export default function JourneyCanvas({ sample }: { sample: JourneySample }) {
       })}
       {entities.map((e) => (
         <g key={e.id} opacity={activeEntities(step.id, e.id) ? 1 : 0.72}>
-          <Tensor entity={e} progress={p} calculation={sample.calculation} step={step.id} />
+          <JourneyTensor entity={e} progress={p} calculation={sample.calculation} step={step.id} />
         </g>
       ))}
       {step.id === 'scores' && (
@@ -397,26 +451,15 @@ export default function JourneyCanvas({ sample }: { sample: JourneySample }) {
             input = (id === 'q' ? model.firstLayer.qn : model.firstLayer.kn)[row],
             fraction = sample.calculation >= 1 ? 1 : ease((sample.calculation * 7) % 1);
           return (
-            <g
+            <JourneyRotationGlyph
               key={id}
-              transform={`translate(${e.x - 80},${e.y + 58})`}
-              className="journey-rotation"
-            >
-              <circle r="31" />
-              <path d="M0,0 H31" />
-              <path
-                d="M0,0 H30"
-                transform={`rotate(${-rotationDegrees(input, row, 0)})`}
-                opacity=".45"
-                strokeDasharray="3 3"
-              />
-              <g transform={`rotate(${-rotationDegrees(input, row, fraction)})`}>
-                <path d="M0,0 H30" className="rotating-vector" markerEnd="url(#journey-arrow)" />
-              </g>
-              <text y="55" textAnchor="middle">
-                位置{traceRow(sample.calculation)}の成分ペア
-              </text>
-            </g>
+              x={e.x - 80}
+              y={e.y + 58}
+              before={-rotationDegrees(input, row, 0)}
+              angle={-rotationDegrees(input, row, fraction)}
+              position={row}
+              marker="journey-arrow"
+            />
           );
         })}
       {step.id === 'layers' && (

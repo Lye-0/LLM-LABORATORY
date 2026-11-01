@@ -491,11 +491,11 @@
 }
 .shape-operators text {
   fill: var(--text);
-  font: 30px var(--sans);
+  font: 24px var(--sans);
 }
 .shape-token rect {
-  fill: var(--surface);
-  stroke: var(--journey-color);
+  stroke: var(--teal);
+  stroke-width: 1.8;
 }
 .shape-token text {
   font-family: var(--mono);
@@ -1056,4 +1056,48 @@ body:has(.journey) .page-content.wide {
 .journey-tensor[data-entity='chosen'] rect.calculation-component {
   stroke: var(--amber);
   stroke-width: 2.5;
+}
+
+/* Role cues match the numerical view; dimensions remain schematic. */
+.shape-matrix {
+  --shape-value-color: var(--teal);
+}
+.shape-matrix.tone-q,
+.shape-matrix.tone-id {
+  --shape-value-color: var(--accent);
+}
+.shape-matrix.tone-k,
+.shape-matrix.tone-weight {
+  --shape-value-color: var(--amber);
+}
+.shape-matrix.tone-saved {
+  --shape-value-color: var(--violet);
+}
+.shape-matrix .shape-body {
+  stroke: var(--shape-value-color);
+  fill: color-mix(in srgb, var(--shape-value-color) 7%, var(--bg));
+}
+.shape-matrix .shape-cell {
+  stroke: color-mix(in srgb, var(--shape-value-color) 20%, transparent);
+  fill: color-mix(in srgb, var(--shape-value-color) 6%, var(--bg));
+}
+.shape-matrix .shape-cell.is-complete {
+  fill: color-mix(in srgb, var(--shape-value-color) 14%, var(--bg));
+}
+.shape-matrix .shape-cell.is-masked {
+  fill: url(#shape-mask-pattern);
+}
+.shape-matrix.tone-saved .shape-body {
+  fill: transparent;
+  stroke-dasharray: 3 3;
+}
+.shape-matrix.is-stored .shape-name,
+.shape-matrix.is-stored .shape-dimension {
+  fill: var(--shape-value-color);
+}
+.shape-badge-wrap > div {
+  color: var(--muted);
+  font: 10px/1.5 var(--sans);
+  text-align: center;
+  overflow-wrap: anywhere;
 }
