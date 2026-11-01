@@ -1,7 +1,7 @@
 import { journeySteps } from '../data/journey';
 import { actorId, binaryActors, projectionActors } from './journey-actors';
 import { journeyFrames, type Entity, type JourneySample } from './journey-scene';
-import { stageMovement } from './journey-timing';
+import { ease, stageMovement } from './journey-timing';
 
 export interface ShapeSpec {
   name: string;
@@ -157,10 +157,8 @@ export function shapeSpec(step: string, id: string): ShapeSpec | null {
 export function shapeSize(s: ShapeSpec): { width: number; height: number } {
   if (s.square || (s.rows === 7 && s.cols === 7)) return { width: 176, height: 176 };
   if (s.rows === 128 && s.cols === 7) return { width: 136, height: 192 };
-  if (s.cols === 151936)
-    return { width: s.rows > 8 ? 210 : 230, height: s.rows === 1 ? 70 : s.rows === 7 ? 136 : 166 };
-  if (s.cols >= 2048) return { width: 210, height: s.rows > 8 ? 166 : 136 };
-  return { width: 192, height: s.rows > 8 ? 166 : s.rows === 1 ? 66 : 136 };
+  const width = s.cols >= 2048 ? (s.cols === 151936 && s.rows <= 7 ? 230 : 210) : 192;
+  return { width, height: s.rows === 1 ? 70 : (width * 136) / 192 };
 }
 
 function pose(step: string, e: Entity, s: ShapeSpec): ShapePose {
@@ -172,7 +170,7 @@ function pose(step: string, e: Entity, s: ShapeSpec): ShapePose {
   const projection = projectionActors(step),
     binary = binaryActors(step);
   if (e.id.startsWith('skip') && binary?.second !== e.id && binary?.input !== e.id)
-    return { cx: 88, cy: e.y + 62, width: 76, height: 80 };
+    return { cx: 88, cy: e.y + 62, width: 76, height: (76 * 136) / 192 };
   if (step === 'embedding' && e.id === 'hidden') cx = 670;
   if (step === 'qkv') {
     if (e.id === 'hidden') {
@@ -281,11 +279,11 @@ function pose(step: string, e: Entity, s: ShapeSpec): ShapePose {
   } else if (step === 'cache') {
     if (e.id === 'k' || e.id === 'cache-new-k') {
       cx = 350;
-      cy = e.id === 'k' ? 380 : 600;
+      cy = e.id === 'k' ? 380 : 620;
     }
     if (e.id === 'v' || e.id === 'cache-new-v') {
       cx = 700;
-      cy = e.id === 'v' ? 380 : 600;
+      cy = e.id === 'v' ? 380 : 620;
     }
     if (/^cache-(1|27)-/.test(e.id)) {
       cx = e.id.endsWith('K') ? 350 : 700;
@@ -293,7 +291,7 @@ function pose(step: string, e: Entity, s: ShapeSpec): ShapePose {
     }
   }
   if ((e.id === 'v' || e.id === 'up') && e.x < 175)
-    return { cx: 88, cy: e.y + 62, width: 76, height: 80 };
+    return { cx: 88, cy: e.y + 62, width: 76, height: (76 * 136) / 192 };
   return { cx, cy, width, height };
 }
 
@@ -325,9 +323,21 @@ export function shapeActors(sample: JourneySample) {
             height: a.height + (b.height - a.height) * p,
           }
         : null;
+    const fromAngle = before?.rows === 128 && before.cols === 7 ? 90 : 0;
+    const toAngle = after?.rows === 128 && after.cols === 7 ? 90 : 0;
+    const turning = sample.step.id === 'transpose' && e.id === 'k';
+    const rotation = fromAngle + (toAngle - fromAngle) * (turning ? ease(sample.calculation) : p);
+    if (at && turning && a && b) {
+      // A rigid plate spins; its sides never morph into a different rectangle.
+      const radians = (rotation * Math.PI) / 180;
+      at.width = 192 * Math.abs(Math.cos(radians)) + 136 * Math.abs(Math.sin(radians));
+      at.height = 192 * Math.abs(Math.sin(radians)) + 136 * Math.abs(Math.cos(radians));
+    }
     // The retained Up value travels below Gate rather than crossing through it.
     if (at && sample.step.id === 'multiply' && e.id === 'up') at.cy += 220 * Math.sin(Math.PI * p);
     return {
+      rotation,
+      turning,
       moving: Boolean(
         a &&
         b &&
@@ -339,7 +349,12 @@ export function shapeActors(sample: JourneySample) {
       ),
       movement: p,
       entity: e,
-      spec: sample.calculation > 0 || !before ? after : before,
+      spec:
+        (['heads', 'transpose'].includes(sample.step.id)
+          ? sample.calculation >= 0.5
+          : sample.calculation > 0) || !before
+          ? after
+          : before,
       target: after,
       pose: at,
     };

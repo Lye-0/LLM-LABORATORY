@@ -165,3 +165,66 @@ test('全工程の移動中と完了時にラベル・軸・説明が重なら�
       expect(overlaps, `${stage.id} ${p}`).toEqual([]);
     }
 });
+
+test('型表示はセルを作らず、Kは同じ長方形を回転して次工程へ渡す', async ({ page }) => {
+  await page.goto(root + '?view=shapes');
+  for (const stage of journeySteps) {
+    await seek(page, stage.id, 0.75);
+    await expect(
+      page.locator(
+        '[data-shape-scene] .shape-cell, [data-shape-scene] .shape-processing-row, [data-shape-scene] .shape-contracted-edge, [data-shape-scene] .shape-swap',
+      ),
+    ).toHaveCount(0);
+    for (const matrix of await page.locator('.shape-matrix').all())
+      await expect(matrix.locator('.shape-body')).toHaveCount(1);
+  }
+  const k = page.locator('[data-shape-entity="k"]');
+  for (const p of [0.1, 0.7, 0.95]) {
+    await seek(page, 'transpose', p);
+    await expect(k.locator('.shape-body')).toHaveAttribute('width', '192');
+    await expect(k.locator('.shape-body')).toHaveAttribute('height', '136');
+    const angle = Number(await k.getAttribute('data-shape-rotation'));
+    if (p === 0.1) expect(angle).toBe(0);
+    else if (p === 0.95) expect(angle).toBe(90);
+    else {
+      expect(angle).toBeGreaterThan(0);
+      expect(angle).toBeLessThan(90);
+    }
+  }
+  await seek(page, 'scores', 0);
+  await expect(k).toHaveAttribute('data-shape-rotation', '90');
+});
+
+test('Maskの禁止領域は処理と連動して現れ、形を保つ処理に式と進行説明がある', async ({ page }) => {
+  await page.goto(root + '?view=shapes');
+  await seek(page, 'mask', 0.4);
+  await expect(page.locator('.shape-mask-region')).toHaveCount(0);
+  await seek(page, 'mask', 0.7);
+  const mask = Number(await page.locator('.shape-mask-region').getAttribute('data-mask-progress'));
+  expect(mask).toBeGreaterThan(0);
+  expect(mask).toBeLessThan(1);
+  await seek(page, 'mask', 0.95);
+  await expect(page.locator('.shape-mask-region')).toHaveAttribute('data-mask-progress', '1');
+  await seek(page, 'softmax', 0);
+  await expect(page.locator('.shape-mask-region')).toHaveAttribute('data-mask-progress', '1');
+  for (const stage of [
+    'norm',
+    'heads',
+    'rope',
+    'transpose',
+    'mask',
+    'softmax',
+    'post-norm',
+    'silu',
+    'layers',
+    'final',
+    'sampling',
+  ]) {
+    await seek(page, stage, 0.7);
+    const note = page.locator(`[data-shape-process="${stage}"]`);
+    await expect(note.locator('math').first()).toBeAttached();
+    await expect(note.locator('.shape-process-status')).toContainText('処理中');
+    await seek(page, stage, 0.99);
+    await expect(note.locator('.shape-process-status')).toContainText('完了');
+  }
+});

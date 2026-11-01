@@ -449,41 +449,15 @@
   stroke: var(--journey-color);
   stroke-width: 1.3;
 }
-.shape-cell {
-  fill: color-mix(in srgb, var(--journey-color) 6%, var(--bg));
-  stroke: color-mix(in srgb, var(--journey-color) 16%, transparent);
-  stroke-width: 0.6;
-}
-.shape-cell.is-complete {
-  fill: color-mix(in srgb, var(--journey-color) 14%, var(--bg));
-}
-.shape-cell.is-masked {
-  fill: url(#shape-mask-pattern);
-  stroke: var(--line);
-}
 .shape-mask-line {
   stroke: var(--muted);
   stroke-width: 0.7;
   opacity: 0.4;
 }
-.shape-dimension-back {
-  fill: var(--bg);
-  opacity: 0.92;
-}
 .journey-shape-svg .shape-dimension {
   fill: var(--text);
   font-family: var(--mono);
   font-weight: 600;
-}
-.shape-processing-row {
-  fill: color-mix(in srgb, var(--shape-matching) 9%, transparent);
-  stroke: var(--shape-matching);
-  stroke-width: 2;
-}
-.shape-contracted-edge {
-  stroke: var(--shape-matching);
-  stroke-width: 4;
-  fill: none;
 }
 .journey-shape-svg .shape-axis.is-matching {
   fill: var(--shape-matching);
@@ -500,10 +474,6 @@
 .shape-token text {
   font-family: var(--mono);
 }
-.shape-head-slices rect {
-  fill: var(--journey-color);
-  opacity: 0.55;
-}
 .shape-branch {
   fill: none;
   stroke: var(--journey-color);
@@ -516,10 +486,6 @@
 .shape-extra-heads text {
   font: 11px var(--sans);
   fill: var(--muted);
-}
-.shape-swap {
-  fill: var(--shape-matching);
-  font-size: 26px;
 }
 .shape-story {
   font: 14px var(--sans);
@@ -1077,17 +1043,7 @@ body:has(.journey) .page-content.wide {
   stroke: var(--shape-value-color);
   fill: color-mix(in srgb, var(--shape-value-color) 7%, var(--bg));
 }
-.shape-matrix .shape-cell {
-  stroke: color-mix(in srgb, var(--shape-value-color) 20%, transparent);
-  fill: color-mix(in srgb, var(--shape-value-color) 6%, var(--bg));
-}
-.shape-matrix .shape-cell.is-complete {
-  fill: color-mix(in srgb, var(--shape-value-color) 14%, var(--bg));
-}
-.shape-matrix .shape-cell.is-masked {
-  fill: url(#shape-mask-pattern);
-}
-.shape-matrix.tone-saved .shape-body {
+.shape-matrix .shape-matrix .shape-matrix .shape-matrix.tone-saved .shape-body {
   fill: transparent;
   stroke-dasharray: 3 3;
 }
@@ -1100,4 +1056,38 @@ body:has(.journey) .page-content.wide {
   font: 10px/1.5 var(--sans);
   text-align: center;
   overflow-wrap: anywhere;
+}
+
+.shape-process-wash {
+  fill: var(--shape-value-color);
+}
+.shape-mask-region {
+  stroke: var(--muted);
+  stroke-width: 0.6;
+}
+.shape-process-note {
+  margin-bottom: 32px;
+}
+.shape-process-math {
+  color: var(--text);
+  font-size: 24px;
+}
+.shape-process-math math {
+  margin: 10px 0;
+}
+.shape-process-status {
+  color: var(--text);
+}
+.shape-process-status span {
+  display: inline-block;
+  color: var(--journey-color);
+  font-size: 12px;
+  margin-right: 14px;
+}
+
+.shape-dimension {
+  paint-order: stroke fill;
+  stroke: var(--bg);
+  stroke-width: 3px;
+  stroke-linejoin: round;
 }

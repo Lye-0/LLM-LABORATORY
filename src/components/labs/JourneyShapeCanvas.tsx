@@ -1,14 +1,9 @@
-import {
-  JourneyTensor,
-  JourneyTokenCuts,
-  JourneyStorage,
-  JourneyRotationGlyph,
-} from './JourneyCanvas';
+import { JourneyTensor, JourneyTokenCuts, JourneyStorage } from './JourneyCanvas';
 import type { JourneySample } from '../../lib/journey-scene';
 import { shapeActors, shapeOperations, shapeEquations, shapeGuide } from '../../lib/journey-shapes';
 import { activeEntities, ease, clamp } from '../../lib/journey-timing';
 import { actorId } from '../../lib/journey-actors';
-import { traceRow } from '../../lib/journey-trace';
+import { shapeProcess } from '../../lib/journey-shape-process';
 import { mathDocument } from '../../lib/journey-formulas';
 
 export default function JourneyShapeCanvas({ sample }: { sample: JourneySample }) {
@@ -16,6 +11,7 @@ export default function JourneyShapeCanvas({ sample }: { sample: JourneySample }
   const actors = shapeActors(sample),
     operations = shapeOperations(step.id),
     equations = shapeEquations(sample);
+  const process = shapeProcess(sample);
   const outputIds = new Set(operations.filter((o) => o.kind !== 'transpose').map((o) => o.output));
   const targetBottom = Math.max(
     400,
@@ -40,11 +36,13 @@ export default function JourneyShapeCanvas({ sample }: { sample: JourneySample }
             targetBottom + 40,
             scalarBottom + 40,
           );
-  const height = Math.max(sample.height, noteY + 180 + equations.length * 125);
+  const height = Math.max(
+    sample.height,
+    noteY + 180 + equations.length * 125 + (process ? 190 + process.formulas.length * 65 : 0),
+  );
   const chosen = sample.entities.find((e) => e.id === 'chosen');
   const leaving = actors.some((a) => a.entity.start.opacity > 0 && a.entity.end.opacity === 0);
-  const row = traceRow(c),
-    working = c > 0 && c < 1;
+  const working = c > 0 && c < 1;
   const branches =
     step.id === 'qkv'
       ? ['q', 'k', 'v'].map((id) => ['hidden', `weight-${id}`])
@@ -114,7 +112,7 @@ export default function JourneyShapeCanvas({ sample }: { sample: JourneySample }
           ))}
         </g>
       )}
-      {actors.map(({ entity: e, spec, pose, moving, movement }) => {
+      {actors.map(({ entity: e, spec, pose, moving, movement, rotation, turning }) => {
         if (!spec || !pose) {
           if (
             !e.id.startsWith('token-') &&
@@ -171,10 +169,11 @@ export default function JourneyShapeCanvas({ sample }: { sample: JourneySample }
         const born = e.start.opacity === 0;
         const isNew = (result && e.start.data !== e.end.data) || (result && born);
         const ready = isNew ? c : 1;
-        const rows = spec.rows <= 8 ? spec.rows : 6,
-          cols = spec.cols <= 8 ? spec.cols : 6;
         const w = pose.width,
           h = pose.height;
+        const spinning = turning && c > 0 && c < 1;
+        const physicalW = turning ? 192 : rotation === 90 ? h : w;
+        const physicalH = turning ? 136 : rotation === 90 ? w : h;
         const active = activeEntities(step.id, e.id);
         const storedLabel =
           e.id === 'skip'
@@ -185,30 +184,50 @@ export default function JourneyShapeCanvas({ sample }: { sample: JourneySample }
         const op = operations.find((o) => o.kind === 'matmul' && o.inputs.includes(e.id));
         const contract = op ? (op.inputs[0] === e.id ? 'columns' : 'rows') : null;
         const keyTable = spec.square;
-        const masked = keyTable && ['mask', 'softmax', 'weighted'].includes(step.id);
+        const maskAmount = keyTable
+          ? step.id === 'mask'
+            ? ease(c)
+            : ['softmax', 'weighted'].includes(step.id)
+              ? 1
+              : 0
+          : 0;
         const axLabel = (n: number, axis: string) => `${n} · ${axis}`;
-        const title =
+        const baseTitle =
           step.id === 'layers' && e.id === actorId(step.id, 'gate')
             ? `H · Layer ${sample.layer}の出力`
             : step.id === 'sampling' && e.id === 'prob' && p < 0.76
               ? 'z_last · 末尾のスコア'
               : spec.name;
-        const scansRows = !['transpose', 'concat', 'append', 'cache', 'decode'].includes(step.id);
-        const detailOpacity = moving
-          ? 1 - ease((movement - 0.03) / 0.12) + ease((movement - 0.88) / 0.12)
-          : 1;
-        const appearance = born ? ease((p - 0.5) / 0.1) : 1;
-        const rightOperand = contract === 'rows';
-        const rowY = rightOperand
+        const detailOpacity = spinning
           ? 0
-          : step.id === 'sampling' && e.id === 'logits-state'
-            ? (6 * h) / 7
-            : (Math.min(rows - 1, row) * h) / rows;
-        const rowHeight = rightOperand
-          ? step.id === 'weighted'
-            ? ((row + 1) * h) / rows
-            : h
-          : h / rows;
+          : moving
+            ? 1 - ease((movement - 0.03) / 0.12) + ease((movement - 0.88) / 0.12)
+            : 1;
+        const appearance = born ? ease((p - 0.5) / 0.1) : 1;
+        const processActive = active && process && !compact && !e.id.startsWith('weight');
+        const progressTitles: Record<string, string> = {
+          norm: 'H₀ → X · 正規化中',
+          'post-norm': 'H₁ → Xₘ · 正規化中',
+          final: 'H → Hfinal · 最終正規化中',
+          mask: 'S → Sₘ · Mask適用中',
+          softmax: 'Sₘ → P · 参照割合へ変換中',
+          silu: 'G → Gₐ · SiLU適用中',
+          transpose: 'K′ · 転置中',
+          heads: `${e.id.toUpperCase()} · Head分割・正規化中`,
+          rope: `${e.id.toUpperCase()} · RoPE適用中`,
+        };
+        const title = processActive && working ? (progressTitles[step.id] ?? baseTitle) : baseTitle;
+        const typeTransition =
+          working && ((turning && e.id === 'k') || (step.id === 'heads' && active));
+        const state = processActive
+          ? process.phase
+          : result
+            ? c >= 1
+              ? '完了'
+              : c > 0
+                ? '生成中'
+                : '計算待ち'
+            : '';
         return (
           <g
             key={e.id}
@@ -218,6 +237,7 @@ export default function JourneyShapeCanvas({ sample }: { sample: JourneySample }
             data-shape-contract={contract ?? ''}
             data-shape-cx={pose.cx}
             data-shape-cy={pose.cy}
+            data-shape-rotation={rotation}
             transform={`translate(${pose.cx - w / 2},${pose.cy - h / 2})`}
             opacity={
               (e.start.opacity > 0 && e.end.opacity === 0
@@ -226,7 +246,7 @@ export default function JourneyShapeCanvas({ sample }: { sample: JourneySample }
               appearance *
               (active ? 1 : 0.72)
             }
-            className={`shape-matrix tone-${e.tone} ${compact ? 'is-stored' : ''} ${result ? 'is-result' : ''} ${contract && working ? 'is-contracting' : ''}`}
+            className={`shape-matrix tone-${e.tone} ${compact ? 'is-stored' : ''} ${result ? 'is-result' : ''} ${processActive && working ? 'is-processing' : ''}`}
           >
             <title>
               {title}。[{spec.rows}×{spec.cols}]。縦：{spec.rowAxis}。横：{spec.colAxis}。
@@ -262,51 +282,39 @@ export default function JourneyShapeCanvas({ sample }: { sample: JourneySample }
                 </text>
               </>
             )}
-            <rect className="shape-body" width={w} height={h} rx="5" />
-            {Array.from({ length: rows }, (_, i) =>
-              Array.from({ length: cols }, (_, j) => {
-                const future = masked && j > i;
-                const completed = !isNew || c >= (i + 1) / rows;
-                return (
-                  <rect
-                    key={`${i}-${j}`}
-                    className={`shape-cell ${future ? 'is-masked' : ''} ${completed ? 'is-complete' : ''}`}
-                    x={(j * w) / cols + 2}
-                    y={(i * h) / rows + 2}
-                    width={w / cols - 4}
-                    height={h / rows - 4}
-                    rx="2"
-                    fill={future ? 'url(#shape-mask-pattern)' : undefined}
-                  />
-                );
-              }),
-            )}
-            {working && active && !compact && scansRows && (
+            <g transform={`translate(${w / 2},${h / 2}) rotate(${rotation})`} data-shape-plate>
               <rect
-                className="shape-processing-row"
-                x="0"
-                y={rowY}
-                width={w}
-                height={rowHeight}
-                rx="3"
+                className="shape-body"
+                x={-physicalW / 2}
+                y={-physicalH / 2}
+                width={physicalW}
+                height={physicalH}
+                rx="5"
               />
-            )}
-            {contract && working && !compact && (
-              <path
-                className="shape-contracted-edge"
-                d={contract === 'columns' ? `M0,-5 H${w}` : `M-5,0 V${h}`}
-              />
-            )}
-            <rect
-              className="shape-dimension-back"
-              x={compact ? 3 : 8}
-              y={h / 2 - (compact ? 12 : 22)}
-              width={w - (compact ? 6 : 16)}
-              height={compact ? 24 : 44}
-              rx="3"
-            />
+              {processActive && working && !keyTable && (
+                <rect
+                  className="shape-process-wash"
+                  x={-physicalW / 2}
+                  y={-physicalH / 2}
+                  width={physicalW}
+                  height={physicalH}
+                  rx="5"
+                  opacity={Math.sin(Math.PI * c) * 0.13}
+                />
+              )}
+              {maskAmount > 0 && (
+                <path
+                  className="shape-mask-region"
+                  data-mask-progress={maskAmount}
+                  d={`M${-physicalW / 2},${-physicalH / 2} H${physicalW / 2} V${physicalH / 2} Z`}
+                  fill="url(#shape-mask-pattern)"
+                  opacity={maskAmount}
+                />
+              )}
+            </g>
             <text
               className="shape-dimension"
+              opacity={typeTransition ? 1 - Math.sin(Math.PI * c) : 1}
               x={w / 2}
               y={h / 2 + 1}
               dominantBaseline="middle"
@@ -328,16 +336,18 @@ export default function JourneyShapeCanvas({ sample }: { sample: JourneySample }
                 height="44"
               >
                 <div>
-                  {spec.badge ??
-                    (result
-                      ? ready >= 1
-                        ? '計算結果を次へ渡す'
-                        : ready > 0
-                          ? '結果を行ごとに生成中'
-                          : '計算待ち'
-                      : spec.rows > 8 || spec.cols > 8
-                        ? '細かい区切りは省略'
-                        : '')}
+                  {state
+                    ? `${state} · ${processActive ? (step.id === 'transpose' ? '行と列の軸を交換' : step.id === 'heads' ? 'Head軸と成分を整える' : '型を保って値を変換') : c >= 1 ? '計算結果を次へ渡す' : '入力から別の結果を作る'}`
+                    : (spec.badge ??
+                      (result
+                        ? ready >= 1
+                          ? '計算結果を次へ渡す'
+                          : ready > 0
+                            ? '結果の行列を生成中'
+                            : '計算待ち'
+                        : spec.rows > 8 || spec.cols > 8
+                          ? '行列全体を模式的に表示'
+                          : ''))}
                 </div>
               </foreignObject>
             )}
@@ -349,18 +359,6 @@ export default function JourneyShapeCanvas({ sample }: { sample: JourneySample }
             {step.id === 'mask' && e.id === 'score' && (
               <text className="shape-badge" x={w / 2} y={h + 78} textAnchor="middle">
                 斜線：未来のKey位置を除外
-              </text>
-            )}
-            {step.id === 'concat' && e.id === 'attn' && (
-              <g className="shape-head-slices">
-                {Array.from({ length: 16 }, (_, i) => (
-                  <rect key={i} x={(i * w) / 16 + 1} y={h - 10} width={w / 16 - 2} height="8" />
-                ))}
-              </g>
-            )}
-            {step.id === 'transpose' && e.id === 'k' && (
-              <text className="shape-swap" x={w - 10} y={h - 10} textAnchor="end">
-                ⇄
               </text>
             )}
           </g>
@@ -394,20 +392,6 @@ export default function JourneyShapeCanvas({ sample }: { sample: JourneySample }
             </g>
           );
         })}
-      {step.id === 'rope' &&
-        actors
-          .filter((a) => ['q', 'k'].includes(a.entity.id) && a.pose)
-          .map((a) => (
-            <JourneyRotationGlyph
-              key={a.entity.id}
-              x={a.pose!.cx - a.pose!.width / 2 - 85}
-              y={a.pose!.cy - 8}
-              // First RoPE pair: omega_0 = 1. Both Q and K use the same position angle.
-              angle={((-row * 180) / Math.PI) * (c >= 1 ? 1 : ease((c * 7) % 1))}
-              position={row}
-              marker="shape-arrow"
-            />
-          ))}
       {step.id === 'layers' && (
         <text x="500" y="445" textAnchor="middle" className="journey-layer-label">
           Layer {sample.layer} / 27
@@ -452,10 +436,10 @@ export default function JourneyShapeCanvas({ sample }: { sample: JourneySample }
       )}
       {step.id === 'cache' && (
         <g className="shape-story journey-story">
-          <text x="180" y="710">
+          <text x="180" y="740">
             各層・各KV Head： [7 × 128] + 新しい [1 × 128] → [8 × 128]
           </text>
-          <text x="180" y="740">
+          <text x="180" y="770">
             次の比較： Q [1 × 128] × Kᵀ [128 × 8] → スコア [1 × 8]
           </text>
         </g>
@@ -469,9 +453,26 @@ export default function JourneyShapeCanvas({ sample }: { sample: JourneySample }
         opacity={leaving ? ease((p - 0.1) / 0.08) : 1}
       >
         <div>
-          <p className="shape-operation-title">
-            {equations.length ? '軸をつないで、結果の形へ' : 'いまの処理と軸の意味'}
-          </p>
+          {process && (
+            <section className="shape-process-note" data-shape-process={step.id}>
+              <p className="shape-operation-title">処理 · {process.name}</p>
+              <div className="shape-process-math">
+                {process.formulas.map((formula, i) => (
+                  <div key={i} dangerouslySetInnerHTML={{ __html: mathDocument(formula) }} />
+                ))}
+              </div>
+              <p className="shape-process-status">
+                <span>{process.phase}</span>
+                {process.status}
+              </p>
+              <p>{process.meaning}</p>
+            </section>
+          )}
+          {(equations.length > 0 || shapeGuide(step.id)) && (
+            <p className="shape-operation-title">
+              {equations.length ? '軸をつないで、結果の形へ' : 'いまの処理と軸の意味'}
+            </p>
+          )}
           {equations.map((eq) => (
             <div key={eq.output} className="shape-equation">
               <div dangerouslySetInnerHTML={{ __html: mathDocument(eq.math) }} />
