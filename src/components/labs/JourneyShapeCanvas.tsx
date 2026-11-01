@@ -1,4 +1,5 @@
 import JourneySliceContext from './JourneySliceContext';
+import { tokenSliceMotion, cacheSliceMotion } from '../../lib/journey-slices';
 import { JourneyTensor, JourneyTokenCuts, JourneyStorage } from './JourneyCanvas';
 import type { JourneySample } from '../../lib/journey-scene';
 import { shapeActors, shapeOperations, shapeEquations, shapeGuide } from '../../lib/journey-shapes';
@@ -124,6 +125,7 @@ export default function JourneyShapeCanvas({
         </g>
       )}
       {actors.map(({ entity: e, spec, pose, moving, movement, rotation, turning }) => {
+        if (step.id === 'decode' && e.id.startsWith('cache-new-')) return null;
         if (!spec || !pose) {
           if (
             !e.id.startsWith('token-') &&
@@ -209,12 +211,23 @@ export default function JourneyShapeCanvas({
             : step.id === 'sampling' && e.id === 'prob' && p < 0.76
               ? 'z_last · 末尾のスコア'
               : spec.name;
-        const detailOpacity = spinning
-          ? 0
-          : moving
-            ? 1 - ease((movement - 0.03) / 0.12) + ease((movement - 0.88) / 0.12)
-            : 1;
-        const appearance = born ? ease((p - 0.5) / 0.1) : 1;
+        const cacheNew = step.id === 'cache' && e.id.startsWith('cache-new-');
+        const cachePast = step.id === 'cache' && ['k', 'v'].includes(e.id);
+        const cache = cacheSliceMotion(p);
+        const detailOpacity = cacheNew
+          ? 1 - ease(cache.join / 0.2)
+          : spinning
+            ? 0
+            : moving
+              ? 1 - ease((movement - 0.03) / 0.12) + ease((movement - 0.88) / 0.12)
+              : 1;
+        const appearance = cacheNew
+          ? ease((p - 0.5) / 0.1)
+          : step.id === 'sampling' && e.id === 'prob'
+            ? ease((p - 0.43) / 0.08)
+            : born
+              ? ease((p - 0.5) / 0.1)
+              : 1;
         const processActive = active && process && !compact && !e.id.startsWith('weight');
         const progressTitles: Record<string, string> = {
           norm: 'H₀ → X · 正規化中',
@@ -265,6 +278,7 @@ export default function JourneyShapeCanvas({
             </title>
             <text
               className="shape-name"
+              opacity={cacheNew ? detailOpacity : 1}
               x={compact ? w / 2 : 0}
               textAnchor={compact ? 'middle' : undefined}
               y={compact ? -12 : -46}
@@ -313,6 +327,17 @@ export default function JourneyShapeCanvas({
                   opacity={Math.sin(Math.PI * c) * 0.13}
                 />
               )}
+              {step.id === 'sampling' && e.id === actorId(step.id, 'gate') && (
+                <rect
+                  className="shape-token-slice"
+                  data-slice-source-row="6"
+                  x={-physicalW / 2}
+                  y={physicalH / 2 - physicalH / 7}
+                  width={physicalW}
+                  height={physicalH / 7}
+                  opacity={tokenSliceMotion(p).focus * (1 - ease((p - 0.47) / 0.1))}
+                />
+              )}
               {maskAmount > 0 && (
                 <path
                   className="shape-mask-region"
@@ -325,7 +350,15 @@ export default function JourneyShapeCanvas({
             </g>
             <text
               className="shape-dimension"
-              opacity={typeTransition ? 1 - Math.sin(Math.PI * c) : 1}
+              opacity={
+                cacheNew
+                  ? detailOpacity
+                  : cachePast
+                    ? 1 - Math.sin(Math.PI * cache.settle)
+                    : typeTransition
+                      ? 1 - Math.sin(Math.PI * c)
+                      : 1
+              }
               x={w / 2}
               y={h / 2 + 1}
               dominantBaseline="middle"

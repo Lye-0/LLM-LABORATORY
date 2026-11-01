@@ -1125,3 +1125,26 @@ body:has(.journey) .page-content.wide {
 .journey-tensor[data-entity='context-head-1'] text {
   fill: var(--violet);
 }
+
+.slice-layer-slot {
+  position: relative;
+  display: inline-grid;
+  min-width: 66px;
+}
+.slice-layer-slot > span {
+  grid-area: 1 / 1;
+  display: block;
+  white-space: nowrap;
+}
+.shape-token-slice {
+  fill: var(--violet);
+  fill-opacity: 0.14;
+  stroke: var(--violet);
+  stroke-width: 1.5;
+  pointer-events: none;
+}
+
+.slice-location {
+  display: inline-flex;
+  align-items: baseline;
+}

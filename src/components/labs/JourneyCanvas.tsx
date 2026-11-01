@@ -53,16 +53,16 @@ export function JourneyTensor({
           ? progress < 0.08
             ? a.label
             : phase === 0
-              ? 'Q Head 0 · 分割した3成分'
+              ? 'Q · 分割した3成分'
               : phase < 1
-                ? 'Q Head 0 · 正規化中'
-                : b.label
+                ? 'Q · 正規化中'
+                : b.label.replace(' Head 0', '')
           : e.id === 'k'
             ? phase === 0
-              ? '共有K Head 0 · 3成分'
+              ? 'K · 3成分'
               : phase < 1
-                ? '共有K Head 0 · 正規化中'
-                : b.label
+                ? 'K · 正規化中'
+                : b.label.replace('共有K Head 0', 'K')
             : null;
 
   const rows = outputFrame ? b.data.length : Math.max(a.data.length, b.data.length),

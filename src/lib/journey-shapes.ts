@@ -2,6 +2,7 @@ import { journeySteps } from '../data/journey';
 import { actorId, binaryActors, projectionActors } from './journey-actors';
 import { journeyFrames, type Entity, type JourneySample } from './journey-scene';
 import { ease, stageMovement } from './journey-timing';
+import { tokenSliceMotion, cacheSliceMotion } from './journey-slices';
 
 export interface ShapeSpec {
   name: string;
@@ -299,9 +300,11 @@ export function shapeActors(sample: JourneySample) {
   const previous = journeySteps[Math.max(0, sample.index - 1)].id;
   const p = stageMovement(sample.step.id, sample.progress);
   return sample.entities.map((e) => {
-    const before =
+    let before =
         e.start.opacity === 0 ? shapeSpec(sample.step.id, e.id) : shapeSpec(previous, e.id),
       after = shapeSpec(sample.step.id, e.id);
+    if (previous === 'cache' && ['k', 'v'].includes(e.id) && before)
+      before = { ...before, rows: 8, badge: 'Layer 0 / KV Head 0 · 8位置を保持' };
     let start = before
       ? pose(e.start.opacity === 0 ? sample.step.id : previous, e.start, before)
       : null;
@@ -309,6 +312,12 @@ export function shapeActors(sample: JourneySample) {
       const sourceId = e.id === 'skip' ? 'hidden' : actorId(previous, 'attn');
       const sourceSpec = shapeSpec(previous, sourceId);
       if (sourceSpec) start = pose(previous, { ...e.start, id: sourceId }, sourceSpec);
+    }
+    if (previous === 'cache' && ['k', 'v'].includes(e.id) && start) {
+      start = { ...start, cy: start.cy + 136 / 14, height: start.height + 136 / 7 };
+    }
+    if (previous === 'cache' && e.id.startsWith('cache-new-') && start) {
+      start = { ...start, cy: 380 + 68 + 136 / 14, height: 136 / 7 };
     }
     let end = after ? pose(sample.step.id, e.end, after) : null;
     if (e.end.opacity === 0 && start) end = start;
@@ -323,6 +332,35 @@ export function shapeActors(sample: JourneySample) {
             height: a.height + (b.height - a.height) * p,
           }
         : null;
+    // The existing probability actor begins at the last row of the existing Z.
+    // No second full Z or comparison matrix is introduced.
+    if (at && sample.step.id === 'sampling' && e.id === 'prob' && after) {
+      const z = sample.entities.find((entity) => entity.id === actorId('sampling', 'gate'))!;
+      const zs = pose(previous, z.start, shapeSpec(previous, z.id)!);
+      const ze = pose('sampling', z.end, shapeSpec('sampling', z.id)!);
+      const zx = zs.cx + (ze.cx - zs.cx) * p,
+        zy = zs.cy + (ze.cy - zs.cy) * p;
+      const zw = zs.width + (ze.width - zs.width) * p,
+        zh = zs.height + (ze.height - zs.height) * p;
+      const target = pose('sampling', e.end, after),
+        t = tokenSliceMotion(sample.progress).extract;
+      at.cx = zx + (target.cx - zx) * t;
+      at.cy = zy + zh / 2 - zh / 14 + (target.cy - (zy + zh / 2 - zh / 14)) * t;
+      at.width = zw + (target.width - zw) * t;
+      at.height = zh / 7 + (target.height - zh / 7) * t;
+    }
+    const cache = cacheSliceMotion(sample.progress);
+    const cachePast = sample.step.id === 'cache' && ['k', 'v'].includes(e.id);
+    const cacheNew = sample.step.id === 'cache' && e.id.startsWith('cache-new-');
+    if (at && cacheNew && b) {
+      const rowHeight = 136 / 7;
+      at.cy = b.cy + (380 + 68 + rowHeight / 2 - b.cy) * cache.join;
+      at.height = b.height + (rowHeight - b.height) * cache.join;
+    }
+    if (at && cachePast && cache.settle > 0) {
+      at.cy += (136 / 14) * cache.settle;
+      at.height += (136 / 7) * cache.settle;
+    }
     const fromAngle = before?.rows === 128 && before.cols === 7 ? 90 : 0;
     const toAngle = after?.rows === 128 && after.cols === 7 ? 90 : 0;
     const turning = sample.step.id === 'transpose' && e.id === 'k';
@@ -338,25 +376,39 @@ export function shapeActors(sample: JourneySample) {
     return {
       rotation,
       turning,
-      moving: Boolean(
-        a &&
-        b &&
-        Math.abs(a.cx - b.cx) +
-          Math.abs(a.cy - b.cy) +
-          Math.abs(a.width - b.width) +
-          Math.abs(a.height - b.height) >
-          1,
-      ),
-      movement: p,
-      entity: e,
+      moving:
+        (sample.step.id === 'sampling' && e.id === 'prob') ||
+        cacheNew ||
+        Boolean(
+          a &&
+          b &&
+          Math.abs(a.cx - b.cx) +
+            Math.abs(a.cy - b.cy) +
+            Math.abs(a.width - b.width) +
+            Math.abs(a.height - b.height) >
+            1,
+        ),
+      movement:
+        sample.step.id === 'sampling' && e.id === 'prob'
+          ? tokenSliceMotion(sample.progress).extract
+          : cacheNew
+            ? cache.join
+            : p,
+      entity: cacheNew
+        ? { ...e, opacity: e.opacity * (1 - cache.settle) }
+        : previous === 'cache' && e.id.startsWith('cache-new-')
+          ? { ...e, opacity: 0 }
+          : e,
       spec:
-        (['heads', 'transpose', 'concat'].includes(sample.step.id)
-          ? sample.step.id === 'concat'
-            ? sample.calculation >= 1
-            : sample.calculation >= 0.5
-          : sample.calculation > 0) || !before
-          ? after
-          : before,
+        cachePast && cache.settle > 0.5 && after
+          ? { ...after, rows: 8, badge: 'Layer 0 / KV Head 0 · 過去7位置 + 新しい1位置' }
+          : (['heads', 'transpose', 'concat'].includes(sample.step.id)
+                ? sample.step.id === 'concat'
+                  ? sample.calculation >= 1
+                  : sample.calculation >= 0.5
+                : sample.calculation > 0) || !before
+            ? after
+            : before,
       target: after,
       pose: at,
     };
