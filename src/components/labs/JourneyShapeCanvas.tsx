@@ -1,5 +1,5 @@
 import JourneySliceContext from './JourneySliceContext';
-import { tokenSliceMotion, cacheSliceMotion } from '../../lib/journey-slices';
+import { tokenSliceMotion, cacheSliceMotion, headSliceMotion } from '../../lib/journey-slices';
 import { JourneyTensor, JourneyTokenCuts, JourneyStorage } from './JourneyCanvas';
 import type { JourneySample } from '../../lib/journey-scene';
 import { shapeActors, shapeOperations, shapeEquations, shapeGuide } from '../../lib/journey-shapes';
@@ -110,7 +110,7 @@ export default function JourneyShapeCanvas({
       {step.id === 'concat' && (
         <g
           className="shape-extra-heads"
-          opacity={ease((p - 0.52) / 0.06) * (1 - ease(c))}
+          opacity={headSliceMotion(sample, 'shapes').restore * (1 - ease(c))}
           transform={`translate(${790 - 230 * c},${225 + 40 * c})`}
         >
           <text y="-22">他の15 Headの出力も連結</text>

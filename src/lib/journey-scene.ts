@@ -172,6 +172,8 @@ for (const s of journeySteps) {
     case 'heads':
       f.height = 900;
       hide(f, 'hidden', 'weight', 'weight-q', 'weight-k', 'weight-v');
+      put(f, 'q-head-1', m.firstLayer.qHeads[1], 610, 180, 'Head 1', 'q', 44, 28);
+      hide(f, 'q-head-1');
       change(f, 'q', { x: 430, data: m.firstLayer.qn, label: 'Q Head 0 · Head内正規化後' });
       change(f, 'k', { x: 430, data: m.firstLayer.kn, label: '共有K Head 0 · Head内正規化後' });
       change(f, 'v', { x: 40, y: 500, w: 30, h: 20, label: 'V · 加重和まで待機' });
@@ -227,6 +229,7 @@ for (const s of journeySteps) {
         26,
         18,
       );
+      hide(f, 'context-head-1');
       put(f, 'attn', m.firstLayer.context, 735, 175, 'C Head 0 · 集めた情報', 'output', 44, 31);
       break;
     case 'concat':
@@ -239,7 +242,14 @@ for (const s of journeySteps) {
         data: m.firstLayer.joined,
         label: 'C · 全Head連結後',
       });
-      change(f, 'context-head-1', { x: 432, y: 180, w: 44, h: 31, label: 'Head 1の結果' });
+      change(f, 'context-head-1', {
+        opacity: 1,
+        x: 432,
+        y: 180,
+        w: 44,
+        h: 31,
+        label: 'Head 1の結果',
+      });
       f.caption =
         '同じToken位置のHead 0・1の3成分を横に連結する。Tokenは7行のまま、各行が6成分になる。';
       break;
@@ -547,6 +557,27 @@ export function sampleJourney(time: number) {
   }
   const entities = Object.values(target.entities).map((end) => {
     let start = before.entities[end.id] ?? { ...end, opacity: 0 };
+    if (step.id === 'heads' && end.id === 'q-head-1') {
+      const source = before.entities.q,
+        move = ease(at.progress / 0.6);
+      start = {
+        ...source,
+        id: end.id,
+        x: source.x + 3 * source.w,
+        data: m.firstLayer.qHeads[1],
+        label: 'Head 1',
+        opacity: 1,
+      };
+      return {
+        ...end,
+        start,
+        end,
+        blend: move,
+        x: start.x + (end.x - start.x) * move,
+        y: start.y + (end.y - start.y) * move,
+        opacity: 1 - ease((at.progress - 0.28) / 0.32),
+      };
+    }
     if (step.id === 'concat' && end.id === 'attn') {
       const move = ease(at.progress / 0.35);
       return {
@@ -562,18 +593,25 @@ export function sampleJourney(time: number) {
       };
     }
     if (step.id === 'concat' && end.id === 'context-head-1') {
-      const across = ease(at.progress / 0.35),
-        rise = ease((at.progress - 0.35) / 0.25);
+      const move = ease(at.progress / 0.35);
+      const restore = ease((at.progress - 0.32) / 0.28);
+      const source = before.entities.attn;
+      const base = target.entities.attn;
+      start = { ...end, opacity: 0, x: source.x + 3 * source.w + 48, y: source.y };
       return {
         ...end,
         start,
         end,
-        blend: p,
-        opacity: 1,
-        x: start.x + (end.x - start.x) * across,
-        y: start.y + (end.y - start.y) * rise,
-        w: start.w + (end.w - start.w) * p,
-        h: start.h + (end.h - start.h) * p,
+        blend: move,
+        opacity: restore,
+        x:
+          source.x +
+          (base.x - source.x) * move +
+          132 +
+          48 * (1 - ease((at.progress - 0.35) / 0.25)),
+        y: source.y + (base.y - source.y) * move,
+        w: 44,
+        h: 31,
       };
     }
     if (step.id === 'layers' && end.id === actorId(step.id, 'gate') && layer > 0)
@@ -737,21 +775,23 @@ export function sampleJourney(time: number) {
       w: start.w + (end.w - start.w) * p,
       h: start.h + (end.h - start.h) * p,
       opacity:
-        start.opacity > 0 &&
-        end.opacity === 0 &&
-        (['attn', 'gate', 'mlp-state', 'attention-state'].includes(end.id) ||
-          end.id.startsWith('weight') ||
-          (step.id === 'heads' && end.id === 'hidden'))
-          ? 1 - clamp(at.progress / 0.18)
-          : step.id === 'norm' && /^(token|id)-/.test(end.id)
-            ? 1 - clamp(at.progress / 0.14)
-            : (step.id === 'norm' || step.id === 'post-norm') &&
-                end.id.startsWith('skip') &&
-                !before.entities[end.id]
-              ? 0.2 * p + 0.8 * ease((at.progress - 0.46) / 0.14)
-              : step.id === 'embedding' && end.id === 'hidden'
-                ? clamp((at.progress - 0.64) / 0.1)
-                : start.opacity + (end.opacity - start.opacity) * p,
+        step.id === 'concat' && ['score', 'v'].includes(end.id)
+          ? 1 - ease(at.progress / 0.16)
+          : start.opacity > 0 &&
+              end.opacity === 0 &&
+              (['attn', 'gate', 'mlp-state', 'attention-state'].includes(end.id) ||
+                end.id.startsWith('weight') ||
+                (step.id === 'heads' && end.id === 'hidden'))
+            ? 1 - clamp(at.progress / 0.18)
+            : step.id === 'norm' && /^(token|id)-/.test(end.id)
+              ? 1 - clamp(at.progress / 0.14)
+              : (step.id === 'norm' || step.id === 'post-norm') &&
+                  end.id.startsWith('skip') &&
+                  !before.entities[end.id]
+                ? 0.2 * p + 0.8 * ease((at.progress - 0.46) / 0.14)
+                : step.id === 'embedding' && end.id === 'hidden'
+                  ? clamp((at.progress - 0.64) / 0.1)
+                  : start.opacity + (end.opacity - start.opacity) * p,
       start,
       end,
       blend: p,

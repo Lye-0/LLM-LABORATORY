@@ -53,19 +53,15 @@ export default function JourneySliceContext({
   const stage = sample.step.id,
     p = sample.progress,
     numeric = view === 'numbers';
-  if (
-    !decoderStages.includes(stage) &&
-    !['layers', 'final', 'logits', 'sampling', 'append', 'cache', 'decode'].includes(stage)
-  )
-    return null;
   const motion = headSliceMotion(sample, view),
     layer = layerSliceMotion(sample);
   const splitting = stage === 'heads' && (numeric ? p < 0.6 : sample.calculation < 0.5);
   const joined = stage === 'o-proj' || (stage === 'concat' && motion.merge >= 1);
-  const enter = stage === 'norm' ? ease(p / 0.18) : 1;
+  const enter = 1;
   const leave = stage === 'decode' ? 1 - ease(p / 0.18) : 1;
   const hasLayer = decoderStages.includes(stage) || stage === 'layers' || stage === 'final';
-  const layerOpacity = stage === 'final' ? 1 - ease(p / 0.18) : 1;
+  const layerOpacity =
+    stage === 'norm' ? ease(p / 0.18) : stage === 'final' ? 1 - ease(p / 0.18) : 1;
   const actors = !numeric && ['heads', 'concat'].includes(stage) ? shapeActors(sample) : [];
   const merging = stage === 'concat';
   const qCount = numeric ? 2 : 16,
@@ -134,38 +130,16 @@ export default function JourneySliceContext({
         </div>
       </foreignObject>
       {['q', 'k'].map((id, i) => {
-        const e = sample.entities.find((entity) => entity.id === id);
-        const pose = actors.find((actor) => actor.entity.id === id)?.pose;
-        const sourceX = pose?.cx ?? (e ? e.x + 1.5 * e.w : 500);
-        const sourceY = pose ? pose.cy - pose.height / 2 - 90 : (e?.y ?? 180) - 54;
         const topX = i === 0 ? 415 : 585;
         let x = topX,
           y = 60;
-        if (stage === 'heads' && !reduced) {
-          x = cubic(sourceX, i === 0 ? sourceX : 180, i === 0 ? topX : 180, topX, motion.travel);
-          y = cubic(sourceY, i === 0 ? 90 : sourceY, 60, 60, motion.travel);
-          if (i === 1) {
-            // Approach the KV slot from below, never across the Q label.
-            if (motion.travel < 0.6) {
-              const t = ease(motion.travel / 0.6);
-              x = cubic(sourceX, 180, 180, 280, t);
-              y = cubic(sourceY, sourceY, 95, 95, t);
-            } else if (motion.travel < 0.85) {
-              x = 280 + 305 * ease((motion.travel - 0.6) / 0.25);
-              y = 95;
-            } else {
-              x = 585;
-              y = 95 - 35 * ease((motion.travel - 0.85) / 0.15);
-            }
-          }
-        }
         if (merging && i === 0 && !reduced) {
           const output = sample.entities.find((entity) => entity.id === 'attn')!;
           const shape = actors.find((actor) => actor.entity.id === 'attn')?.pose;
           const cx = shape?.cx ?? output.x + 1.5 * output.w;
           const cy = shape ? shape.cy - shape.height / 2 - 90 : output.y - 54;
-          x = cubic(topX, topX, cx, cx, motion.merge);
-          y = cubic(60, 85, cy, cy, motion.merge);
+          x = cubic(topX, topX, cx, cx, motion.returnToMatrix);
+          y = cubic(60, 85, cy, cy, motion.returnToMatrix);
         }
         const opacity = !headStages.includes(stage)
           ? 0
@@ -173,14 +147,8 @@ export default function JourneySliceContext({
             ? motion.appear
             : merging
               ? i === 0
-                ? 1 - ease((motion.merge - 0.88) / 0.12)
+                ? 1 - motion.restore
                 : 1 - ease(p / 0.18)
-              : 1;
-        const totals =
-          stage === 'heads'
-            ? ease((motion.travel - 0.82) / 0.18)
-            : merging
-              ? 1 - ease(motion.merge / 0.3)
               : 1;
         return (
           <text
@@ -195,19 +163,28 @@ export default function JourneySliceContext({
             textAnchor="middle"
             opacity={opacity}
           >
-            <tspan>
-              {i === 0 ? (
-                <>
-                  <tspan opacity={merging ? 1 - ease(motion.merge / 0.3) : 1}>Q </tspan>Head 0
-                </>
-              ) : (
-                'KV Head 0'
-              )}
-            </tspan>
-            <tspan opacity={totals}> / 全{i === 0 ? qCount : kvCount}</tspan>
+            {i === 0 ? `Q Head 0 / 全${qCount}` : `KV Head 0 / 全${kvCount}`}
           </text>
         );
       })}
+      {stage === 'heads' &&
+        ['q', 'k'].map((id, i) => {
+          const e = sample.entities.find((entity) => entity.id === id)!;
+          const pose = actors.find((actor) => actor.entity.id === id)?.pose;
+          return (
+            <text
+              key={`local-${id}`}
+              className="slice-head-label"
+              data-local-head={id}
+              x={pose?.cx ?? e.x + 1.5 * e.w}
+              y={pose ? pose.cy - pose.height / 2 - 90 : e.y - 54}
+              textAnchor="middle"
+              opacity={motion.local}
+            >
+              {i === 0 ? 'Head 0' : 'KV Head 0'}
+            </text>
+          );
+        })}
       {['sampling', 'append'].includes(stage) && (
         <text
           className="slice-head-label"

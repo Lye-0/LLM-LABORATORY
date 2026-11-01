@@ -8,43 +8,40 @@ async function seek(page: import('@playwright/test').Page, id: string, p: number
     .getByRole('slider')
     .fill(String(Math.round((journeyStarts[i] + journeySteps[i].duration * p) / 10) * 10));
 }
-test('Q Head 0を引き継ぎ、所属を上部表示に集約する', async ({ page }) => {
+test('分割したHead 1が上部表示と交差フェードし、Head 0の局所タグは到着後に消える', async ({
+  page,
+}) => {
   await page.goto(root);
   await seek(page, 'qkv', 0.99);
-  const original = await page.locator('[data-cell="q:0:0"]').evaluate((e) => ({
-    x: e.getAttribute('data-x'),
-    y: e.getAttribute('data-y'),
-    value: e.getAttribute('data-value'),
-  }));
+  const source = await page.locator('[data-cell="q:0:3"]').getAttribute('data-value');
   await seek(page, 'heads', 0);
-  const split = await page.locator('[data-cell="q:0:0"]').evaluate((e) => ({
-    x: e.getAttribute('data-x'),
-    y: e.getAttribute('data-y'),
-    value: e.getAttribute('data-value'),
-  }));
-  expect(split).toEqual(original);
-  await expect(page.locator('[data-entity="q"] [data-cell]')).toHaveCount(21);
-  await expect(page.locator('[data-entity="q-head-1"]')).toHaveCount(0);
-  for (const p of [0, 0.25, 0.6, 0.95]) {
+  const head1 = page.locator('[data-entity="q-head-1"]');
+  const upper = page.locator('[data-slice-view="numbers"] [data-slice-head="q"]');
+  const local = page.locator('[data-slice-view="numbers"] [data-local-head="q"]');
+  await expect(head1.locator('[data-cell="q-head-1:0:0"]')).toHaveAttribute('data-value', source!);
+  for (const p of [0.2, 0.4, 0.5]) {
     await seek(page, 'heads', p);
-    await expect(page.locator('[data-entity="q-head-1"]')).toHaveCount(0);
-    await expect(page.locator('[data-journey-scene]')).not.toContainText('分割時の値');
+    const a = Number(await head1.getAttribute('opacity')),
+      b = Number(await upper.getAttribute('opacity'));
+    expect(a + b).toBeCloseTo(1, 8);
+    await expect(upper).toHaveAttribute('x', '415');
+    await expect(upper).toHaveAttribute('y', '60');
   }
-  await seek(page, 'heads', 0.25);
-  await expect(page.locator('[data-slice-view="numbers"]')).toHaveAttribute(
-    'data-head-state',
-    'splitting',
-  );
-  await seek(page, 'rope', 0.7);
-  const context = page.locator('[data-slice-view="numbers"]');
-  await expect(context).toContainText('Q Head 0');
-  await expect(context).toContainText('KV Head 0 / 全1');
-  await expect(context).toContainText('Q Head 0 / 全2');
-  await expect(context).toContainText('Batch 0');
-  await expect(context).toContainText('Layer 0');
-  await expect(context).not.toContainText('Token位置');
-  await expect(context).not.toContainText('詳細計算');
+  await seek(page, 'heads', 0.6);
+  await expect(head1).toHaveCount(0);
+  expect(Number(await local.getAttribute('opacity'))).toBeGreaterThan(0.99);
+  await seek(page, 'heads', 0.72);
+  expect(Number(await local.getAttribute('opacity'))).toBeGreaterThan(0);
+  expect(Number(await local.getAttribute('opacity'))).toBeLessThan(1);
+  await seek(page, 'heads', 0.95);
+  await expect(local).toHaveAttribute('opacity', '0');
+  await expect(upper).toHaveText('Q Head 0 / 全2');
+  await seek(page, 'heads', 0.4);
+  expect(Number(await head1.getAttribute('opacity'))).toBeGreaterThan(0);
+  await seek(page, 'rope', 0.2);
+  await expect(head1).toHaveCount(0);
 });
+
 test('2 Headの結果が各Tokenの横へ並び、その全6成分をo_projへ渡す', async ({ page }) => {
   await page.goto(root);
   await seek(page, 'concat', 0.95);
@@ -139,9 +136,7 @@ test('両ビューの表示範囲が収まり、分割と結合の途中でも�
   }
 });
 
-test('Head名は行列付近から上段へ移動し、中央配置・逆再生・動きを減らす設定を維持する', async ({
-  page,
-}) => {
+test('上部表示は固定し、両ビューの局所タグを行列付近で消す', async ({ page }) => {
   await page.goto(root);
   for (const view of ['numbers', 'shapes']) {
     await page
@@ -151,37 +146,17 @@ test('Head名は行列付近から上段へ移動し、中央配置・逆再生�
       })
       .click();
     const panel = page.locator(`[data-slice-view="${view}"]`);
-    const q = panel.locator('[data-slice-head="q"]');
-    const k = panel.locator('[data-slice-head="k"]');
-    await seek(page, 'heads', view === 'numbers' ? 0.55 : 0.74);
-    const originalY = Number(await k.getAttribute('y'));
-    expect(originalY).toBeGreaterThan(300);
-    await seek(page, 'heads', view === 'numbers' ? 0.8 : 0.86);
-    const midpoint = { x: await k.getAttribute('x'), y: await k.getAttribute('y') };
-    expect(Number(midpoint.y)).toBeLessThan(originalY);
-    expect(Number(midpoint.y)).toBeGreaterThan(60);
-    await seek(page, 'heads', 0.99);
-    await expect(q).toHaveAttribute('x', '415');
-    await expect(k).toHaveAttribute('x', '585');
-    await expect(q).toHaveAttribute('y', '60');
-    await expect(k).toHaveAttribute('y', '60');
-    await seek(page, 'heads', view === 'numbers' ? 0.8 : 0.86);
-    expect({ x: await k.getAttribute('x'), y: await k.getAttribute('y') }).toEqual(midpoint);
-    await seek(page, 'mask', 0.8);
-    const centering = await panel.evaluate((el) => {
-      const svg = el.closest('svg')!,
-        r = svg.getBoundingClientRect();
-      const line = el.querySelector('.journey-slice-context')!;
-      const pieces = [...line.children].map((n) => n.getBoundingClientRect());
-      return Math.abs((pieces[0].left + pieces.at(-1)!.right) / 2 - (r.left + r.right) / 2);
-    });
-    expect(centering).toBeLessThan(1);
+    for (const p of [0.3, 0.6, 0.75, 0.95]) {
+      await seek(page, 'heads', p);
+      await expect(panel.locator('[data-slice-head="q"]')).toHaveAttribute('x', '415');
+      await expect(panel.locator('[data-slice-head="q"]')).toHaveAttribute('y', '60');
+      await expect(panel.locator('[data-slice-head="k"]')).toHaveAttribute('x', '585');
+    }
+    await expect(panel.locator('[data-local-head="q"]')).toHaveAttribute('opacity', '0');
     await page.getByRole('checkbox', { name: '動きを減らす' }).check();
-    await seek(page, 'heads', view === 'numbers' ? 0.8 : 0.86);
-    await expect(k).toHaveAttribute('x', '585');
-    await expect(k).toHaveAttribute('y', '60');
+    await seek(page, 'heads', 0.7);
+    await expect(panel.locator('[data-slice-head="q"]')).toHaveAttribute('y', '60');
     await page.getByRole('checkbox', { name: '動きを減らす' }).uncheck();
-    expect({ x: await k.getAttribute('x'), y: await k.getAttribute('y') }).toEqual(midpoint);
   }
 });
 
@@ -248,12 +223,12 @@ test('通常再生でHead名が連続して進み、画面幅が変わっても�
       })
       .click();
     const panel = page.locator(`[data-slice-view="${view}"]`);
-    await seek(page, 'heads', view === 'numbers' ? 0.6 : 0.74);
+    await seek(page, 'heads', 0.6);
     await page.getByRole('button', { name: '▶ 全体を再生', exact: true }).click();
     const ys: number[] = [];
     for (let i = 0; i < 6; i++) {
       await page.waitForTimeout(220);
-      ys.push(Number(await panel.locator('[data-slice-head="k"]').getAttribute('y')));
+      ys.push(Number(await panel.locator('[data-local-head="k"]').getAttribute('opacity')));
       await page.locator('.journey-theater').screenshot({
         path: `.cache/slice-play-${view}-${i}.png`,
         style: '.journey-dock{display:none!important}',
@@ -296,8 +271,9 @@ test('結合の途中までHead名を保持して結合先へ戻し、各段階�
     const q = panel.locator('[data-slice-head="q"]');
     await expect(q).toHaveAttribute('y', '60');
     await seek(page, 'concat', view === 'numbers' ? 0.3 : 0.72);
-    expect(Number(await q.getAttribute('opacity'))).toBeGreaterThan(0.9);
+    expect(Number(await q.getAttribute('opacity'))).toBeGreaterThan(0);
     expect(Number(await q.getAttribute('y'))).toBeGreaterThan(60);
+    await expect(q).toHaveText(view === 'numbers' ? 'Q Head 0 / 全2' : 'Q Head 0 / 全16');
     const mid = { x: await q.getAttribute('x'), y: await q.getAttribute('y') };
     await seek(page, 'concat', 0.99);
     await expect(q).toHaveAttribute('opacity', '0');
@@ -377,7 +353,10 @@ test('スライスが変わる前・途中・完了を両ビューで確認す�
       })
       .click();
     for (const [stage, p] of [
+      ['heads', 0.0],
       ['heads', 0.25],
+      ['heads', 0.4],
+      ['heads', 0.55],
       ['heads', 0.72],
       ['concat', 0.45],
       ['concat', 0.75],
@@ -398,5 +377,42 @@ test('スライスが変わる前・途中・完了を両ビューで確認す�
         style: '.journey-dock{display:none!important}',
       });
     }
+  }
+});
+
+test('冒頭からBatch 0を表示し、結合では完全なスライス名とHead 1が交差フェードする', async ({
+  page,
+}) => {
+  await page.goto(root);
+  for (const view of ['numbers', 'shapes']) {
+    await page
+      .getByRole('button', {
+        name: view === 'numbers' ? '数値で見る' : '形と軸で見る',
+        exact: true,
+      })
+      .click();
+    const panel = page.locator(`[data-slice-view="${view}"]`);
+    for (const stage of ['text', 'tokenize', 'ids', 'embedding']) {
+      await seek(page, stage, 0);
+      await expect(panel).toBeVisible();
+      await expect(panel.locator('.slice-location')).toHaveText('Batch 0');
+      await expect(panel.locator('[data-slice-layer]')).toHaveCount(0);
+    }
+  }
+  await page.getByRole('button', { name: '数値で見る', exact: true }).click();
+  await seek(page, 'weighted', 0.9);
+  await expect(page.locator('[data-entity="context-head-1"]')).toHaveAttribute('opacity', '0');
+  for (const p of [0.35, 0.45, 0.55]) {
+    await seek(page, 'concat', p);
+    const tag = page.locator('[data-slice-view="numbers"] [data-slice-head="q"]');
+    await expect(tag).toHaveText('Q Head 0 / 全2');
+    expect(
+      Number(await tag.getAttribute('opacity')) +
+        Number(await page.locator('[data-entity="context-head-1"]').getAttribute('opacity')),
+    ).toBeCloseTo(1, 8);
+    expect(Number(await tag.getAttribute('y'))).toBeGreaterThan(100);
+    await expect(page.locator('[data-entity="context-head-1"] [data-ready="true"]')).toHaveCount(
+      21,
+    );
   }
 });

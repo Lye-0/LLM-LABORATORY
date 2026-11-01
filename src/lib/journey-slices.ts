@@ -6,9 +6,15 @@ export type JourneyView = 'numbers' | 'shapes';
 export function headSliceMotion(sample: JourneySample, view: JourneyView) {
   const numeric = view === 'numbers',
     p = sample.progress;
+  const focus = ease((p - (numeric ? 0.28 : 0.58)) / (numeric ? 0.32 : 0.28));
+  const restore = ease((p - (numeric ? 0.32 : 0.52)) / (numeric ? 0.28 : 0.34));
   return {
-    appear: ease((p - (numeric ? 0.08 : 0.58)) / 0.12),
-    travel: ease((p - (numeric ? 0.42 : 0.66)) / (numeric ? 0.5 : 0.3)),
+    appear: focus,
+    travel: 1,
+    local: ease(p / 0.12) * (1 - ease((p - 0.6) / 0.22)),
+    other: 1 - focus,
+    returnToMatrix: ease(p / (numeric ? 0.32 : 0.52)),
+    restore,
     merge: numeric ? ease(p / 0.6) : ease(sample.calculation),
   };
 }

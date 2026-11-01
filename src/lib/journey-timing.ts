@@ -53,6 +53,8 @@ const groups: Record<string, string[]> = {
   decode: ['result'],
 };
 export function activeEntities(step: string, id: string) {
+  if ((step === 'heads' && id === 'q-head-1') || (step === 'concat' && id === 'context-head-1'))
+    return true;
   const binary = binaryActors(step);
   if (binary && Object.values(binary).includes(id)) return true;
   const projection = projectionActors(step);

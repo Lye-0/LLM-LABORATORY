@@ -25,7 +25,11 @@ export function JourneyTensor({
   calculation: number;
   view?: 'numbers' | 'shapes';
 }) {
-  if (step === 'o-proj' && e.id === 'context-head-1') return null;
+  if (
+    (step === 'o-proj' && e.id === 'context-head-1') ||
+    (e.id === 'q-head-1' && (step !== 'heads' || e.opacity <= 0.001))
+  )
+    return null;
   const active = activeEntities(step, e.id);
   const saving = (step === 'norm' || step === 'post-norm') && e.id.startsWith('skip');
   const a = e.start,
@@ -43,7 +47,10 @@ export function JourneyTensor({
   const born = a.opacity === 0 && b.opacity > 0;
   const isParameter = e.id === 'weight' || e.id.startsWith('weight-');
   const isOperand = projection?.input === e.id || binary?.input === e.id || binary?.second === e.id;
-  const held = step === 'cache' || (step === 'append' && e.id.startsWith('id-'));
+  const held =
+    step === 'cache' ||
+    (step === 'append' && e.id.startsWith('id-')) ||
+    (step === 'concat' && e.id === 'context-head-1');
   const splitLabel =
     step !== 'heads'
       ? null
@@ -55,13 +62,15 @@ export function JourneyTensor({
             : phase < 1
               ? 'Q · 正規化中'
               : b.label.replace(' Head 0', '')
-        : e.id === 'k'
-          ? phase === 0
-            ? 'K · 3成分'
-            : phase < 1
-              ? 'K · 正規化中'
-              : b.label.replace('共有K Head 0', 'K')
-          : null;
+        : e.id === 'q-head-1'
+          ? 'Head 1'
+          : e.id === 'k'
+            ? phase === 0
+              ? 'K · 3成分'
+              : phase < 1
+                ? 'K · 正規化中'
+                : b.label.replace('共有K Head 0', 'K')
+            : null;
 
   const rows = outputFrame ? b.data.length : Math.max(a.data.length, b.data.length),
     cols =
@@ -93,7 +102,13 @@ export function JourneyTensor({
       opacity={Math.max(0, Math.min(1, e.opacity))}
       className={`journey-tensor tone-${e.tone} ${active ? 'is-active' : 'is-support'}`}
     >
-      <text y="-16" className="tensor-label" opacity={saving ? ease((progress - 0.44) / 0.16) : 1}>
+      <text
+        y="-16"
+        className="tensor-label"
+        opacity={
+          e.id === 'q-head-1' ? ease(progress / 0.12) : saving ? ease((progress - 0.44) / 0.16) : 1
+        }
+      >
         {splitLabel !== null
           ? splitLabel
           : step === 'concat' && e.id === 'attn'
@@ -232,7 +247,13 @@ export function JourneyTensor({
                 y={e.h / 2 + 4}
                 textAnchor="middle"
                 style={{ fontSize: font }}
-                opacity={saving ? ease((progress - 0.44) / 0.16) : 1}
+                opacity={
+                  e.id === 'q-head-1'
+                    ? ease(progress / 0.12)
+                    : saving
+                      ? ease((progress - 0.44) / 0.16)
+                      : 1
+                }
               >
                 {step === 'decode' && e.id === 'result'
                   ? model.generated.pieces
@@ -459,7 +480,7 @@ export default function JourneyCanvas({
         <foreignObject
           key={note.key}
           className="journey-operation-note"
-          opacity={note.opacity}
+          opacity={note.opacity * (step.id === 'heads' ? ease((p - 0.58) / 0.08) : 1)}
           data-owner={note.key}
           x={note.x}
           y={note.y}
