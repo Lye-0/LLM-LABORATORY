@@ -1116,8 +1116,8 @@ body:has(.journey) .page-content.wide {
   fill: var(--muted);
 }
 
-.journey-tensor[data-entity='context-head-1'] rect,
-.journey-tensor rect.head-one-component {
+.journey-tensor[data-entity='context-head-1'] rect:not(.calculation-component),
+.journey-tensor rect.head-one-component:not(.calculation-component) {
   stroke: var(--violet);
 }
 .journey-tensor[data-entity='context-head-1'] text {
@@ -1147,7 +1147,7 @@ body:has(.journey) .page-content.wide {
   align-items: baseline;
 }
 
-.journey-tensor[data-entity='q-head-1'] rect {
+.journey-tensor[data-entity='q-head-1'] rect:not(.calculation-component) {
   stroke: var(--violet);
 }
 .journey-tensor[data-entity='q-head-1'] text {

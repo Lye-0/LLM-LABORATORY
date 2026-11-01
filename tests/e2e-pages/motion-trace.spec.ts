@@ -124,3 +124,27 @@ test('要素積とResidualは入力を保持して別の結果を作り、その
     expect(await result.locator('[data-cell] text').allTextContents()).toEqual(finished);
   }
 });
+
+test('Headの識別色より計算中の強調色を優先し、全6成分を同じ色で示す', async ({ page }) => {
+  await page.goto(root);
+  for (const p of [0.6, 0.72, 0.83]) {
+    await seek(page, 'o-proj', p);
+    const active = focus(page, 'attn');
+    await expect(active).toHaveCount(6);
+    const colors = await active.evaluateAll((es) => es.map((e) => getComputedStyle(e).stroke));
+    expect(new Set(colors).size).toBe(1);
+    expect(colors[0]).toBe('rgb(227, 190, 121)');
+    const idle = page
+      .locator('[data-entity="attn"] .head-one-component:not(.calculation-component)')
+      .first();
+    expect(await idle.evaluate((e) => getComputedStyle(e).stroke)).not.toBe(colors[0]);
+    await page
+      .locator('.journey-theater')
+      .screenshot({
+        path: `.cache/head-highlight-${p}.png`,
+        style: '.journey-dock{display:none!important}',
+      });
+  }
+  await seek(page, 'o-proj', 0.95);
+  await expect(focus(page, 'attn')).toHaveCount(0);
+});
