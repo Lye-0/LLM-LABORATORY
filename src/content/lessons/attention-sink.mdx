@@ -1,0 +1,203 @@
+---
+title: "Attention SinkとValueの寄与"
+description: "誰が誰を参照するかを固定し、参照割合からValue・ベクトルの合計・o_projの寄与まで追う。"
+stage: "representation"
+order: 13.6
+minutes: 20
+eyebrow: "ATTENTION SINK / VALUE / HEAD CONTRIBUTION"
+prerequisites: ["attention-heads"]
+labs: ["attention"]
+sources: ["qwen","tensor"]
+tags: ["Attention Sink","Value","Weighted Sum","ノルム","o_proj","GQA"]
+question: "先頭TokenへのWeightが98.8%なら、そのTokenが次Token予測の98.8%を決めていますか？"
+answer: "いいえ。WeightはVを混ぜる係数です。Vの大きさと方向、Head結合・o_proj、残差や後続の処理も関わります。予測への影響は介入して別に確かめます。"
+---
+
+import AtlasFormula from '../../components/atlas/AtlasFormula.astro';
+
+## まず「誰が、誰を」を固定する
+
+**最後のToken「。」が、先頭「明日」を含む8 Tokenから情報を集める**観察です。[Attention Headを観察する](../attention-heads/)の7 Tokenの例から入力を変更しています。
+
+| 固定する条件 | 今回見る範囲 |
+|---|---|
+| モデル・Layer | Qwen3-0.6B・Layer 27（28層目） |
+| Batch・Query | Batch 0・T8「。」（Pythonの位置7） |
+| Key / Value位置 | T1「明日」からT8「。」まで |
+| 最初に調べるHead | Q Head 0 → KV Head 0 |
+
+Token列は **明日 / は / 雨 / が / 降 / る / かもしれません / 。** です。各Token位置にHeadごとのQ/K/Vがあります。T8のQを選ぶのであって、ほかのTokenがT8を参照しに来る観察ではありません。
+
+| T8の参照する側 | 比較するK・集めるV（どちらもT1〜T8） |
+|---|---|
+| Q Head 0・1 | KV Head 0 |
+| Q Head 5 | KV Head 2 |
+| Q Head 13 | KV Head 6 |
+
+このGQAの対応は`kv_head = q_head // 2`です。Head 5がHead 0の計算結果を読みに行く、という意味ではありません。
+
+## 割合からベクトルへ：同じ計算を追う
+
+| 段階 | shape | 何が残るか |
+|---|---|---|
+| Layer 27の全Attention Weight | `[1,16,8,8]` | Batch・Q Head・Query位置・Key位置 |
+| Batch 0・Q Head 0・Query T8を選ぶ | `[8]` | T8から各Keyへの8個の係数 |
+| 対応するKV Head 0のV | `[8,128]` | 各参照先Tokenの128成分 |
+| Weightを各Vに掛ける | `[8,128]` | TokenごとのWeighted Value |
+| **Token軸を合計する** | **`[128]`** | **T8・Q Head 0の出力ベクトル** |
+| Head 0用のo_projの重みを掛ける | `[1024]` | Self-Attention出力へ加わるHead 0の寄与 |
+
+<AtlasFormula formula={{label: 'Weighted Sum：成分ごとに、参照先Tokenを足す', reading: '出力の成分cは、8つのTokenについてAttention WeightとValueの成分cの積を合計する', math: '<msub><mi>o</mi><mi>c</mi></msub><mo>=</mo><munderover><mo>∑</mo><mrow><mi>t</mi><mo>=</mo><mn>1</mn></mrow><mn>8</mn></munderover><msub><mi>a</mi><mi>t</mi></msub><msub><mi>V</mi><mrow><mi>t</mi><mo>,</mo><mi>c</mi></mrow></msub>'}} />
+
+ここで`a`はT8・Q Head 0の参照割合、`V`はKV Head 0です。8個の128成分ベクトルを足しても、結果は128成分のままです。**合計しているのはTokenの軸であり、128成分の軸ではありません。** 地図では[割合とVの加重和](../../maps/inference/#n-weighted-sum)に当たります。
+
+### ログの3つの数値は、種類が違う
+
+以下は提供された実験013の観察ログです。**サイトでの再測定値ではありません。** 値はモデルの版・精度・実行環境などで変わります。
+
+| 参照先Token | Attention Weight | VのL2ノルム | Weight × VのL2ノルム |
+|---|---:|---:|---:|
+| T1「明日」 | 0.9883 | 4.3654 | 4.3142 |
+| T3「雨」 | 0.0002 | 117.0574 | 0.0232 |
+| T8「。」 | 0.0061 | 88.6361 | 0.5383 |
+
+`Weight=0.9883`は、**T8のQ Head 0がT1のK Head 0に付けた係数**です。一方、`Vのノルム=4.3654`は、**T1自身の内部表現から作ったVベクトル全体の大きさ**です。この大きさ自体はQuery T8から計算する割合ではありません。
+
+<AtlasFormula formula={{label: 'L2ノルム：128個の成分を、一つの大きさにまとめる', reading: 'ベクトルVのL2ノルムは、128成分の二乗和の平方根', math: '<mo>‖</mo><mi>V</mi><mo>‖</mo><mo>=</mo><msqrt><mrow><msubsup><mi>v</mi><mn>1</mn><mn>2</mn></msubsup><mo>+</mo><mo>⋯</mo><mo>+</mo><msubsup><mi>v</mi><mn>128</mn><mn>2</mn></msubsup></mrow></msqrt>'}} />
+
+`Weight × V`も128成分のベクトルです。表にはそのノルムだけを載せています。Weightは非負なので、そのノルムはWeightとVのノルムの積になります。表示値は丸めているため、表示された数字同士の積とは少しずれる場合があります。
+
+このHeadでは、T1のVはほかの位置より小さい一方、**重み付け後のベクトルはT1が最大**でした。「SinkのVが小さいから何も寄与しない」とは読めません。
+
+## 足すのはベクトル：大きさだけを足さない
+
+同じLayer 27・Query T8・Q Head 0のログでは、次の結果でした。
+
+| 対象 | L2ノルム |
+|---|---:|
+| T1のWeighted Value（u） | 4.3142 |
+| T2〜T8のWeighted Valueを合計したベクトル（v） | 0.7708 |
+| 全8 Tokenを合計したHead出力（u + v） | **4.1127** |
+
+4.3142と0.7708を足しても4.1127にはなりません。**成分同士を足してからノルムを求める**ためです。ログにあるuとvのコサイン類似度は約−0.3447で、互いを部分的に打ち消す向きでした。
+
+<AtlasFormula formula={{label: '合計の大きさには、ベクトルの向きも効く', reading: 'uとvの合計のノルムの二乗は、それぞれのノルムの二乗と、両ノルムの積とコサインの2倍の和', math: '<msup><mrow><mo>‖</mo><mi>u</mi><mo>+</mo><mi>v</mi><mo>‖</mo></mrow><mn>2</mn></msup><mo>=</mo><msup><mrow><mo>‖</mo><mi>u</mi><mo>‖</mo></mrow><mn>2</mn></msup><mo>+</mo><msup><mrow><mo>‖</mo><mi>v</mi><mo>‖</mo></mrow><mn>2</mn></msup><mo>+</mo><mn>2</mn><mo>‖</mo><mi>u</mi><mo>‖</mo><mo>‖</mo><mi>v</mi><mo>‖</mo><mi>cos</mi><mi>θ</mi>'}} />
+
+`weighted_values.sum(dim=0)`はToken方向の合計、`torch.linalg.vector_norm(head_output)`は完成したベクトルの大きさです。**ノルム4.1127は、128個のうちの一つの成分でも、参照割合でもありません。**
+
+## 128成分のHead出力と、2048成分のo_proj入力
+
+通常のモデルでは、**同じQuery T8に対応する16 Headの出力**を成分方向に連結します。Token全体を一つに合体する処理ではありません。
+
+| 通常のモデル処理 | Head別の寄与を調べる分析 |
+|---|---|
+| 各Head `[128]` → 16 HeadをConcat `[2048]` | 各Headの `[128]` を個別に扱う |
+| o_proj全体の重み `[1024,2048]` を使う | そのHead用の128列 `[1024,128]` を切り出す |
+| 一度に変換して `[1024]` | 各Headを `[1024]` に変換して、ベクトルを合計 |
+
+PyTorchのLinearは入力に重みの転置を掛けます。Head hの担当列は`h*128:(h+1)*128`です。例えばHead 0は`[:, 0:128]`で、**全1024行・列0〜127**を選びます。終端128は含みません。128成分をそのままo_proj全体へ入れるのではなく、対応する列だけで部分的な寄与を計算しています。
+
+<AtlasFormula formula={{label: 'o_projをHeadごとの寄与へ分解する', reading: '連結したHead出力に重みの転置を掛けた結果は、各Head出力に対応する重みの転置を掛けた結果の和と等しい', math: '<mi>Concat</mi><mo>(</mo><msub><mi>o</mi><mn>0</mn></msub><mo>,</mo><mo>…</mo><mo>,</mo><msub><mi>o</mi><mn>15</mn></msub><mo>)</mo><msup><mi>W</mi><mi>T</mi></msup><mo>=</mo><munderover><mo>∑</mo><mrow><mi>h</mi><mo>=</mo><mn>0</mn></mrow><mn>15</mn></munderover><msub><mi>o</mi><mi>h</mi></msub><msubsup><mi>W</mi><mi>h</mi><mi>T</mi></msubsup>'}} />
+
+このモデルのo_projはbiasなしなので、この分解が成立します。biasがある一般のLinearでは、全体に一度だけ加えるbiasを別に扱います。重みのshapeと転置の向きは[PyTorch Linear](https://docs.pytorch.org/docs/2.15/generated/torch.nn.Linear.html)、Qwen3の処理順は[参照実装](https://github.com/huggingface/transformers/blob/v5.18.0/src/transformers/models/qwen3/modeling_qwen3.py)で確認できます。
+
+### Head番号が並ぶログは「何%参照したか」ではない
+
+| 見ている値 | 観察ログ | 対象・意味 |
+|---|---:|---|
+| T1へのAttention Weight | 0.9883 | T8・Q Head 0からT1・K Head 0への係数 |
+| Head 0のo_proj前のノルム | 4.1127 | T8のHead 0の出力 `[128]` の大きさ |
+| Head 0のo_proj後のノルム | 3.8580 | 同じHeadの寄与 `[1024]` の大きさ |
+| Head 5のo_proj後のノルム | 41.6905 | T8・Q Head 5 → KV Head 2から集めた結果の寄与 |
+| 全16 Headの寄与ベクトルを合計した後のノルム | 79.0900 | T8のSelf-Attention出力 `[1024]` の大きさ |
+
+Headごとのノルムを足して79.0900を作るわけではありません。**1024成分のベクトル同士を足してから**大きさを求めます。Head 5が大きくても、そのHeadが予測に最も重要だと確定したわけではありません。
+
+ログの`Concat → o_projと一致: True`は、**再構成した二つの計算法同士の比較**です。それだけでモデル内部のForward出力との一致まで確認したことにはなりません。丸められたAttention Weightをfloat32へ変換しても、元の精度が復元されるわけではありません。
+
+<details>
+<summary>PythonでWeight・V・Head別の寄与を対応させる</summary>
+
+[前の教材](../attention-heads/#実モデルから参照割合を取り出す)で準備した`torch`・`model`・`tokenizer`を使います。1件・paddingなし・cacheなし・eager・evalの観察例です。Forward中の`v_proj`出力をhookで記録し、入力を書き換えずにVを取り出します。分析はCPUのfloat32で行います。以下はサイト用に整理した実行例で、ログの数値を再現保証するものではありません。
+
+```python
+layer_idx = 27
+head_idx = 0
+text = "明日は雨が降るかもしれません。"
+model.eval()
+inputs = tokenizer(text, return_tensors="pt")
+inputs = {k: v.to(model.device) for k, v in inputs.items()}
+attention = model.model.layers[layer_idx].self_attn
+captured = {}
+
+def record_v(module, args, output):
+    # 返り値なし：モデルの値を置き換えず、記録だけする
+    captured["v"] = output.detach().to(device="cpu", dtype=torch.float32)
+
+handle = attention.v_proj.register_forward_hook(record_v)
+try:
+    with torch.no_grad():
+        outputs = model(**inputs, output_attentions=True, use_cache=False)
+finally:
+    handle.remove()
+
+assert outputs.attentions is not None
+B, T, _ = captured["v"].shape
+H = model.config.num_attention_heads
+Hkv = model.config.num_key_value_heads
+d = attention.head_dim
+groups = H // Hkv
+assert B == 1 and H % Hkv == 0 and 0 <= head_idx < H
+
+# VにはQのHead軸もQuery軸もない。[Batch, KV Head, Key位置, 成分]
+value_states = captured["v"].reshape(B, T, Hkv, d).transpose(1, 2)
+all_weights = outputs.attentions[layer_idx][0, :, -1, :].detach().float().cpu()
+kv_head_idx = head_idx // groups
+weights = all_weights[head_idx]                 # [T]
+values = value_states[0, kv_head_idx]           # [T,d]
+weighted_values = weights[:, None] * values    # [T,d]
+head_output = weighted_values.sum(dim=0)       # [d]
+
+token_ids = inputs["input_ids"][0].tolist()
+print(f"Layer {layer_idx}, Query T{T}, Q Head {head_idx} → KV Head {kv_head_idx}")
+for t, tid in enumerate(token_ids):
+    print(f"Key T{t+1} {tokenizer.decode([tid])!r}: "
+          f"Weight={weights[t].item():.4f}, "
+          f"Vノルム={values[t].norm().item():.4f}, "
+          f"Weighted Valueノルム={weighted_values[t].norm().item():.4f}")
+
+first = weighted_values[0]
+others = weighted_values[1:].sum(dim=0)
+print("Head出力のshape・ノルム:", head_output.shape, head_output.norm().item())
+print("T1とその他の向き:", torch.nn.functional.cosine_similarity(first, others, dim=0).item())
+
+# GQA対応後も、各Q Headは独自のWeightを使う
+all_values = value_states[0].repeat_interleave(groups, dim=0)  # [H,T,d]
+all_head_outputs = (all_weights[..., None] * all_values).sum(dim=1)  # [H,d]
+W = attention.o_proj.weight.detach().float().cpu()            # [1024,H*d]
+assert attention.o_proj.bias is None
+projected_heads = torch.stack([
+    all_head_outputs[h] @ W[:, h*d:(h+1)*d].T
+    for h in range(H)
+])                                                         # [H,1024]
+total = projected_heads.sum(dim=0)                          # [1024]
+via_concat = all_head_outputs.reshape(H*d) @ W.T            # [1024]
+for h in range(H):
+    print(f"Query T{T}, Q Head {h}: o_proj後のノルム={projected_heads[h].norm().item():.4f}")
+print("寄与の合計後のノルム:", total.norm().item())
+print("二つの再構成の最大差:", (total - via_concat).abs().max().item())
+```
+
+`weights[:, None]`は`[T]`を`[T,1]`へ変え、各Tokenの係数をそのVの全成分に掛けられるようにします。`sum(dim=0)`で消えるのはToken軸です。実験会話のように`outputs.hidden_states[layer_idx] → input_layernorm → v_proj`でVを再計算する方法もあります。この例は同じForward中のVを記録する方法を使っています。
+
+この比較は同じ再構成データを使った線形分解の確認です。モデル本来の低精度の行列積や内部Forward出力との比較は別途必要です。
+
+</details>
+
+## Attention Sinkの役割と、次の検証を分ける
+
+先頭付近へ大きなWeightが集まることだけで、モデルの異常・Tokenの意味的重要度・Headの不要性は判断できません。先頭位置はCausal Mask下で全Queryから参照でき、Softmaxは参照可能な位置へ合計1の係数を配ります。これはSinkを考える手がかりで、個別モデルでの発生原因の証明ではありません。
+
+[StreamingLLMの研究](https://arxiv.org/abs/2309.17453)は、直近のK/Vに加えて先頭付近のK/Vを保持する意義を示しています。今回のログは、Qwen3の先頭KVを削除して性能を測った実験ではありません。[KV Cacheの保存範囲](../kv-cache/#保存範囲を変えると計算も変わる)と併せて考えます。
+
+次は<strong>Head Ablation（Headの出力を一時的に無効化する比較実験）</strong>です。Layer・Head・対象Token位置を明示し、同じ入力でLogitsと予測を比べます。o_projの直前で特定Headの成分をゼロにするなら、全Tokenを対象にするのか、末尾Queryだけにするのかも区別します。この段階の会話では比較結果はまだなく、Weightやノルムの大小から先に結論を出さないことが大切です。

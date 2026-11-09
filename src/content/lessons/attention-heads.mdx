@@ -198,6 +198,8 @@ Softmaxが参照可能な位置へ合計1の割合を配ることは、この現
 
 ## 次に確かめること
 
+参照割合の次は、[Attention SinkとValueの寄与](../attention-sink/)で、同じQuery・Headについて**Weight × V → ベクトルの合計 → Head別のo_proj寄与**を追えます。「どのTokenを何%参照したか」と「計算結果のベクトルがどれくらい大きいか」を分けて読みます。
+
 まず入力・Layer・Head・Query・Keyを指定して割合を観察し、次にVとの積を調べます。さらにHeadの出力を無効にしてLogitsなどを比較すれば、単なる分布の観察から、出力への影響を調べる実験へ進めます。1文のヒートマップだけでHeadの役割を固定しないことが大切です。
 
 割合を取得する地点・dtype・GQAの根拠は[Qwen3参照実装 v5.18.0](https://github.com/huggingface/transformers/blob/v5.18.0/src/transformers/models/qwen3/modeling_qwen3.py)です。このページのコードは実行例であり、特定の割合やグラフの形を再現する保証ではありません。
