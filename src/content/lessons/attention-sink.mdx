@@ -200,4 +200,62 @@ print("二つの再構成の最大差:", (total - via_concat).abs().max().item()
 
 [StreamingLLMの研究](https://arxiv.org/abs/2309.17453)は、直近のK/Vに加えて先頭付近のK/Vを保持する意義を示しています。今回のログは、Qwen3の先頭KVを削除して性能を測った実験ではありません。[KV Cacheの保存範囲](../kv-cache/#保存範囲を変えると計算も変わる)と併せて考えます。
 
-次は<strong>Head Ablation（Headの出力を一時的に無効化する比較実験）</strong>です。Layer・Head・対象Token位置を明示し、同じ入力でLogitsと予測を比べます。o_projの直前で特定Headの成分をゼロにするなら、全Tokenを対象にするのか、末尾Queryだけにするのかも区別します。この段階の会話では比較結果はまだなく、Weightやノルムの大小から先に結論を出さないことが大切です。
+## Head Ablation：末尾の「。」でHead 5を止める
+
+Layer 27で、Head 5の寄与ベクトルのノルムは41.6905でした。このHeadが届けた情報を取り除くと、次Tokenの候補はどれだけ変わるでしょうか。同じ文章「明日は雨が降るかもしれません。」を2回モデルに通し、1回目を比較の基準にします。
+
+2回目だけ、**全Headの加重和を横に連結した後、`o_proj` に入る直前**に介入します。入力の形は `[1, 8, 2048]`。横の2048成分には16 Headの出力が128成分ずつ並んでいます。
+
+| 選ぶ軸 | 今回の指定 | 意味 |
+|---|---|---|
+| バッチ | `0` | 比較に使う1文 |
+| Query位置 | `-1` | パディングのない8 Tokenの末尾「。」 |
+| 連結後の成分 | `640:768` | Q Head 5の先頭列は5 × 128。640〜767列を選ぶ |
+
+この128成分をゼロにすると、T8のHead 5が集めたValueの寄与が出力射影から先へ伝わらなくなります。参照割合と共有KV Head 2のK/Vはすでに計算済みで、同じK/Vを使うQ Head 4の出力もそのままです。
+
+**比較の準備**　評価モードのQwen3-0.6Bと対応するTokenizerを読み込んでから実行します。
+
+```python
+inputs = tokenizer("明日は雨が降るかもしれません。", return_tensors="pt").to(model.device)
+model.eval()
+with torch.no_grad():
+    baseline = model(**inputs, use_cache=False).logits[0, -1].float()
+```
+
+続いて[末尾TokenのAttention Headを一つだけ無効化する](../../recipes/ablate-head/)のコードを同じ入力で実行します。得られる `modified` は、残差加算・MLP・最終Norm・LM Headまで通した後のスコアです。
+
+**なぜHookを外すのか。** Forward Pre-hookは指定したモジュールが呼ばれる直前に働きます。`args[0]` は `o_proj` の入力Tensorで、`return (x,)` は変更した入力を位置引数のタプルとして渡します。`model(**inputs)` は各層を通常のモジュール呼び出しで実行するため、途中の `o_proj` でこのHookが働きます。対象モジュール自身の `forward` を直接呼ぶと、そのモジュールに登録したHookの処理を通りません。
+
+登録は同じプロセス内の同じモジュールに残ります。`finally` で解除すれば、途中で例外が起きても次の実験は通常の状態から始まります。変更するのはコピーした入力だけで、モデルの重みファイルには書き込みません。すでに計算した `modified` は解除後も比較に使えます。
+
+### 実験014の結果を読む
+
+提供された実行ログでは、最有力候補が**空白から「今日」へ**変化しました。同じ候補IDの確率を両条件で照合すると、順位が変わった理由を追えます。
+
+| 次Token候補 | 通常 | Head 5を無効化 |
+|---|---:|---:|
+| 空白 | 3.8938% | 3.7299% |
+| 今日 | 3.4363% | 5.0982% |
+
+全候補のlogit絶対差は最大1.2109375、平均約0.1943でした。この測定から分かるのは、この入力・層・位置での予測への影響です。モデル全体の性能や、別の入力でもHead 5が同じ役割を持つかは、別の評価が必要です。
+
+### 実験015：16 Headを一つずつ比較する
+
+各回で同じ通常出力を基準にし、止めるHeadだけを変えます。最有力候補が同じでも、下位の候補へ確率が移る場合があります。そこで**全変動距離（TV距離）**で、語彙候補すべての確率差を測ります。増えた確率と減った確率を二重に数えるので、絶対差の合計を2で割ります。値は0から1で、0なら分布が一致します。
+
+```python
+p = baseline.softmax(-1)
+results = []
+for head in range(model.config.num_attention_heads):
+    scores = modified if head == 5 else predict_without(head)
+    q = scores.softmax(-1)
+    tv = (p - q).abs().sum().item() / 2
+    token = tokenizer.decode([scores.argmax().item()])
+    results.append((head, token, tv))
+
+for head, token, tv in sorted(results, key=lambda row: row[2], reverse=True):
+    print(head, repr(token), tv)
+```
+
+各回のHookを解除すると、前のHeadへの介入が累積せず、単独での影響を比べられます。実験013のノルムは層内の寄与ベクトルの長さ、ここでのTV距離は最終予測の分布の変化です。両者の順位が一致するかは、この表を実際に作って確かめる問いです。

@@ -733,6 +733,19 @@
     },
     {
       "group": "edit",
+      "id": "ablate-head",
+      "title": "末尾TokenのAttention Headを一つだけ無効化する",
+      "requires": [
+        "load",
+        "input"
+      ],
+      "lesson": "attention-sink",
+      "note": "Qwen3-0.6B・パディングなしの1文用。Layer 27の連結済みHead出力をo_proj直前で変更します。通常の末尾logitsと比較するときは同じモデルと入力を使います。",
+      "code": "projection = model.model.layers[27].self_attn.o_proj\nwidth = model.config.head_dim\ndef predict_without(head):\n    start = head * width\n    def mask(module, args):\n        x = args[0].clone()\n        x[0, -1, start:start + width] = 0\n        return (x,)\n    handle = projection.register_forward_pre_hook(mask)\n    try:\n        with torch.no_grad():\n            return model(**inputs, use_cache=False).logits[0, -1].float()\n    finally:\n        handle.remove()\nmodified = predict_without(5)",
+      "aliases": "head ablation ヘッド アブレーション 介入 pre-hook Q Head 無効化"
+    },
+    {
+      "group": "edit",
       "id": "ablate-mlp",
       "title": "特定層のMLP出力をゼロにして影響を測る",
       "requires": [
