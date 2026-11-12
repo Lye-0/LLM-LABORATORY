@@ -3,6 +3,7 @@ import { withBase, withoutBase } from '../lib/paths';
 import { getCollection } from 'astro:content';
 import { stages, labs } from '../data/catalog';
 import { projects } from '../data/projects';
+import recipeCatalog from '../data/recipes.json';
 import { topics } from '../data/topics';
 import { maps, mapUrl } from '../data/atlas';
 import { apiLibraries, apiClasses, getApiClass } from '../data/api-groups';
@@ -33,9 +34,10 @@ const nav = [
   { href: '/motion/', label: '動きで学ぶ', no: '03' },
   { href: '/labs/', label: '実験する', no: '04' },
   { href: '/reference/', label: '調べる', no: '05' },
-  { href: '/projects/', label: '改造する', no: '06' },
+  { href: '/recipes/', label: 'コードを探す', no: '06' },
+  { href: '/projects/', label: '改造する', no: '07' },
 ];
-const activeSection = path.startsWith('/maps/')
+const activeSection = path.startsWith('/recipes/') ? '/recipes/' : path.startsWith('/maps/')
   ? '/maps/'
   : path.startsWith('/motion/')
     ? '/motion/'
@@ -140,6 +142,11 @@ if (activeSection === '/motion/') {
       links: topics.map((t) => ({ href: `/topics/${t.slug}/`, label: t.title })),
     },
   ];
+} else if (activeSection === '/recipes/') {
+  sidebarHome = { href: '/recipes/', label: 'コードを探す' };
+  sidebarGroups = [{ title: '目的別に探す', links: recipeCatalog.groups.map(g => ({
+    href: `/recipes/#${g.id}`, label: g.title,
+  })) }];
 } else if (activeSection === '/projects/') {
   sidebarHome = { href: '/projects/', label: '改造課題の一覧' };
   sidebarGroups = [

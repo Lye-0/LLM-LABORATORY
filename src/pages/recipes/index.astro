@@ -1,0 +1,63 @@
+---
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import catalog from '../../data/recipes.json';
+import { withBase } from '../../lib/paths';
+---
+<SiteLayout title="コードを探す">
+  <header class="page-header"><h1>コードを探す</h1>
+    <p>やりたいことから、手元で使うPythonコードを選べます。</p>
+  </header>
+  <label for="recipe-query">目的・API名で検索</label>
+  <input id="recipe-query" type="search" placeholder="例：隠れ状態、LoRA、save_pretrained" />
+  <p class="count" aria-live="polite" id="recipe-count">{catalog.recipes.length}件</p>
+  {catalog.groups.map(group => <section id={group.id} data-recipe-group>
+    <h2>{group.title}</h2>
+    <ul>{catalog.recipes.filter(r => r.group === group.id).map(r =>
+      <li data-search={[group.title, r.title, r.aliases, r.note, r.code].join(' ')}>
+        <a href={withBase(`/recipes/${r.id}/`)}>{r.title}<span aria-hidden="true">→</span></a>
+      </li>)}</ul>
+  </section>)}
+</SiteLayout>
+<script>
+  const field = document.querySelector<HTMLInputElement>('#recipe-query')!;
+  const normalize = (s: string) => s.normalize('NFKC').toLowerCase().replace(/[\s_-]/g, '');
+  function filterRecipes() {
+    const terms = field.value.trim().split(/\s+/).map(normalize);
+    let count = 0;
+    for (const group of document.querySelectorAll<HTMLElement>('[data-recipe-group]')) {
+      let matches = 0;
+      for (const row of group.querySelectorAll<HTMLElement>('[data-search]')) {
+        const value = normalize(row.dataset.search!);
+        row.hidden = !terms.every(t => value.includes(t));
+        if (!row.hidden) matches++;
+      }
+      group.hidden = !matches;
+      count += matches;
+    }
+    document.querySelector('#recipe-count')!.textContent = count ? count + '件' : '一致するコードがありません。別の目的やAPI名で検索してください。';
+  }
+  field.addEventListener('input', filterRecipes);
+  function revealCategory() {
+    if (document.getElementById(location.hash.slice(1))) {
+      field.value = '';
+      filterRecipes();
+      document.getElementById(location.hash.slice(1))?.scrollIntoView();
+    }
+  }
+  window.addEventListener('hashchange', revealCategory);
+  document.querySelectorAll('a[href*="/recipes/#"]').forEach(a => a.addEventListener('click', () => {
+    field.value = '';
+    filterRecipes();
+  }));
+  window.addEventListener('pageshow', filterRecipes);
+</script>
+<style>
+  label { display:block; margin-bottom:.5rem; font-weight:600 }
+  input { width:100%; padding:.8rem 1rem; border:1px solid var(--line); background:var(--surface); color:var(--text); border-radius:var(--radius); font:inherit }
+  .count { color:var(--muted); font-size:.875rem }
+  section { scroll-margin-top:calc(var(--header) + 1rem); margin:2rem 0 }
+  h2 { font-size:1.2rem }
+  ul { list-style:none; padding:0; border-top:1px solid var(--line) }
+  li a { display:flex; justify-content:space-between; align-items:center; gap:1rem; padding:.8rem .25rem; border-bottom:1px solid var(--line); color:var(--text) }
+  li a:hover, li span {color:var(--accent)}
+</style>

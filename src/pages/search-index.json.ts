@@ -5,12 +5,17 @@ import { apiClasses, apiLibraries, getApiClass } from '../data/api-groups';
 import { glossary, comparisons } from '../data/glossary';
 import { labs } from '../data/catalog';
 import { projects } from '../data/projects';
+import recipeCatalog from '../data/recipes.json';
 import { topics } from '../data/topics';
 import { maps, mapUrl, nodes, sectionById } from '../data/atlas';
 import tokens from '../data/tokens.json';
 export async function GET() {
   const lessons = await getCollection('lessons');
   const index = [
+    ...recipeCatalog.recipes.map(r => ({
+      title: r.title, description: r.note, kind: 'コード',
+      url: `/recipes/${r.id}/`, keywords: `${r.aliases} ${r.code}`,
+    })),
     ...maps.map((map) => ({
       title: map.title,
       description: map.description,

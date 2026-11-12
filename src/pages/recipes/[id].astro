@@ -1,0 +1,28 @@
+---
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import catalog from '../../data/recipes.json';
+import { withBase } from '../../lib/paths';
+import { Code } from 'astro:components';
+export function getStaticPaths() {
+  return catalog.recipes.map(recipe => ({ params: { id: recipe.id }, props: { recipe } }));
+}
+const { recipe } = Astro.props;
+const group = catalog.groups.find(g => g.id === recipe.group)!;
+const prerequisites = recipe.requires.map(id => catalog.recipes.find(r => r.id === id)!);
+---
+<SiteLayout title={recipe.title} description={recipe.note}>
+  <a href={withBase(`/recipes/#${group.id}`)}>← {group.title}</a>
+  <header class="page-header"><h1>{recipe.title}</h1></header>
+  {prerequisites.length > 0 && <div class="prereqs"><strong>先に用意するコード</strong>
+    {prerequisites.map(r => <a href={withBase(`/recipes/${r.id}/`)}>{r.title}</a>)}
+  </div>}
+  <Code code={recipe.code} lang="python" theme="github-dark" />
+  <p>{recipe.note}</p>
+  <a href={withBase(`/learn/${recipe.lesson}/`)}>関連する教材を読む →</a>
+</SiteLayout>
+<style>
+  .prereqs { display:flex; flex-wrap:wrap; gap:.4rem 1rem; margin-bottom:1rem; font-size:.9rem }
+  .prereqs strong { color:var(--muted) }
+  p { margin:1.25rem 0; line-height:1.8 }
+  :global(pre.astro-code) { position:relative; overflow:auto; max-width:100%; padding:2.6rem 1rem 1rem; border-radius:var(--radius) }
+</style>

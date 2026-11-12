@@ -1,0 +1,566 @@
+{
+  "groups": [
+    {
+      "id": "prepare",
+      "title": "モデルと入力の準備"
+    },
+    {
+      "id": "tokens",
+      "title": "Token・語彙・Tensor"
+    },
+    {
+      "id": "observe",
+      "title": "Embedding・Layer・Hidden State"
+    },
+    {
+      "id": "attention",
+      "title": "Attention・Head・寄与"
+    },
+    {
+      "id": "generate",
+      "title": "予測・生成・KV Cache"
+    },
+    {
+      "id": "edit",
+      "title": "モデルの作成・改造"
+    },
+    {
+      "id": "train",
+      "title": "学習データ・勾配・LoRA"
+    },
+    {
+      "id": "measure",
+      "title": "量子化・速度・評価"
+    },
+    {
+      "id": "save",
+      "title": "保存・復元・学習再開"
+    }
+  ],
+  "recipes": [
+    {
+      "group": "prepare",
+      "id": "load",
+      "title": "Qwen3とTokenizerを読み込む",
+      "requires": [],
+      "lesson": "qwen",
+      "note": "以降の例は単一デバイスで使います。Attentionの割合も取得できるようeagerを指定します。",
+      "code": "import torch\nfrom transformers import AutoModelForCausalLM, AutoTokenizer\n\nmodel_id = \"Qwen/Qwen3-0.6B\"\ntokenizer = AutoTokenizer.from_pretrained(model_id)\ndevice = \"cuda\" if torch.cuda.is_available() else \"cpu\"\nmodel = AutoModelForCausalLM.from_pretrained(model_id, attn_implementation=\"eager\")\nmodel = model.to(device).eval()",
+      "aliases": ""
+    },
+    {
+      "group": "prepare",
+      "id": "input",
+      "title": "文章をモデルに渡せるTensorにする",
+      "requires": [
+        "load"
+      ],
+      "lesson": "tensor",
+      "note": "ID列とattention_maskを同じデバイスに配置します。shapeはどちらも [バッチ, Token位置] です。",
+      "code": "text = \"こんにちは、今日はいい天気ですね\"\ninputs = tokenizer(text, return_tensors=\"pt\").to(model.device)",
+      "aliases": ""
+    },
+    {
+      "group": "prepare",
+      "id": "chat",
+      "title": "会話をChat Templateで整形する",
+      "requires": [
+        "load"
+      ],
+      "lesson": "chat-template",
+      "note": "アシスタントが返答を始める位置まで整形します。",
+      "code": "messages = [{\"role\": \"user\", \"content\": \"空はなぜ青い？\"}]\nprompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)\ninputs = tokenizer(prompt, add_special_tokens=False, return_tensors=\"pt\").to(model.device)",
+      "aliases": ""
+    },
+    {
+      "group": "prepare",
+      "id": "batch",
+      "title": "長さの違う文章をまとめて生成用の入力にする",
+      "requires": [
+        "load"
+      ],
+      "lesson": "batch",
+      "note": "左側を埋め、各行の最終位置に実際のTokenが来るようにします。",
+      "code": "tokenizer.padding_side = \"left\"\ninputs = tokenizer([\"こんにちは\", \"日本の首都は\"], padding=True, return_tensors=\"pt\").to(model.device)",
+      "aliases": ""
+    },
+    {
+      "group": "tokens",
+      "id": "encode",
+      "title": "文章をTokenとIDに分解する",
+      "requires": [
+        "input"
+      ],
+      "lesson": "tokenizer",
+      "note": "同じ位置のIDと内部Token表記を並べます。",
+      "code": "ids = inputs.input_ids[0].tolist()\nprint(list(zip(ids, tokenizer.convert_ids_to_tokens(ids))))",
+      "aliases": ""
+    },
+    {
+      "group": "tokens",
+      "id": "decode",
+      "title": "ID列を文字列に戻す",
+      "requires": [
+        "input"
+      ],
+      "lesson": "tokenizer",
+      "note": "特殊Tokenを除いて1文を復元します。",
+      "code": "text_again = tokenizer.decode(inputs.input_ids[0], skip_special_tokens=True)",
+      "aliases": ""
+    },
+    {
+      "group": "tokens",
+      "id": "vocab",
+      "title": "基本語彙と追加TokenのIDを調べる",
+      "requires": [
+        "load"
+      ],
+      "lesson": "vocabulary",
+      "note": "追加分はToken文字列をキー、IDを値に持つ辞書です。",
+      "code": "print(tokenizer.vocab_size, len(tokenizer))\nprint(tokenizer.get_added_vocab())",
+      "aliases": ""
+    },
+    {
+      "group": "tokens",
+      "id": "axes",
+      "title": "Tensorにバッチ軸を追加し軸を入れ替える",
+      "requires": [
+        "input"
+      ],
+      "lesson": "tensor",
+      "note": "[T] → [1,T] → [T,1] の順です。",
+      "code": "row = inputs.input_ids[0]\nbatch = row.unsqueeze(0)\npositions_first = batch.transpose(0, 1)",
+      "aliases": ""
+    },
+    {
+      "group": "observe",
+      "id": "embedding",
+      "title": "各TokenのEmbeddingベクトルを取得する",
+      "requires": [
+        "input"
+      ],
+      "lesson": "embedding",
+      "note": "語彙表から各IDの行を取り出した [バッチ, Token位置, 表現成分] です。",
+      "code": "with torch.no_grad():\n    vectors = model.get_input_embeddings()(inputs.input_ids)",
+      "aliases": ""
+    },
+    {
+      "group": "observe",
+      "id": "hidden",
+      "title": "全層のHidden Stateを取得する",
+      "requires": [
+        "input"
+      ],
+      "lesson": "decoder-stack",
+      "note": "位置0がEmbedding直後です。Qwen3の末尾要素には最終RMSNormが適用されています。",
+      "code": "with torch.no_grad():\n    outputs = model(**inputs, output_hidden_states=True, use_cache=False)\nhidden_states = outputs.hidden_states",
+      "aliases": "hiddenstate hidden_states 隠れ状態 中身"
+    },
+    {
+      "group": "observe",
+      "id": "last-vector",
+      "title": "Layer 0を通った最後のトークンのベクトルを取り出す",
+      "requires": [
+        "hidden"
+      ],
+      "lesson": "decoder-stack",
+      "note": "1文・パディングなしの例です。最初の層の出力からバッチ0、末尾位置の全成分を選びます。",
+      "code": "vector = hidden_states[1][0, -1, :]\nprint(vector.shape)",
+      "aliases": "hiddenstate hidden_states 隠れ状態"
+    },
+    {
+      "group": "observe",
+      "id": "layer-diff",
+      "title": "最初の層の前後で表現の変化を測る",
+      "requires": [
+        "hidden"
+      ],
+      "lesson": "decoder-stack",
+      "note": "位置ごとに全成分の絶対差を平均します。",
+      "code": "delta = (hidden_states[1].float() - hidden_states[0].float()).abs().mean(dim=-1)",
+      "aliases": ""
+    },
+    {
+      "group": "observe",
+      "id": "hook",
+      "title": "最終RMSNorm直前の値をHookで保存する",
+      "requires": [
+        "input"
+      ],
+      "lesson": "decoder-stack",
+      "note": "Qwen3の最終Normへの入力をコピーし、観察後にHookを解除します。",
+      "code": "seen = []\ndef capture(module, args):\n    seen.append(args[0].detach().clone())\n\nhandle = model.model.norm.register_forward_pre_hook(capture)\ntry:\n    with torch.no_grad():\n        model(**inputs)\nfinally:\n    handle.remove()\nbefore_norm = seen[0]",
+      "aliases": ""
+    },
+    {
+      "group": "attention",
+      "id": "weights",
+      "title": "指定したHeadで最後のトークンの参照割合を見る",
+      "requires": [
+        "input"
+      ],
+      "lesson": "attention-heads",
+      "note": "Layer 0・Q Head 0・最後のQueryから、各Key位置への割合を取り出します。",
+      "code": "with torch.no_grad():\n    out = model(**inputs, output_attentions=True, use_cache=False)\nrow = out.attentions[0][0, 0, -1, :]",
+      "aliases": "attention weight sink"
+    },
+    {
+      "group": "attention",
+      "id": "kv-head",
+      "title": "Q Headに対応する共有KV Headを求める",
+      "requires": [
+        "load"
+      ],
+      "lesson": "attention-heads",
+      "note": "Qwen3のGQAでは連続するQ Headが一つのKV Headを共有します。",
+      "code": "q_head = 3\ngroup_size = model.config.num_attention_heads // model.config.num_key_value_heads\nkv_head = q_head // group_size",
+      "aliases": ""
+    },
+    {
+      "group": "attention",
+      "id": "value",
+      "title": "参照割合とVからHeadの出力を求める",
+      "requires": [
+        "hidden",
+        "weights"
+      ],
+      "lesson": "attention-sink",
+      "note": "1層目・Q Head 0が使うKV Head 0について、末尾Queryの加重和を再構成します。",
+      "code": "layer = model.model.layers[0]\nwidth = model.config.head_dim\nwith torch.no_grad():\n    x = layer.input_layernorm(hidden_states[0])\n    values = layer.self_attn.v_proj(x)[0, :, :width]\n    head_output = row.to(values.dtype) @ values",
+      "aliases": ""
+    },
+    {
+      "group": "attention",
+      "id": "project-head",
+      "title": "Head 0だけのo_projへの寄与を取り出す",
+      "requires": [
+        "value"
+      ],
+      "lesson": "attention-sink",
+      "note": "Qwen3の出力射影のうちHead 0に対応する入力列を使います。結果はhidden幅のベクトルです。",
+      "code": "with torch.no_grad():\n    columns = layer.self_attn.o_proj.weight[:, :width]\n    contribution = columns @ head_output",
+      "aliases": ""
+    },
+    {
+      "group": "generate",
+      "id": "logits",
+      "title": "最後のトークンから次Tokenのスコアを取得する",
+      "requires": [
+        "input"
+      ],
+      "lesson": "logits",
+      "note": "バッチごとに末尾位置の全候補スコアを残します。",
+      "code": "with torch.no_grad():\n    logits = model(**inputs).logits[:, -1, :]",
+      "aliases": ""
+    },
+    {
+      "group": "generate",
+      "id": "top",
+      "title": "次Tokenの上位候補を確率と文字列で見る",
+      "requires": [
+        "logits"
+      ],
+      "lesson": "sampling",
+      "note": "語彙方向で正規化してから、バッチ0の上位5件を表示します。",
+      "code": "prob, ids = logits[0].float().softmax(-1).topk(5)\nfor token_id, p in zip(ids.tolist(), prob.tolist()):\n    print(token_id, tokenizer.decode([token_id]), p)",
+      "aliases": ""
+    },
+    {
+      "group": "generate",
+      "id": "sample",
+      "title": "温度を指定して次Tokenを抽選する",
+      "requires": [
+        "logits"
+      ],
+      "lesson": "sampling",
+      "note": "正の温度で分布を調整してバッチごとに1候補を選びます。",
+      "code": "temperature = 0.8\nprobs = (logits.float() / temperature).softmax(-1)\nnext_id = torch.multinomial(probs, num_samples=1)",
+      "aliases": ""
+    },
+    {
+      "group": "generate",
+      "id": "generate",
+      "title": "生成した回答部分だけ取り出す",
+      "requires": [
+        "input"
+      ],
+      "lesson": "first-generation",
+      "note": "入力の幅で切り分けます。左paddingのバッチ入力にも使えます。",
+      "code": "ids = model.generate(**inputs, max_new_tokens=32, do_sample=False)\nanswers = tokenizer.batch_decode(ids[:, inputs.input_ids.shape[1]:], skip_special_tokens=True)",
+      "aliases": ""
+    },
+    {
+      "group": "generate",
+      "id": "stop",
+      "title": "指定文字列で生成を終了する",
+      "requires": [
+        "input"
+      ],
+      "lesson": "sampling",
+      "note": "停止文字列が生成された時点で止めます。返り値には停止文字列も含まれます。",
+      "code": "ids = model.generate(**inputs, max_new_tokens=64, stop_strings=[\"。\"], tokenizer=tokenizer)",
+      "aliases": ""
+    },
+    {
+      "group": "generate",
+      "id": "cache",
+      "title": "KV Cacheを引き継いで1 Token進める",
+      "requires": [
+        "input"
+      ],
+      "lesson": "kv-cache",
+      "note": "パディングのない1文用。過去のK/Vと選んだ1 Tokenを渡し、その次の候補を得ます。",
+      "code": "with torch.no_grad():\n    first = model(**inputs, use_cache=True)\n    token = first.logits[:, -1].argmax(-1, keepdim=True)\n    second = model(input_ids=token, past_key_values=first.past_key_values, use_cache=True)\nnext_logits = second.logits[:, -1]",
+      "aliases": ""
+    },
+    {
+      "group": "edit",
+      "id": "tiny",
+      "title": "設定から小さな言語モデルを初期化する",
+      "requires": [],
+      "lesson": "qwen",
+      "note": "ランダムな重みで初期化します。この例の入力ID範囲は0〜255です。",
+      "code": "from transformers import Qwen3Config, Qwen3ForCausalLM\n\nconfig = Qwen3Config(vocab_size=256, hidden_size=64, intermediate_size=128,\n                     num_hidden_layers=2, num_attention_heads=4,\n                     num_key_value_heads=2, head_dim=16)\nsmall_model = Qwen3ForCausalLM(config)",
+      "aliases": ""
+    },
+    {
+      "group": "edit",
+      "id": "names",
+      "title": "名前から特定層の重みとshapeを探す",
+      "requires": [
+        "load"
+      ],
+      "lesson": "model-editing",
+      "note": "Layer 0に属するパラメーターだけ列挙します。",
+      "code": "for name, param in model.named_parameters():\n    if name.startswith(\"model.layers.0.\"):\n        print(name, tuple(param.shape))",
+      "aliases": ""
+    },
+    {
+      "group": "edit",
+      "id": "edit-row",
+      "title": "Embeddingの1行を変更して元に戻す",
+      "requires": [
+        "input"
+      ],
+      "lesson": "model-editing",
+      "note": "対象行のコピーを保持し、変更前後の差を確認して復元します。共有重みなら出力層にも影響します。",
+      "code": "weight = model.get_input_embeddings().weight\ni = inputs.input_ids[0, 0].item()\nwith torch.no_grad():\n    original = weight[i].clone()\n    try:\n        weight[i].zero_()\n        print((weight[i] - original).norm().item())\n    finally:\n        weight[i].copy_(original)",
+      "aliases": ""
+    },
+    {
+      "group": "edit",
+      "id": "swap",
+      "title": "MLPの活性化関数を差し替える",
+      "requires": [
+        "input"
+      ],
+      "lesson": "model-editing",
+      "note": "Qwen3のLayer 0だけSiLUからReLUへ変更し、試行後に元のモジュールへ戻します。",
+      "code": "mlp = model.model.layers[0].mlp\noriginal = mlp.act_fn\ntry:\n    mlp.act_fn = torch.nn.ReLU()\n    with torch.no_grad():\n        changed_logits = model(**inputs).logits\nfinally:\n    mlp.act_fn = original",
+      "aliases": ""
+    },
+    {
+      "group": "edit",
+      "id": "extend",
+      "title": "語彙にTokenを追加してモデルに入力する",
+      "requires": [
+        "load"
+      ],
+      "lesson": "vocab-extension",
+      "note": "新しいIDに対応する行を確保します。もとの重み表に余裕があれば、既存の行数を保ちます。",
+      "code": "tokenizer.add_tokens([\"<lab_item>\"])\nrows = model.get_input_embeddings().num_embeddings\nif len(tokenizer) > rows:\n    model.resize_token_embeddings(len(tokenizer))\nids = tokenizer(\"<lab_item>\", add_special_tokens=False, return_tensors=\"pt\").input_ids\nwith torch.no_grad():\n    vector = model.get_input_embeddings()(ids.to(model.device))",
+      "aliases": ""
+    },
+    {
+      "group": "train",
+      "id": "labels",
+      "title": "学習用バッチを作りpaddingをlossから除く",
+      "requires": [
+        "load"
+      ],
+      "lesson": "loss",
+      "note": "有効な位置には入力ID、padding位置には無視値 -100 を置きます。因果LMは内部で予測と正解を1位置ずらします。",
+      "code": "tokenizer.padding_side = \"right\"\ninputs = tokenizer([\"こんにちは、今日は晴れです。\", \"明日は雨です。\"],\n                   padding=True, return_tensors=\"pt\").to(model.device)\nlabels = inputs.input_ids.clone()\nlabels[inputs.attention_mask == 0] = -100",
+      "aliases": ""
+    },
+    {
+      "group": "train",
+      "id": "answer-labels",
+      "title": "会話の回答部分だけを学習対象にする",
+      "requires": [
+        "load"
+      ],
+      "lesson": "loss",
+      "note": "Qwen3の1往復用。生成開始位置までを -100 で除外し、回答とその終了Tokenを正解にします。",
+      "code": "dialog = [{\"role\": \"user\", \"content\": \"1+1は？\"}]\nprompt = tokenizer.apply_chat_template(dialog, tokenize=False, add_generation_prompt=True,\n                                       enable_thinking=False)\nprefix = tokenizer.encode(prompt, add_special_tokens=False)\nanswer = tokenizer.encode(\"2です。\", add_special_tokens=False) + [tokenizer.eos_token_id]\ninputs = {\"input_ids\": torch.tensor([prefix + answer], device=model.device)}\nlabels = inputs[\"input_ids\"].clone()\nlabels[:, :len(prefix)] = -100",
+      "aliases": ""
+    },
+    {
+      "group": "train",
+      "id": "freeze",
+      "title": "Embeddingだけを更新対象にする",
+      "requires": [
+        "load"
+      ],
+      "lesson": "autograd",
+      "note": "共有された出力重みも同じパラメーターです。optimizerは対象を決めた後で作ります。",
+      "code": "model.requires_grad_(False)\nmodel.get_input_embeddings().requires_grad_(True)\nprint([n for n, p in model.named_parameters() if p.requires_grad])",
+      "aliases": ""
+    },
+    {
+      "group": "train",
+      "id": "step",
+      "title": "lossから勾配を計算して1ステップ更新する",
+      "requires": [
+        "labels"
+      ],
+      "lesson": "autograd",
+      "note": "勾配を初期化し、逆伝播で求めた勾配を使ってAdamWが重みを更新します。",
+      "code": "model.train()\noptimizer = torch.optim.AdamW((p for p in model.parameters() if p.requires_grad), lr=1e-5)\noptimizer.zero_grad(set_to_none=True)\nloss = model(**inputs, labels=labels, use_cache=False).loss\nloss.backward()\noptimizer.step()",
+      "aliases": ""
+    },
+    {
+      "group": "train",
+      "id": "accumulate",
+      "title": "複数回の逆伝播で勾配を蓄積する",
+      "requires": [
+        "labels"
+      ],
+      "lesson": "autograd",
+      "note": "各行を別のマイクロバッチとし、各マイクロバッチの平均lossを等しく重み付けします。",
+      "code": "optimizer = torch.optim.AdamW(model.parameters(), lr=1e-5)\nmodel.train()\noptimizer.zero_grad(set_to_none=True)\ncount = labels.size(0)\nfor i in range(count):\n    part = {k: v[i:i+1] for k, v in inputs.items()}\n    loss = model(**part, labels=labels[i:i+1], use_cache=False).loss\n    (loss / count).backward()\noptimizer.step()",
+      "aliases": ""
+    },
+    {
+      "group": "train",
+      "id": "lora",
+      "title": "AttentionにLoRAを取り付ける",
+      "requires": [
+        "load"
+      ],
+      "lesson": "lora",
+      "note": "peftが必要です。QとVの射影を対象にし、学習するパラメーター数を確認します。",
+      "code": "from peft import LoraConfig, get_peft_model\n\ncfg = LoraConfig(task_type=\"CAUSAL_LM\", r=8, lora_alpha=16, target_modules=[\"q_proj\", \"v_proj\"])\nadapter_model = get_peft_model(model, cfg)\nadapter_model.print_trainable_parameters()",
+      "aliases": ""
+    },
+    {
+      "group": "measure",
+      "id": "quantize",
+      "title": "4bit量子化でモデルを読み込む",
+      "requires": [],
+      "lesson": "quantization",
+      "note": "対応GPUとbitsandbytes・accelerateが必要です。NF4で読み込んだ重みの使用量をバイト単位で表示します。",
+      "code": "from transformers import AutoModelForCausalLM, BitsAndBytesConfig\n\ncfg = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type=\"nf4\")\nquantized = AutoModelForCausalLM.from_pretrained(\"Qwen/Qwen3-0.6B\",\n    quantization_config=cfg, device_map=\"auto\")\nprint(quantized.get_memory_footprint())",
+      "aliases": ""
+    },
+    {
+      "group": "measure",
+      "id": "memory",
+      "title": "推論時のGPUメモリのピークを測る",
+      "requires": [
+        "input"
+      ],
+      "lesson": "inference-memory",
+      "note": "単一CUDA GPU用。モデル常駐分を含むPyTorch割当量の最大値をMiBで表示します。",
+      "code": "torch.cuda.reset_peak_memory_stats(model.device)\nwith torch.inference_mode():\n    out = model(**inputs)\nprint(torch.cuda.max_memory_allocated(model.device) / 2**20)",
+      "aliases": ""
+    },
+    {
+      "group": "measure",
+      "id": "benchmark",
+      "title": "Cacheの有無で生成時間を比較する",
+      "requires": [
+        "input"
+      ],
+      "lesson": "inference-memory",
+      "note": "同じ入力・生成長で各設定をウォームアップします。同期して実測した3回の中央値は秒単位です。",
+      "code": "import time\nfrom statistics import median\n\nfor cache in (False, True):\n    times = []\n    for _ in range(4):\n        if model.device.type == \"cuda\":\n            torch.cuda.synchronize()\n        start = time.perf_counter()\n        model.generate(**inputs, min_new_tokens=16, max_new_tokens=16, do_sample=False, use_cache=cache)\n        if model.device.type == \"cuda\":\n            torch.cuda.synchronize()\n        times.append(time.perf_counter() - start)\n    print(cache, median(times[1:]))",
+      "aliases": ""
+    },
+    {
+      "group": "measure",
+      "id": "compare",
+      "title": "活性化関数の変更前後でlogitsを比較する",
+      "requires": [
+        "logits",
+        "swap"
+      ],
+      "lesson": "evaluation",
+      "note": "同じモデル・入力の末尾位置で候補スコアの最大差を求めます。",
+      "code": "difference = changed_logits[:, -1].float() - logits.float()\nprint(difference.abs().max().item())",
+      "aliases": ""
+    },
+    {
+      "group": "measure",
+      "id": "perplexity",
+      "title": "評価文のlossとperplexityを求める",
+      "requires": [
+        "input"
+      ],
+      "lesson": "evaluation",
+      "note": "2 Token以上のパディングなし1文用。評価時の平均次Token損失を指数に戻します。",
+      "code": "model.eval()\nwith torch.no_grad():\n    loss = model(**inputs, labels=inputs.input_ids).loss\nprint(loss.item(), loss.float().exp().item())",
+      "aliases": ""
+    },
+    {
+      "group": "save",
+      "id": "save",
+      "title": "モデルとTokenizerを保存して再読込する",
+      "requires": [
+        "load"
+      ],
+      "lesson": "save-model",
+      "note": "設定・重み・語彙を同じフォルダに保存します。",
+      "code": "folder = \"saved-model\"\nmodel.save_pretrained(folder)\ntokenizer.save_pretrained(folder)\nrestored = AutoModelForCausalLM.from_pretrained(folder)\nrestored_tokenizer = AutoTokenizer.from_pretrained(folder)",
+      "aliases": ""
+    },
+    {
+      "group": "save",
+      "id": "adapter",
+      "title": "LoRAの変更分だけ保存して読み戻す",
+      "requires": [
+        "lora"
+      ],
+      "lesson": "lora",
+      "note": "同じベースモデルを新たに読み込み、学習済みアダプターを取り付けます。",
+      "code": "from peft import PeftModel\n\nadapter_model.save_pretrained(\"saved-adapter\")\nbase = AutoModelForCausalLM.from_pretrained(model_id)\nrestored = PeftModel.from_pretrained(base, \"saved-adapter\")",
+      "aliases": ""
+    },
+    {
+      "group": "save",
+      "id": "resume",
+      "title": "学習の更新位置とoptimizerを復元する",
+      "requires": [
+        "step"
+      ],
+      "lesson": "save-model",
+      "note": "同じモデル構成・更新対象・optimizerを準備して復元します。再開位置は次の更新番号です。",
+      "code": "torch.save({\"step\": 1, \"model\": model.state_dict(),\n            \"optimizer\": optimizer.state_dict()}, \"checkpoint.pt\")\n\nstate = torch.load(\"checkpoint.pt\", map_location=model.device, weights_only=True)\nmodel.load_state_dict(state[\"model\"])\noptimizer.load_state_dict(state[\"optimizer\"])\nnext_step = state[\"step\"] + 1",
+      "aliases": ""
+    },
+    {
+      "group": "save",
+      "id": "save-layer",
+      "title": "変更した層の重みだけを保存して戻す",
+      "requires": [
+        "load"
+      ],
+      "lesson": "save-model",
+      "note": "同じ構成のLayer 0に読み戻します。ほかの層の重みは保存対象に含まれません。",
+      "code": "target = model.model.layers[0]\ntorch.save(target.state_dict(), \"layer0.pt\")\nweights = torch.load(\"layer0.pt\", map_location=model.device, weights_only=True)\ntarget.load_state_dict(weights)",
+      "aliases": "差分 復元 部分保存"
+    },
+    {
+      "group": "train",
+      "id": "grad",
+      "title": "勾配が届いた重みを確認する",
+      "requires": [
+        "step"
+      ],
+      "lesson": "autograd",
+      "note": "直近のbackwardで残った勾配を確認します。次のzero_gradより前に実行してください。",
+      "code": "for name, param in model.named_parameters():\n    if param.grad is not None:\n        print(name, param.grad.norm().item())",
+      "aliases": "gradient backward"
+    }
+  ]
+}
