@@ -561,6 +561,202 @@
       "note": "直近のbackwardで残った勾配を確認します。次のzero_gradより前に実行してください。",
       "code": "for name, param in model.named_parameters():\n    if param.grad is not None:\n        print(name, param.grad.norm().item())",
       "aliases": "gradient backward"
+    },
+    {
+      "group": "observe",
+      "id": "tensor-info",
+      "title": "Tensorの型・デバイス・メモリ量を調べる",
+      "requires": [
+        "input"
+      ],
+      "lesson": "tensor",
+      "note": "ID列の全要素が占める論理サイズを求めます。",
+      "code": "t = inputs.input_ids\nprint(t.shape, t.dtype, t.device)\nprint(t.numel() * t.element_size())",
+      "aliases": "dtype shape numel byte サイズ"
+    },
+    {
+      "group": "tokens",
+      "id": "lookup",
+      "title": "内部Tokenから語彙表のIDを引く",
+      "requires": [
+        "load"
+      ],
+      "lesson": "vocabulary",
+      "note": "分割後の内部表記を語彙表のキーにします。",
+      "code": "pieces = tokenizer.tokenize(\"こんにちは\")\nvocab = tokenizer.get_vocab()\nprint([(p, vocab[p]) for p in pieces])",
+      "aliases": "辞書 検索 get_vocab"
+    },
+    {
+      "group": "attention",
+      "id": "qkv",
+      "title": "Q・K・Vを射影してHeadに分割する",
+      "requires": [
+        "load",
+        "hidden"
+      ],
+      "lesson": "attention",
+      "note": "Layer 0のQ・K・Vを [バッチ, Head, Token位置, Head内成分] の形で取得します。",
+      "code": "block = model.model.layers[0]\nattn = block.self_attn\nwith torch.no_grad():\n    x = block.input_layernorm(hidden_states[0])\n    shape = (*x.shape[:2], -1, model.config.head_dim)\n    q = attn.q_norm(attn.q_proj(x).reshape(shape)).transpose(1, 2)\n    k = attn.k_norm(attn.k_proj(x).reshape(shape)).transpose(1, 2)\n    v = attn.v_proj(x).reshape(shape).transpose(1, 2)",
+      "aliases": "query key value reshape 正規化"
+    },
+    {
+      "group": "attention",
+      "id": "rope-mask",
+      "title": "RoPEと因果マスクから参照割合を再現する",
+      "requires": [
+        "load",
+        "qkv"
+      ],
+      "lesson": "position",
+      "note": "パディングなしの1文用。行がQuery位置、列がKey位置の表を作ります。",
+      "code": "from transformers.models.qwen3.modeling_qwen3 import apply_rotary_pos_emb\npositions = torch.arange(q.size(2), device=q.device)[None, :]\ncos, sin = model.model.rotary_emb(q, positions)\nqr, kr = apply_rotary_pos_emb(q, k, cos, sin)\nscores = qr[0, 0].float() @ kr[0, 0].float().T / q.size(-1)**0.5\nfuture = torch.ones_like(scores, dtype=torch.bool).triu(1)\nweights = scores.masked_fill(future, -torch.inf).softmax(-1)",
+      "aliases": "causal mask softmax scores 回転 転置"
+    },
+    {
+      "group": "attention",
+      "id": "heatmap",
+      "title": "全Headの参照先をヒートマップで比較する",
+      "requires": [
+        "weights",
+        "input",
+        "load"
+      ],
+      "lesson": "attention-heads",
+      "note": "Matplotlibを使用します。各行はLayer 0の各Head、各列は末尾Queryから見た参照先です。",
+      "code": "import matplotlib.pyplot as plt\nmatrix = out.attentions[0][0, :, -1, :].float().cpu()\nfig, ax = plt.subplots()\nim = ax.imshow(matrix, aspect=\"auto\", vmin=0, vmax=1)\ntokens = tokenizer.convert_ids_to_tokens(inputs.input_ids[0].tolist())\nax.set_xticks(range(len(tokens)), tokens, rotation=90)\nax.set(xlabel=\"Key token\", ylabel=\"Query head\")\nfig.colorbar(im, ax=ax)\nplt.show()",
+      "aliases": "attention sink 可視化 グラフ matplotlib"
+    },
+    {
+      "group": "observe",
+      "id": "mlp",
+      "title": "MLPのgate・up・SiLU・downを手計算で照合する",
+      "requires": [
+        "load",
+        "hidden"
+      ],
+      "lesson": "transformer-block",
+      "note": "Layer 0のMLP単体へ同じ試験入力を渡して照合します。",
+      "code": "mlp = model.model.layers[0].mlp\nx = hidden_states[0]\nwith torch.no_grad():\n    gated = mlp.act_fn(mlp.gate_proj(x)) * mlp.up_proj(x)\n    manual = mlp.down_proj(gated)\n    torch.testing.assert_close(manual, mlp(x))",
+      "aliases": "SwiGLU 要素積"
+    },
+    {
+      "group": "generate",
+      "id": "cache-shape",
+      "title": "KV Cacheの各層のK・Vと保存位置数を調べる",
+      "requires": [
+        "load",
+        "input"
+      ],
+      "lesson": "kv-cache",
+      "note": "Qwen3のDynamicCacheを観察します。",
+      "code": "with torch.no_grad():\n    cache = model(**inputs, use_cache=True).past_key_values\nprint(cache.get_seq_length())\nfor i, entry in enumerate(cache.layers):\n    print(i, entry.keys.shape, entry.values.shape)",
+      "aliases": "cache shape keys values 長さ"
+    },
+    {
+      "group": "generate",
+      "id": "top-p",
+      "title": "Top-kとTop-pで生成候補を絞る",
+      "requires": [
+        "load",
+        "input"
+      ],
+      "lesson": "sampling",
+      "note": "上位k件に絞り、その中の累積確率がpに達するまでの候補から抽選します。",
+      "code": "ids = model.generate(**inputs, do_sample=True, top_k=20, top_p=0.9, max_new_tokens=16)\nreply = ids[:, inputs.input_ids.size(1):]\nprint(tokenizer.batch_decode(reply, skip_special_tokens=True))",
+      "aliases": "nucleus sampling 累積確率"
+    },
+    {
+      "group": "edit",
+      "id": "tied",
+      "title": "入力Embeddingと出力層の重み共有を確認する",
+      "requires": [
+        "load"
+      ],
+      "lesson": "model-editing",
+      "note": "改造の前に、モデルが同じParameterを使っているか調べます。",
+      "code": "embedding = model.get_input_embeddings().weight\nlm_head = model.get_output_embeddings().weight\nprint(embedding is lm_head)",
+      "aliases": "weight tying tied weights"
+    },
+    {
+      "group": "measure",
+      "id": "quant-error",
+      "title": "量子化前後の候補スコアを比較する",
+      "requires": [
+        "quantize",
+        "logits",
+        "input",
+        "load"
+      ],
+      "lesson": "quantization",
+      "note": "同じ入力の末尾位置で平均絶対差と最有力Tokenの一致を測ります。",
+      "code": "device = quantized.get_input_embeddings().weight.device\nbatch = {k: t.to(device) for k, t in inputs.items()}\nwith torch.no_grad():\n    candidate = quantized(**batch).logits[:, -1].float().cpu()\nbaseline = logits.float().cpu()\nprint((candidate - baseline).abs().mean().item())\nprint(candidate.argmax(-1) == baseline.argmax(-1))",
+      "aliases": "4bit NF4 精度 誤差 品質"
+    },
+    {
+      "group": "train",
+      "id": "split",
+      "title": "データを学習用と評価用に分割する",
+      "requires": [
+        "load"
+      ],
+      "lesson": "data-evaluation",
+      "note": "独立した4文の例です。同じ原文から作った断片がある場合は原文単位で分けます。",
+      "code": "texts = [\"今日は晴れです。\", \"春に花が咲く。\", \"空は青い。\", \"冬の夜は長い。\"]\nrng = torch.Generator().manual_seed(42)\norder = torch.randperm(len(texts), generator=rng).tolist()\ntrain_texts = [texts[i] for i in order[:-1]]\neval_texts = [texts[order[-1]]]",
+      "aliases": "dataset train validation seed 未使用データ"
+    },
+    {
+      "group": "measure",
+      "id": "heldout",
+      "title": "評価文全体でperplexityを測る",
+      "requires": [
+        "load",
+        "split"
+      ],
+      "lesson": "evaluation",
+      "note": "各文の長さを考慮し、予測対象Tokenあたりの平均損失を求めます。各文は文脈長以内で、集合に予測対象が1個以上必要です。",
+      "code": "import math\nmodel.eval()\ntotal_loss, count = 0.0, 0\nwith torch.no_grad():\n    for text in eval_texts:\n        ids = tokenizer(text, return_tensors=\"pt\").input_ids.to(model.device)\n        n = ids.size(1) - 1\n        if n > 0:\n            total_loss += model(input_ids=ids, labels=ids).loss.item() * n\n            count += n\nprint(math.exp(total_loss / count))",
+      "aliases": "validation loss コーパス 困惑度"
+    },
+    {
+      "group": "train",
+      "id": "train-adapter",
+      "title": "LoRAの重みを1ステップ学習する",
+      "requires": [
+        "lora",
+        "labels",
+        "load"
+      ],
+      "lesson": "lora",
+      "note": "アダプターを取り付けたモデルに学習バッチを渡し、更新対象の重みだけを変更します。",
+      "code": "adapter_model.train()\nparams = [p for p in adapter_model.parameters() if p.requires_grad]\noptimizer = torch.optim.AdamW(params, lr=1e-4)\noptimizer.zero_grad(set_to_none=True)\nloss = adapter_model(**inputs, labels=labels, use_cache=False).loss\nloss.backward()\noptimizer.step()",
+      "aliases": "peft optimizer fine-tuning 更新"
+    },
+    {
+      "group": "edit",
+      "id": "ablate-mlp",
+      "title": "特定層のMLP出力をゼロにして影響を測る",
+      "requires": [
+        "load",
+        "input",
+        "logits"
+      ],
+      "lesson": "model-editing",
+      "note": "評価モードで同じ入力を使い、Layer 0のMLP分岐だけを一時的に無効化します。残差経路は通ります。",
+      "code": "mlp = model.model.layers[0].mlp\nhandle = mlp.register_forward_hook(lambda module, args, output: torch.zeros_like(output))\ntry:\n    with torch.no_grad():\n        ablated = model(**inputs).logits[:, -1]\nfinally:\n    handle.remove()\nprint((ablated.float() - logits.float()).abs().mean().item())",
+      "aliases": "ablation アブレーション 無効化 フック"
+    },
+    {
+      "group": "observe",
+      "id": "final-norm",
+      "title": "最終層と最終RMSNormの変化を分けて測る",
+      "requires": [
+        "hook",
+        "hidden"
+      ],
+      "lesson": "decoder-stack",
+      "note": "Qwen3で、最終Decoder Layerの入力・出力・最終正規化後の3地点を比較します。",
+      "code": "last_input = hidden_states[-2].float()\nlast_output = before_norm.float()\nnormalized = hidden_states[-1].float()\nprint((last_output - last_input).abs().mean().item())\nprint((normalized - last_output).abs().mean().item())",
+      "aliases": "final norm hidden state 最終正規化"
     }
   ]
 }

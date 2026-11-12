@@ -1,5 +1,35 @@
 {
   "variables": {
+    "q": {
+      "name": "q",
+      "source": "qkv",
+      "description": "Layer 0のHead分割・正規化後、回転前のQ。"
+    },
+    "k": {
+      "name": "k",
+      "source": "qkv",
+      "description": "同じ入力から得た回転前のK。"
+    },
+    "out": {
+      "name": "out",
+      "source": "weights",
+      "description": "output_attentions=Trueで取得したForward出力。"
+    },
+    "quantized": {
+      "name": "quantized",
+      "source": "quantize",
+      "description": "同じモデル版から4bitで読み込んだ比較先。"
+    },
+    "eval_texts": {
+      "name": "eval_texts",
+      "source": "split",
+      "description": "学習に使わなかった評価文のリスト。"
+    },
+    "before_norm": {
+      "name": "before_norm",
+      "source": "hook",
+      "description": "同じ入力の最終RMSNorm直前にHookで保存したTensor。"
+    },
     "torch": {
       "name": "torch",
       "description": "import torch 済みのPyTorch。",
@@ -97,6 +127,393 @@
     }
   },
   "guides": {
+    "tensor-info": {
+      "needs": [
+        "inputs"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "入力のID列を取り出します。"
+        },
+        {
+          "lines": 1,
+          "note": "各軸の長さ、数値型、配置先を確認します。"
+        },
+        {
+          "lines": 1,
+          "note": "要素数に1要素のバイト数を掛けます。"
+        }
+      ]
+    },
+    "lookup": {
+      "needs": [
+        "tokenizer"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "入力をこのTokenizerの内部Token列に変えます。"
+        },
+        {
+          "lines": 1,
+          "note": "追加分を含む対応表を取得します。"
+        },
+        {
+          "lines": 1,
+          "note": "元の順序で表記とIDを対にします。"
+        }
+      ]
+    },
+    "qkv": {
+      "needs": [
+        "model",
+        "torch",
+        "hidden_states"
+      ],
+      "steps": [
+        {
+          "lines": 2,
+          "note": "最初の層とそのAttentionを選びます。"
+        },
+        {
+          "lines": 1,
+          "note": "観察用に勾配の記録を止めます。"
+        },
+        {
+          "lines": 1,
+          "note": "Embedding直後の各位置の表現を正規化します。"
+        },
+        {
+          "lines": 1,
+          "note": "バッチとToken位置を保ち、射影幅からHead数を推定します。"
+        },
+        {
+          "lines": 1,
+          "note": "Qへ射影してHeadごとに正規化し、Head軸を2番目へ移します。"
+        },
+        {
+          "lines": 1,
+          "note": "Kも同様に変形します。Qwen3ではKV側のHead数を使います。"
+        },
+        {
+          "lines": 1,
+          "note": "Vは射影後に軸を並べ替えます。"
+        }
+      ]
+    },
+    "rope-mask": {
+      "needs": [
+        "model",
+        "torch",
+        "q",
+        "k"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "Qwen3実装の回転関数を使います。"
+        },
+        {
+          "lines": 1,
+          "note": "先頭を0とするToken位置を作ります。"
+        },
+        {
+          "lines": 2,
+          "note": "位置ごとの回転係数を求め、QとKに適用します。"
+        },
+        {
+          "lines": 1,
+          "note": "Q Head 0と共有KV Head 0の内積を、Head幅の平方根で割ります。"
+        },
+        {
+          "lines": 1,
+          "note": "未来のKey位置を示す上三角のマスクを作ります。"
+        },
+        {
+          "lines": 1,
+          "note": "未来のスコアを除外し、各行の合計が1になる参照割合を得ます。"
+        }
+      ]
+    },
+    "heatmap": {
+      "needs": [
+        "out",
+        "inputs",
+        "tokenizer"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "描画モジュールを用意します。"
+        },
+        {
+          "lines": 1,
+          "note": "すべてのQ Headから末尾Queryの行を取り出します。"
+        },
+        {
+          "lines": 2,
+          "note": "参照割合0〜1を共通の色範囲で表示します。"
+        },
+        {
+          "lines": 2,
+          "note": "列の下に対応する内部Token表記を付けます。"
+        },
+        {
+          "lines": 3,
+          "note": "軸名と割合の目盛りを添えて表示します。"
+        }
+      ]
+    },
+    "mlp": {
+      "needs": [
+        "model",
+        "torch",
+        "hidden_states"
+      ],
+      "steps": [
+        {
+          "lines": 2,
+          "note": "単体比較用の入力としてEmbedding直後の表現を使います。"
+        },
+        {
+          "lines": 1,
+          "note": "推論用の計算範囲を開始します。"
+        },
+        {
+          "lines": 1,
+          "note": "gate側にSiLUを適用し、up側と要素ごとに掛けます。"
+        },
+        {
+          "lines": 1,
+          "note": "中間表現をモデルの幅に戻します。"
+        },
+        {
+          "lines": 1,
+          "note": "モジュールに同じ入力を渡した結果と照合します。"
+        }
+      ]
+    },
+    "cache-shape": {
+      "needs": [
+        "model",
+        "torch",
+        "inputs"
+      ],
+      "steps": [
+        {
+          "lines": 2,
+          "note": "入力文を通して各層のCacheを取得します。"
+        },
+        {
+          "lines": 1,
+          "note": "保持している位置の数を表示します。"
+        },
+        {
+          "lines": 2,
+          "note": "各層のKとVについて、バッチ・KV Head・位置・成分の順に寸法を表示します。"
+        }
+      ]
+    },
+    "top-p": {
+      "needs": [
+        "model",
+        "inputs",
+        "tokenizer"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "各ステップで上位20件と累積確率0.9の条件を適用します。"
+        },
+        {
+          "lines": 1,
+          "note": "入力部分を除いて生成IDだけを残します。"
+        },
+        {
+          "lines": 1,
+          "note": "生成結果を文ごとに復号します。"
+        }
+      ]
+    },
+    "tied": {
+      "needs": [
+        "model"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "入力側の語彙表を参照します。"
+        },
+        {
+          "lines": 1,
+          "note": "出力側の射影重みを参照します。"
+        },
+        {
+          "lines": 1,
+          "note": "同じParameterなら一方への直接編集が両方に影響します。"
+        }
+      ]
+    },
+    "quant-error": {
+      "needs": [
+        "quantized",
+        "logits",
+        "inputs",
+        "torch"
+      ],
+      "steps": [
+        {
+          "lines": 2,
+          "note": "同じIDとマスクを量子化モデルの入力先に配置します。"
+        },
+        {
+          "lines": 2,
+          "note": "量子化後の末尾スコアをfloat32で取得します。"
+        },
+        {
+          "lines": 1,
+          "note": "元モデルのスコアを同じ型と配置にそろえます。"
+        },
+        {
+          "lines": 2,
+          "note": "全候補の平均絶対差と、各文の最大候補が一致したかを表示します。"
+        }
+      ]
+    },
+    "split": {
+      "needs": [
+        "torch"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "各文を1サンプルとして用意します。"
+        },
+        {
+          "lines": 2,
+          "note": "専用の乱数生成器で分割を再現できるようにします。"
+        },
+        {
+          "lines": 2,
+          "note": "3文を学習用、残りの1文を評価専用にします。"
+        }
+      ]
+    },
+    "heldout": {
+      "needs": [
+        "model",
+        "tokenizer",
+        "torch",
+        "eval_texts"
+      ],
+      "steps": [
+        {
+          "lines": 2,
+          "note": "評価モードに切り替えます。"
+        },
+        {
+          "lines": 1,
+          "note": "損失と予測数を初期化します。"
+        },
+        {
+          "lines": 2,
+          "note": "未使用の文を順に評価します。"
+        },
+        {
+          "lines": 2,
+          "note": "先頭Tokenを除いた個数が予測対象です。"
+        },
+        {
+          "lines": 3,
+          "note": "平均損失を文の合計に戻し、予測数とともに加算します。"
+        },
+        {
+          "lines": 1,
+          "note": "全対象の平均損失を指数に戻します。"
+        }
+      ]
+    },
+    "train-adapter": {
+      "needs": [
+        "adapter_model",
+        "trainingInputs",
+        "labels",
+        "torch"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "アダプターを含めて学習モードにします。"
+        },
+        {
+          "lines": 2,
+          "note": "勾配が有効なパラメーターだけをAdamWに渡します。"
+        },
+        {
+          "lines": 1,
+          "note": "以前の勾配を消します。"
+        },
+        {
+          "lines": 2,
+          "note": "正解IDに対する損失を計算し、アダプターへ逆伝播します。"
+        },
+        {
+          "lines": 1,
+          "note": "登録したパラメーターを1回更新します。"
+        }
+      ]
+    },
+    "ablate-mlp": {
+      "needs": [
+        "model",
+        "inputs",
+        "torch",
+        "logits"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "介入する層のMLPを選びます。"
+        },
+        {
+          "lines": 1,
+          "note": "出力を同じ形・型・配置のゼロTensorに差し替えます。"
+        },
+        {
+          "lines": 3,
+          "note": "介入した状態の末尾スコアを取得します。"
+        },
+        {
+          "lines": 2,
+          "note": "推論の成否によらずHookを外します。"
+        },
+        {
+          "lines": 1,
+          "note": "元のスコアとの差を同じ候補同士で計算します。"
+        }
+      ]
+    },
+    "final-norm": {
+      "needs": [
+        "before_norm",
+        "hidden_states"
+      ],
+      "steps": [
+        {
+          "lines": 2,
+          "note": "最終層に入る前と、最終Normに入る前の値をそろえます。"
+        },
+        {
+          "lines": 1,
+          "note": "最終Normを通った後の値を取得します。"
+        },
+        {
+          "lines": 2,
+          "note": "層と正規化がそれぞれ生んだ平均絶対変化量を表示します。"
+        }
+      ]
+    },
     "load": {
       "needs": [],
       "steps": [
