@@ -3,26 +3,72 @@ import SiteLayout from '../../layouts/SiteLayout.astro';
 import catalog from '../../data/recipes.json';
 import { withBase } from '../../lib/paths';
 import { Code } from 'astro:components';
+import { getEntry } from 'astro:content';
+import guides from '../../data/recipe-guides.json';
 export function getStaticPaths() {
   return catalog.recipes.map(recipe => ({ params: { id: recipe.id }, props: { recipe } }));
 }
 const { recipe } = Astro.props;
 const group = catalog.groups.find(g => g.id === recipe.group)!;
-const prerequisites = recipe.requires.map(id => catalog.recipes.find(r => r.id === id)!);
+const guide = guides.guides[recipe.id as keyof typeof guides.guides];
+const preparations = new Map<string, { name: string; description: string }[]>();
+for (const key of guide.needs) {
+  const variable = guides.variables[key as keyof typeof guides.variables];
+  const entries = preparations.get(variable.source) ?? [];
+  entries.push(variable);
+  preparations.set(variable.source, entries);
+}
+const setupNotes: Record<string,string> = {
+  load: 'PyTorch・Transformersと、Qwen3-0.6Bの重みを読み込める環境。',
+  tiny: 'PyTorchとTransformersをインストールしたPython環境。',
+  lora: '追加ライブラリ：peft。',
+  adapter: '追加ライブラリ：peft。ベースモデルはアダプターの作成時と同じものを用意します。',
+  quantize: '対応GPUと、PyTorch・Transformers・bitsandbytes・accelerate。',
+  memory: '計測するモデルと入力は同じCUDAデバイスに配置します。',
+};
+const lines = recipe.code.split('\n').filter(line => line.trim());
+let offset = 0;
+const steps = guide.steps.map(({ lines: count, note }) => {
+  const code = lines.slice(offset, offset + count).join('\n');
+  offset += count;
+  return { code, note };
+});
+if (offset !== lines.length) throw new Error(`解説とコードの行数が一致しません: ${recipe.id}`);
+const lesson = await getEntry('lessons', recipe.lesson);
+if (!lesson) throw new Error(`教材が見つかりません: ${recipe.lesson}`);
 ---
 <SiteLayout title={recipe.title} description={recipe.note}>
   <a href={withBase(`/recipes/#${group.id}`)}>← {group.title}</a>
   <header class="page-header"><h1>{recipe.title}</h1></header>
-  {prerequisites.length > 0 && <div class="prereqs"><strong>先に用意するコード</strong>
-    {prerequisites.map(r => <a href={withBase(`/recipes/${r.id}/`)}>{r.title}</a>)}
-  </div>}
+  <section class="prereqs prose" aria-label="事前準備">
+    <h2>先に用意するもの</h2>
+    {setupNotes[recipe.id] && <p>{setupNotes[recipe.id]}</p>}
+    {Array.from(preparations, ([id, variables]) => <div class="prep">
+      <ul>{variables.map(v => <li><code>{v.name}</code>　{v.description}</li>)}</ul>
+      <a href={withBase(`/recipes/${id}/`)}>{catalog.recipes.find(r => r.id === id)!.title}</a>
+    </div>)}
+  </section>
   <Code code={recipe.code} lang="python" theme="github-dark" />
   <p>{recipe.note}</p>
-  <a href={withBase(`/learn/${recipe.lesson}/`)}>関連する教材を読む →</a>
+  <div class="prose">
+    <details class="walkthrough">
+      <summary>コードを1行ずつ読む</summary>
+      <ol>{steps.map(step => <li><code>{step.code}</code><p>{step.note}</p></li>)}</ol>
+    </details>
+    <h2>関連する教材</h2>
+    <p><a href={withBase(`/learn/${recipe.lesson}/`)}>{lesson.data.title}</a></p>
+  </div>
 </SiteLayout>
 <style>
-  .prereqs { display:flex; flex-wrap:wrap; gap:.4rem 1rem; margin-bottom:1rem; font-size:.9rem }
-  .prereqs strong { color:var(--muted) }
+  .prereqs { padding:.85rem 1rem; border-left:2px solid var(--accent); background:var(--surface); font-size:.9rem }
+  .prereqs h2 { font-size:1rem; margin:0 0 .35rem; padding:0; border:0 }
+  .prereqs p, .prep ul { margin:.35rem 0 }
+  .prep ul { list-style:none; padding:0 }
+  .prep + .prep { border-top:1px solid var(--line); margin-top:.65rem; padding-top:.45rem }
+  .walkthrough ol { padding-left:1.8rem }
+  .walkthrough li { padding:.4rem 0 }
+  .walkthrough li > code { display:block; white-space:pre-wrap; overflow-wrap:anywhere }
+  .walkthrough li > p { margin:.4rem 0 }
   p { margin:1.25rem 0; line-height:1.8 }
   :global(pre.astro-code) { position:relative; overflow:auto; max-width:100%; padding:2.6rem 1rem 1rem; border-radius:var(--radius) }
 </style>

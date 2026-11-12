@@ -14,6 +14,12 @@ for (const width of [390, 1280]) {
     await query.fill('hidden_state');
     await detail.click();
     await expect(page).toHaveURL(/\/recipes\/last-vector\/$/);
+    await expect(page.getByRole('region', { name: '事前準備' })).toContainText('hidden_states');
+    const guide = page.locator('details.walkthrough');
+    await expect(guide.locator('ol')).toBeHidden();
+    await guide.locator('summary').click();
+    await expect(guide.locator('ol')).toContainText('バッチ0、末尾位置');
+    await expect(page.locator('a[href$="/learn/decoder-stack/"]').last()).toBeVisible();
     const code = await page.locator('pre code').innerText();
     await page.getByRole('button', { name: 'このコードをコピー' }).click();
     const copied = await page.evaluate(() => navigator.clipboard.readText());

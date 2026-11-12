@@ -1,0 +1,1182 @@
+{
+  "variables": {
+    "torch": {
+      "name": "torch",
+      "description": "import torch 済みのPyTorch。",
+      "source": "load"
+    },
+    "model": {
+      "name": "model",
+      "description": "入力と同じデバイスに配置したQwen3の因果言語モデル。",
+      "source": "load"
+    },
+    "tokenizer": {
+      "name": "tokenizer",
+      "description": "このモデルと同じ語彙・特殊Token設定を使うTokenizer。",
+      "source": "load"
+    },
+    "model_id": {
+      "name": "model_id",
+      "description": "ベースモデルの識別子。",
+      "source": "load"
+    },
+    "AutoModelForCausalLM": {
+      "name": "AutoModelForCausalLM",
+      "description": "因果言語モデルを読み込むクラス。",
+      "source": "load"
+    },
+    "AutoTokenizer": {
+      "name": "AutoTokenizer",
+      "description": "保存したTokenizerを読み戻すクラス。",
+      "source": "load"
+    },
+    "inputs": {
+      "name": "inputs",
+      "description": "1文をToken化した入力。input_idsとattention_maskの形は [1, Token位置数]。",
+      "source": "input"
+    },
+    "hidden_states": {
+      "name": "hidden_states",
+      "description": "同じ文のForwardで得た各段階のTensor列。各Tensorは [バッチ, Token位置, 表現成分]。",
+      "source": "hidden"
+    },
+    "logits": {
+      "name": "logits",
+      "description": "末尾位置から次Tokenを予測したスコア。形は [バッチ, 語彙候補数]。",
+      "source": "logits"
+    },
+    "row": {
+      "name": "row",
+      "description": "同じ文・Layer 0・Q Head 0の末尾Queryから各Key位置への参照割合。",
+      "source": "weights"
+    },
+    "layer": {
+      "name": "layer",
+      "description": "Qwen3の最初のDecoder Layer。",
+      "source": "value"
+    },
+    "width": {
+      "name": "width",
+      "description": "1 Headあたりの成分数。",
+      "source": "value"
+    },
+    "head_output": {
+      "name": "head_output",
+      "description": "末尾QueryでVを加重平均したHead 0のベクトル。",
+      "source": "value"
+    },
+    "changed_logits": {
+      "name": "changed_logits",
+      "description": "同じ入力で活性化関数を変更したときの全位置のスコア。",
+      "source": "swap"
+    },
+    "trainingInputs": {
+      "name": "inputs",
+      "description": "右paddingした学習バッチ。各Tensorの形は [バッチ, Token位置]。",
+      "source": "labels"
+    },
+    "labels": {
+      "name": "labels",
+      "description": "入力と同じ形の正解ID。損失から除く位置は -100。",
+      "source": "labels"
+    },
+    "optimizer": {
+      "name": "optimizer",
+      "description": "対象パラメーターで更新を行ったAdamW。",
+      "source": "step"
+    },
+    "trained": {
+      "name": "model",
+      "description": "backward後の勾配を保持したモデル。",
+      "source": "step"
+    },
+    "adapter_model": {
+      "name": "adapter_model",
+      "description": "ベースモデルにLoRAを取り付けた、保存対象のモデル。",
+      "source": "lora"
+    }
+  },
+  "guides": {
+    "load": {
+      "needs": [],
+      "steps": [
+        {
+          "lines": 2,
+          "note": "PyTorchと、モデル・Tokenizerを配布元から読み込むクラスを用意します。"
+        },
+        {
+          "lines": 1,
+          "note": "モデルとTokenizerで共有する配布元の名前を指定します。"
+        },
+        {
+          "lines": 1,
+          "note": "語彙と分割規則を読み込みます。"
+        },
+        {
+          "lines": 1,
+          "note": "CUDAを利用できる場合はGPU、それ以外はCPUを選びます。"
+        },
+        {
+          "lines": 1,
+          "note": "重みを読み込み、Attentionの割合を取り出せるeager実装を指定します。"
+        },
+        {
+          "lines": 1,
+          "note": "モデルを選んだデバイスへ移し、推論モードの層動作に切り替えます。"
+        }
+      ]
+    },
+    "input": {
+      "needs": [
+        "model",
+        "tokenizer"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "推論したい文章を用意します。"
+        },
+        {
+          "lines": 1,
+          "note": "文章をIDとマスクのPyTorch Tensorに変換し、両方をモデルと同じデバイスへ移します。"
+        }
+      ]
+    },
+    "chat": {
+      "needs": [
+        "model",
+        "tokenizer"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "役割と発話内容を一組にして、会話を順番に並べます。"
+        },
+        {
+          "lines": 1,
+          "note": "モデル固有の会話書式を適用し、最後にアシスタントの応答開始位置を加えます。"
+        },
+        {
+          "lines": 1,
+          "note": "書式に含まれる特殊Tokenを二重に追加せずID化し、モデルに渡せる場所へ移します。"
+        }
+      ]
+    },
+    "batch": {
+      "needs": [
+        "model",
+        "tokenizer"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "短い文章の左側にpaddingを置く設定にします。"
+        },
+        {
+          "lines": 1,
+          "note": "2文を同じ長さにそろえ、IDと実Token位置を示すマスクをまとめて配置します。"
+        }
+      ]
+    },
+    "encode": {
+      "needs": [
+        "inputs",
+        "tokenizer"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "先頭の文のID列をPythonのリストにします。"
+        },
+        {
+          "lines": 1,
+          "note": "各IDをTokenizer内部のToken表記に変換し、同じ位置のIDと対にします。"
+        }
+      ]
+    },
+    "decode": {
+      "needs": [
+        "inputs",
+        "tokenizer"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "バッチの先頭のID列をまとめて復号し、特殊Tokenを除いた文字列を返します。"
+        }
+      ]
+    },
+    "vocab": {
+      "needs": [
+        "tokenizer"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "基本語彙の件数と、追加Tokenを含む件数を並べます。"
+        },
+        {
+          "lines": 1,
+          "note": "追加されたTokenの表記とIDの対応を辞書で表示します。"
+        }
+      ]
+    },
+    "axes": {
+      "needs": [
+        "inputs"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "バッチ0のID列を取り出すと、Token位置だけの1次元になります。"
+        },
+        {
+          "lines": 1,
+          "note": "先頭に長さ1の軸を作り、1文のバッチに戻します。"
+        },
+        {
+          "lines": 1,
+          "note": "バッチ軸とToken位置軸を交換し、各位置を行として扱えるようにします。"
+        }
+      ]
+    },
+    "embedding": {
+      "needs": [
+        "torch",
+        "model",
+        "inputs"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "推論用に勾配の記録を止めます。"
+        },
+        {
+          "lines": 1,
+          "note": "入力Embedding層にIDを渡し、各IDに対応する表の行を取り出します。"
+        }
+      ]
+    },
+    "hidden": {
+      "needs": [
+        "torch",
+        "model",
+        "inputs"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "観察中の計算を勾配に記録しません。"
+        },
+        {
+          "lines": 1,
+          "note": "IDとマスクを展開してForwardを実行し、途中の表現を返すよう指定します。KV Cacheは使いません。"
+        },
+        {
+          "lines": 1,
+          "note": "出力から層ごとのTensor列だけを取り出します。"
+        }
+      ]
+    },
+    "last-vector": {
+      "needs": [
+        "hidden_states"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "[1]は最初の層の出力です。続く添字でバッチ0、末尾位置、その位置の全成分を選びます。"
+        },
+        {
+          "lines": 1,
+          "note": "残ったベクトルの長さがモデルの表現幅と一致するか確認します。"
+        }
+      ]
+    },
+    "layer-diff": {
+      "needs": [
+        "hidden_states"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "Layer 0の出力と入力をfloat32で引き算し、絶対値の平均を成分軸だけで取ります。バッチとToken位置は残ります。"
+        }
+      ]
+    },
+    "hook": {
+      "needs": [
+        "model",
+        "inputs",
+        "torch"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "Hookが受け取った値を入れるリストを用意します。"
+        },
+        {
+          "lines": 1,
+          "note": "層の実行直前に呼ばれる関数を定義します。"
+        },
+        {
+          "lines": 1,
+          "note": "先頭の入力Tensorを計算グラフから切り離し、その時点の値をコピーします。"
+        },
+        {
+          "lines": 1,
+          "note": "最終Normに関数を登録し、解除に使うハンドルを受け取ります。"
+        },
+        {
+          "lines": 1,
+          "note": "以降の処理が失敗しても登録を解除できるようにします。"
+        },
+        {
+          "lines": 1,
+          "note": "Forwardの勾配記録を止めます。"
+        },
+        {
+          "lines": 1,
+          "note": "入力をモデルに通すと、最終Normの直前で関数が実行されます。"
+        },
+        {
+          "lines": 1,
+          "note": "成否にかかわらず後処理へ進みます。"
+        },
+        {
+          "lines": 1,
+          "note": "登録を外し、以降の推論で値が追加されるのを防ぎます。"
+        },
+        {
+          "lines": 1,
+          "note": "保存された最初のTensorを取り出します。"
+        }
+      ]
+    },
+    "weights": {
+      "needs": [
+        "model",
+        "inputs",
+        "torch"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "観察用のForwardでは勾配を記録しません。"
+        },
+        {
+          "lines": 1,
+          "note": "Attentionの割合を各層から返すよう指定します。"
+        },
+        {
+          "lines": 1,
+          "note": "層0を選び、バッチ0・Q Head 0・最後のQueryについて、全Key位置の割合を取り出します。"
+        }
+      ]
+    },
+    "kv-head": {
+      "needs": [
+        "model"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "対応を調べたいQ Headの番号を指定します。番号は0始まりです。"
+        },
+        {
+          "lines": 1,
+          "note": "Q Head数をKV Head数で割り、同じK/Vを共有するQ Headの個数を求めます。"
+        },
+        {
+          "lines": 1,
+          "note": "Q Head番号を共有数で整数除算すると、対応するKV Head番号になります。"
+        }
+      ]
+    },
+    "value": {
+      "needs": [
+        "model",
+        "torch",
+        "hidden_states",
+        "row"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "最初のDecoder Layerを選びます。"
+        },
+        {
+          "lines": 1,
+          "note": "Vから1 Head分を切り出すために成分数を取得します。"
+        },
+        {
+          "lines": 1,
+          "note": "以降の再計算を勾配に記録しません。"
+        },
+        {
+          "lines": 1,
+          "note": "Embedding直後の表現に、この層のAttention前の正規化を適用します。"
+        },
+        {
+          "lines": 1,
+          "note": "Vへ射影し、バッチ0の全Tokenから最初のKV Headの成分を選びます。"
+        },
+        {
+          "lines": 1,
+          "note": "割合をVと同じ型にし、Token位置方向の加重和を求めます。"
+        }
+      ]
+    },
+    "project-head": {
+      "needs": [
+        "torch",
+        "layer",
+        "width",
+        "head_output"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "射影の寄与を勾配記録なしで計算します。"
+        },
+        {
+          "lines": 1,
+          "note": "o_projの出力行をすべて残し、入力列からHead 0の範囲を選びます。"
+        },
+        {
+          "lines": 1,
+          "note": "その部分行列とHead出力を掛け、モデルの表現幅における寄与を求めます。"
+        }
+      ]
+    },
+    "logits": {
+      "needs": [
+        "model",
+        "inputs",
+        "torch"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "このForwardの勾配記録を止めます。"
+        },
+        {
+          "lines": 1,
+          "note": "全位置の候補スコアから、各文の末尾位置だけを取り出します。最後の軸には全語彙候補が残ります。"
+        }
+      ]
+    },
+    "top": {
+      "needs": [
+        "logits",
+        "tokenizer"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "先頭の文を選んでfloat32に変換し、語彙方向のsoftmaxで確率にします。topkの値は確率、位置はToken IDです。"
+        },
+        {
+          "lines": 1,
+          "note": "IDと確率を同じ順位同士で組にし、上位から順に取り出します。"
+        },
+        {
+          "lines": 1,
+          "note": "候補ID、そのIDを復号した文字列、確率を1件ずつ表示します。"
+        }
+      ]
+    },
+    "sample": {
+      "needs": [
+        "logits",
+        "torch"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "抽選の温度を正の値で指定します。"
+        },
+        {
+          "lines": 1,
+          "note": "各候補のスコアを温度で割ってから、語彙方向のsoftmaxで各文の確率分布にします。"
+        },
+        {
+          "lines": 1,
+          "note": "各行の確率に従ってIDを1個選びます。結果の形は [バッチ, 1] です。"
+        }
+      ]
+    },
+    "generate": {
+      "needs": [
+        "model",
+        "inputs",
+        "tokenizer"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "各ステップで最もスコアの高い候補を選び、最大32 Tokenを追加します。"
+        },
+        {
+          "lines": 1,
+          "note": "返ったID列から入力の幅を切り落とし、各文の生成部分だけを文字列に戻します。"
+        }
+      ]
+    },
+    "stop": {
+      "needs": [
+        "model",
+        "inputs",
+        "tokenizer"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "「。」を停止文字列に指定します。Tokenizerで生成列との一致を判定し、最大64 Tokenまで生成します。"
+        }
+      ]
+    },
+    "cache": {
+      "needs": [
+        "model",
+        "inputs",
+        "torch"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "2回のForwardを勾配記録なしで実行します。"
+        },
+        {
+          "lines": 1,
+          "note": "全文を通し、各層のK/Vと候補スコアを受け取ります。"
+        },
+        {
+          "lines": 1,
+          "note": "末尾位置で最大の候補IDを選び、次の入力に必要な長さ1の軸を保ちます。"
+        },
+        {
+          "lines": 1,
+          "note": "新しいIDと以前のCacheを一緒に渡して、その位置の計算を進めます。"
+        },
+        {
+          "lines": 1,
+          "note": "追加したTokenの次に来る候補のスコアを取り出します。"
+        }
+      ]
+    },
+    "tiny": {
+      "needs": [],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "Qwen3の構成と因果言語モデルのクラスを読み込みます。"
+        },
+        {
+          "lines": 3,
+          "note": "語彙256、表現幅64、MLP幅128の2層モデルを設定します。4つのQ Headが2つのKV Headを共有し、各Headは16成分です。"
+        },
+        {
+          "lines": 1,
+          "note": "設定から新しい重みを初期化します。"
+        }
+      ]
+    },
+    "names": {
+      "needs": [
+        "model"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "各パラメーターを、モジュール階層を含む名前と組にしてたどります。"
+        },
+        {
+          "lines": 1,
+          "note": "最初のDecoder Layerに所属する名前だけを選びます。"
+        },
+        {
+          "lines": 1,
+          "note": "重みの名前と各軸の長さを表示します。"
+        }
+      ]
+    },
+    "edit-row": {
+      "needs": [
+        "model",
+        "inputs",
+        "torch"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "入力Embeddingの重み表を参照します。"
+        },
+        {
+          "lines": 1,
+          "note": "最初の文の先頭TokenのIDをPython整数にします。"
+        },
+        {
+          "lines": 1,
+          "note": "重みの直接編集を勾配計算から外します。"
+        },
+        {
+          "lines": 1,
+          "note": "対象行の値を独立したTensorにコピーします。"
+        },
+        {
+          "lines": 1,
+          "note": "復元を保証する範囲を開始します。"
+        },
+        {
+          "lines": 1,
+          "note": "対象のTokenベクトルをその場でゼロにします。"
+        },
+        {
+          "lines": 1,
+          "note": "変更した行と元の値の差をノルムで確認します。"
+        },
+        {
+          "lines": 1,
+          "note": "途中の処理が失敗しても復元へ進みます。"
+        },
+        {
+          "lines": 1,
+          "note": "退避した値を同じ行へ書き戻します。"
+        }
+      ]
+    },
+    "swap": {
+      "needs": [
+        "model",
+        "inputs",
+        "torch"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "最初のDecoder LayerのMLPを参照します。"
+        },
+        {
+          "lines": 1,
+          "note": "現在の活性化関数を復元用に保持します。"
+        },
+        {
+          "lines": 1,
+          "note": "一時的に関数を変更する範囲を開始します。"
+        },
+        {
+          "lines": 1,
+          "note": "このMLPの活性化関数をReLUに差し替えます。"
+        },
+        {
+          "lines": 1,
+          "note": "比較用の推論で勾配を記録しません。"
+        },
+        {
+          "lines": 1,
+          "note": "変更後のモデルで全位置の候補スコアを取得します。"
+        },
+        {
+          "lines": 1,
+          "note": "成否にかかわらず復元へ進みます。"
+        },
+        {
+          "lines": 1,
+          "note": "同じMLPに元の活性化関数を戻します。"
+        }
+      ]
+    },
+    "extend": {
+      "needs": [
+        "tokenizer",
+        "model",
+        "torch"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "新しい文字列をTokenizerに登録します。"
+        },
+        {
+          "lines": 1,
+          "note": "現在の入力Embeddingに何行あるか調べます。"
+        },
+        {
+          "lines": 1,
+          "note": "追加後の語彙数が重み表の行数を上回るか確かめます。"
+        },
+        {
+          "lines": 1,
+          "note": "不足するときだけ表を拡張します。"
+        },
+        {
+          "lines": 1,
+          "note": "追加したTokenだけをID化し、余分な特殊Tokenが付くのを防ぎます。"
+        },
+        {
+          "lines": 1,
+          "note": "新しいIDの読み出しでは勾配を記録しません。"
+        },
+        {
+          "lines": 1,
+          "note": "IDをモデルに合わせて配置し、対応するEmbedding行を取得します。"
+        }
+      ]
+    },
+    "labels": {
+      "needs": [
+        "tokenizer",
+        "model"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "学習用に短い文の右側をpaddingします。"
+        },
+        {
+          "lines": 2,
+          "note": "2文を同じ長さのIDとマスクにし、モデルと同じデバイスへ移します。"
+        },
+        {
+          "lines": 1,
+          "note": "入力IDをコピーして、正解ラベル用のTensorを作ります。"
+        },
+        {
+          "lines": 1,
+          "note": "マスクが0の位置を損失計算の無視値にします。"
+        }
+      ]
+    },
+    "answer-labels": {
+      "needs": [
+        "tokenizer",
+        "model",
+        "torch"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "質問をユーザー発話として用意します。"
+        },
+        {
+          "lines": 2,
+          "note": "Qwen3の思考モードを無効にし、回答を書き始める位置まで会話を整形します。"
+        },
+        {
+          "lines": 1,
+          "note": "整形済みの質問部分を、特殊Tokenの重複を避けてID化します。"
+        },
+        {
+          "lines": 1,
+          "note": "回答をID化し、末尾に終了Tokenを足します。"
+        },
+        {
+          "lines": 1,
+          "note": "質問と回答をつなぎ、1文分の入力Tensorにします。"
+        },
+        {
+          "lines": 1,
+          "note": "同じID列から正解ラベルのコピーを作ります。"
+        },
+        {
+          "lines": 1,
+          "note": "質問部分を -100 にして、回答と終了Tokenにだけ損失をかけます。"
+        }
+      ]
+    },
+    "freeze": {
+      "needs": [
+        "model"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "モデル全体の勾配計算を無効にします。"
+        },
+        {
+          "lines": 1,
+          "note": "入力Embeddingのパラメーターだけ勾配計算を有効にします。"
+        },
+        {
+          "lines": 1,
+          "note": "更新対象となった名前を列挙して範囲を確認します。"
+        }
+      ]
+    },
+    "step": {
+      "needs": [
+        "model",
+        "torch",
+        "trainingInputs",
+        "labels"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "層の動作を学習モードに切り替えます。"
+        },
+        {
+          "lines": 1,
+          "note": "勾配を計算する重みを選び、学習率を指定してAdamWを作ります。"
+        },
+        {
+          "lines": 1,
+          "note": "以前の勾配を消し、この更新の計算を開始します。"
+        },
+        {
+          "lines": 1,
+          "note": "入力と正解IDを渡し、次Token予測の平均損失を取り出します。"
+        },
+        {
+          "lines": 1,
+          "note": "損失を逆伝播し、各対象パラメーターに勾配を蓄えます。"
+        },
+        {
+          "lines": 1,
+          "note": "勾配とAdamWの内部状態を使って重みを1回更新します。"
+        }
+      ]
+    },
+    "accumulate": {
+      "needs": [
+        "model",
+        "torch",
+        "trainingInputs",
+        "labels"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "モデルの重みに対するAdamWを用意します。"
+        },
+        {
+          "lines": 1,
+          "note": "モデルを学習モードにします。"
+        },
+        {
+          "lines": 1,
+          "note": "すべてのマイクロバッチを処理する前に一度だけ勾配を消します。"
+        },
+        {
+          "lines": 1,
+          "note": "入力バッチに含まれる文の数を調べます。"
+        },
+        {
+          "lines": 1,
+          "note": "バッチを1文ずつ処理します。"
+        },
+        {
+          "lines": 1,
+          "note": "IDとマスクから同じ行を切り出し、バッチ軸を残します。"
+        },
+        {
+          "lines": 1,
+          "note": "対応する正解ラベルを渡して、この文の平均損失を求めます。"
+        },
+        {
+          "lines": 1,
+          "note": "文の数で割って逆伝播し、各文の勾配を加算します。"
+        },
+        {
+          "lines": 1,
+          "note": "すべての文を処理したあと、重みを1回更新します。"
+        }
+      ]
+    },
+    "lora": {
+      "needs": [
+        "model"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "PEFTからLoRAの設定とモデルに適用する関数を読み込みます。"
+        },
+        {
+          "lines": 1,
+          "note": "追加する行列のランクを8、alphaを16とし、QとVの射影を対象に選びます。"
+        },
+        {
+          "lines": 1,
+          "note": "ベースモデルに学習可能なアダプターを取り付けます。"
+        },
+        {
+          "lines": 1,
+          "note": "全体のうち実際に更新するパラメーターの個数と割合を表示します。"
+        }
+      ]
+    },
+    "quantize": {
+      "needs": [],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "量子化設定と因果言語モデルのクラスを読み込みます。"
+        },
+        {
+          "lines": 1,
+          "note": "4bitで読み込むことと、量子化形式NF4を指定します。"
+        },
+        {
+          "lines": 2,
+          "note": "この設定でQwen3をロードし、モジュールの配置を自動で決定します。"
+        },
+        {
+          "lines": 1,
+          "note": "モデルのパラメーターとバッファーが使用するメモリをバイト単位で表示します。"
+        }
+      ]
+    },
+    "memory": {
+      "needs": [
+        "model",
+        "inputs",
+        "torch"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "モデルを置いたCUDAデバイスのピーク統計を現在の割当量から取り直します。"
+        },
+        {
+          "lines": 1,
+          "note": "推論専用のモードでForwardを実行します。"
+        },
+        {
+          "lines": 1,
+          "note": "入力を通し、出力を保持した状態で測ります。"
+        },
+        {
+          "lines": 1,
+          "note": "PyTorchのピーク割当量を取得し、バイトからMiBへ換算します。"
+        }
+      ]
+    },
+    "benchmark": {
+      "needs": [
+        "model",
+        "inputs",
+        "torch"
+      ],
+      "steps": [
+        {
+          "lines": 2,
+          "note": "経過時間を測る時計と中央値を求める関数を用意します。"
+        },
+        {
+          "lines": 1,
+          "note": "Cacheを無効・有効にした2条件で繰り返します。"
+        },
+        {
+          "lines": 1,
+          "note": "この条件の計測結果を入れるリストを作ります。"
+        },
+        {
+          "lines": 1,
+          "note": "初回のウォームアップを含めて4回実行します。"
+        },
+        {
+          "lines": 1,
+          "note": "CUDAで動かしているか確認します。"
+        },
+        {
+          "lines": 1,
+          "note": "以前のGPU処理の完了を待ちます。"
+        },
+        {
+          "lines": 1,
+          "note": "開始時刻を記録します。"
+        },
+        {
+          "lines": 1,
+          "note": "同じ入力から16 Tokenを貪欲生成し、Cache設定だけを切り替えます。"
+        },
+        {
+          "lines": 1,
+          "note": "GPUを使う場合は終了時にも同期します。"
+        },
+        {
+          "lines": 1,
+          "note": "生成に使ったGPU処理の完了を待ちます。"
+        },
+        {
+          "lines": 1,
+          "note": "開始から完了までの秒数を保存します。"
+        },
+        {
+          "lines": 1,
+          "note": "初回を除いた3回の中央値を設定とともに表示します。"
+        }
+      ]
+    },
+    "compare": {
+      "needs": [
+        "changed_logits",
+        "logits"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "変更後の末尾位置と変更前の同じ位置をfloat32で引き算します。入力と候補IDの並びをそろえて比較します。"
+        },
+        {
+          "lines": 1,
+          "note": "全候補の絶対差のうち、最大の値をPythonの数値として表示します。"
+        }
+      ]
+    },
+    "perplexity": {
+      "needs": [
+        "model",
+        "inputs",
+        "torch"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "評価モードでモデルを使います。"
+        },
+        {
+          "lines": 1,
+          "note": "評価文から勾配を計算しないようにします。"
+        },
+        {
+          "lines": 1,
+          "note": "入力IDを正解にも渡し、モデル内部で1位置ずらした次Token予測の平均損失を得ます。"
+        },
+        {
+          "lines": 1,
+          "note": "平均損失と、その指数を取ったperplexityを表示します。"
+        }
+      ]
+    },
+    "save": {
+      "needs": [
+        "model",
+        "tokenizer",
+        "AutoModelForCausalLM",
+        "AutoTokenizer"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "設定・重み・Tokenizerの保存先を決めます。"
+        },
+        {
+          "lines": 1,
+          "note": "モデルの設定と重みを書き出します。"
+        },
+        {
+          "lines": 1,
+          "note": "入力の分割規則と語彙も同じフォルダに保存します。"
+        },
+        {
+          "lines": 1,
+          "note": "そのフォルダからモデルを復元します。"
+        },
+        {
+          "lines": 1,
+          "note": "モデルに対応するTokenizerを同じ場所から復元します。"
+        }
+      ]
+    },
+    "adapter": {
+      "needs": [
+        "adapter_model",
+        "model_id",
+        "AutoModelForCausalLM"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "アダプターを読み戻すPEFTのクラスを用意します。"
+        },
+        {
+          "lines": 1,
+          "note": "LoRAの重みと設定を保存します。"
+        },
+        {
+          "lines": 1,
+          "note": "アダプター作成時と同じベースモデルを読み込みます。"
+        },
+        {
+          "lines": 1,
+          "note": "ベースモデルに保存したアダプターを取り付けます。"
+        }
+      ]
+    },
+    "resume": {
+      "needs": [
+        "model",
+        "optimizer",
+        "torch"
+      ],
+      "steps": [
+        {
+          "lines": 2,
+          "note": "完了した更新番号、モデルの重み、AdamWのモーメントなどを同じファイルに保存します。"
+        },
+        {
+          "lines": 1,
+          "note": "保存したTensorをモデルと同じデバイスに配置して読み込みます。"
+        },
+        {
+          "lines": 1,
+          "note": "対応するモデル構成に重みを復元します。"
+        },
+        {
+          "lines": 1,
+          "note": "同じパラメーター構成のoptimizerに学習状態を戻します。"
+        },
+        {
+          "lines": 1,
+          "note": "保存した更新番号の次から数え始めます。"
+        }
+      ]
+    },
+    "save-layer": {
+      "needs": [
+        "model",
+        "torch"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "保存したいLayer 0を選びます。"
+        },
+        {
+          "lines": 1,
+          "note": "この層のパラメーターと永続バッファーだけを保存します。"
+        },
+        {
+          "lines": 1,
+          "note": "重みをモデルに合わせたデバイスへ読み込みます。"
+        },
+        {
+          "lines": 1,
+          "note": "同じ構造の層に保存値を書き戻します。"
+        }
+      ]
+    },
+    "grad": {
+      "needs": [
+        "trained"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "各重みの名前とパラメーターをたどります。"
+        },
+        {
+          "lines": 1,
+          "note": "勾配Tensorが存在するものを選びます。"
+        },
+        {
+          "lines": 1,
+          "note": "勾配の大きさをノルムで表示します。0なら勾配Tensorはありますが値の大きさは0です。"
+        }
+      ]
+    }
+  }
+}
