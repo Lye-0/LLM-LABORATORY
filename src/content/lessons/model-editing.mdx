@@ -121,6 +121,24 @@ print("終了IDの設定:", model.generation_config.eos_token_id)
 
 </details>
 
+<details>
+<summary>提供元と実行の仕組みをコードから読む</summary>
+
+| コード | 担当するもの |
+|---|---|
+| tokenizer.apply_chat_template / tokenizer.decode | TransformersのTokenizerが、会話書式・文字列・IDを変換 |
+| model.generate | TransformersがForward、Token選択、Cache、終了条件を管理 |
+| model.eval / torch.inference_mode | PyTorchが層の動作モードと勾配記録を制御 |
+| mlp.act_fn | Qwen3MLPがForward中に呼び出す活性化Module |
+
+SiLU自体は汎用的な活性化関数で、PyTorchにも `torch.nn.SiLU()` があります。Qwen3のMLPはその計算をgate側で使う構造です。
+
+`do_sample=False` は生成設定、`torch.argmax()` は最大値の位置を返す演算です。1ビームの貪欲生成では最大の候補を選びますが、生成設定によるスコア調整が入ると、生のlogitsへ直接argmaxした結果とは異なる場合があります。
+
+`finally` 内でも通常のPythonと同じく、例外が起きた行で処理が中断します。復元の代入が成功した後に表示処理が失敗した場合、復元自体は完了しています。
+
+</details>
+
 ### 文章の変化をどう評価するか
 
 提供された実行結果では、通常の「以下のプロセスがあります」が、交換後は「以下のプロセスが考えられます」に変わっていました。最初に異なるTokenを選ぶと、それ以降は過去の生成Tokenも異なるため、文章全体の違いへ広がります。
