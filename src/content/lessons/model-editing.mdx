@@ -54,6 +54,81 @@ print(sum(p.numel() for p in layer.parameters() if p.requires_grad))
 
 同じ入力・出力shapeを持つ層を、別実装に置き換えるところから始めます。Residualへ戻るshapeが合っていても、数値のスケールや役割が違えば品質は変わります。Identityへの置換は、層を無効化するablationとして役立ちますが、改善を保証しません。
 
+## 活性化関数を交換して生成を比べる
+
+Qwen3-0.6BのLayer 27で、MLPの `act_fn` をSiLUからReLUへ交換します。MLPは、入力をgateとupへ射影し、gate側に活性化関数を適用してから両者を要素ごとに掛け、downで元の幅へ戻します。
+
+```text
+入力 [B,T,1024]
+  ├─ gate_proj → act_fn ─┐
+  └─ up_proj ───────────× → down_proj → [B,T,1024]
+                 [B,T,3072]
+```
+
+SiLUは各値にそのSigmoidを掛け、ReLUは負の値を0、正の値をそのまま返します。例えば入力が-1なら、SiLUは約-0.2689、ReLUは0です。その後up側と掛ける値が変わり、出力まで影響します。RMSNormは同じ位置の成分全体から尺度を計算しますが、これらの活性化関数は各成分に非線形変換を適用します。
+
+`mlp = model.model.layers[27].mlp` はモデル内部のインスタンスへの参照です。その属性にReLUのインスタンスを代入すると、その層を通るすべてのToken位置でReLUが使われます。Prefillの全文と、その後のDecodeで処理するTokenの両方が対象です。[Head Ablation](../attention-sink/)で末尾位置の特定Headだけを止めた実験から、介入範囲が変わります。
+
+### 同じチャット入力で比較する
+
+[モデルとTokenizerを読み込む](../../recipes/load/)の準備後、次を実行します。添付の実験と同じ質問・Layer・生成上限を使い、1ビームの貪欲生成を明示します。
+
+```python
+messages = [{"role": "user", "content": "雨が降る仕組みを簡単に説明してください。"}]
+prompt = tokenizer.apply_chat_template(
+    messages, tokenize=False, add_generation_prompt=True, enable_thinking=False,
+)
+inputs = tokenizer(prompt, add_special_tokens=False, return_tensors="pt").to(model.device)
+model.eval()
+
+def generate_ids():
+    with torch.inference_mode():
+        ids = model.generate(**inputs, max_new_tokens=500, do_sample=False, num_beams=1)
+    return ids[0, inputs["input_ids"].shape[1]:]
+
+original_ids = generate_ids()
+mlp = model.model.layers[27].mlp
+original_activation = mlp.act_fn
+try:
+    mlp.act_fn = torch.nn.ReLU()
+    modified_ids = generate_ids()
+finally:
+    mlp.act_fn = original_activation
+
+print(tokenizer.decode(original_ids, skip_special_tokens=True))
+print(tokenizer.decode(modified_ids, skip_special_tokens=True))
+assert mlp.act_fn is original_activation
+```
+
+同じ関数を2回呼び、その時点のモデルで生成します。各生成は同じ入力から新しく始まり、前の生成のCacheを渡しません。`finally` は途中で生成が失敗した場合にも、保持した元のModuleを再登録します。Notebookで次の実験を行うときも、復元後の状態から始められます。SiLUとReLUは学習可能な重みを持たないため、この交換ではoptimizerによる更新を行いません。
+
+<details>
+<summary>入力・生成結果・終了Tokenを区別する</summary>
+
+今回の `enable_thinking=False` では、空のthinkブロックを閉じるところまでが入力に含まれます。Tokenizerが返すのは質問と応答開始部分のIDで、回答はその後の `generate()` が末尾に追加します。`add_special_tokens=False` はテンプレートにある特殊Tokenを保ち、さらに自動付加する処理を止める指定です。
+
+`generate()` の返り値には入力と生成部分が含まれます。`inputs["input_ids"].shape[1]` で入力の幅を求め、その後ろだけを切り出します。生成部分を関数内でも呼び出し元でもprintすると、同じ回答が2回表示されます。
+
+`max_new_tokens=500` は新しく生成するToken数の上限です。設定されたEOSを選べば上限より前に終了します。終わり方を調べるときは、特殊Tokenを含めて末尾を表示します。
+
+```python
+print("生成Token数:", len(modified_ids))
+print("末尾:", repr(tokenizer.decode(modified_ids[-1:], skip_special_tokens=False)))
+print("終了IDの設定:", model.generation_config.eos_token_id)
+```
+
+上限に達したかだけで終了原因を決めず、末尾IDとEOS設定も確認します。1回のForwardを行う `model()` に対し、Transformersの `generate()` はForwardとToken選択を繰り返します。その内部のTensor計算はPyTorchが担います。
+
+</details>
+
+### 文章の変化をどう評価するか
+
+提供された実行結果では、通常の「以下のプロセスがあります」が、交換後は「以下のプロセスが考えられます」に変わっていました。最初に異なるTokenを選ぶと、それ以降は過去の生成Tokenも異なるため、文章全体の違いへ広がります。
+
+両方の回答に、体の乾燥を雨の原因とする不正確な説明が含まれていました。この比較で確認できるのは生成への影響で、性能の評価には[未使用データでの評価](../evaluation/)が必要です。固定した同じ入力に対するlogits比較と、自己回帰生成で変わっていく文章の比較を併用します。[短い活性化関数の差し替えコード](../../recipes/swap/)も利用できます。
+
+交換はメモリ上のモデルに対して有効です。SiLUとReLUの違いは重みTensorに記録されないため、state_dictだけではこの変更を再現できません。特定のLayerだけ変更した構造を保存・再利用する場合、読み込み後の同じ差し替え手順も必要です。
+
 ## Head・Norm・RoPEも変更対象になる
 
 重みの数値だけでなく、それを使う計算構造も研究対象です。Qwen3-0.6Bでは次の違いを分けて考えます。
