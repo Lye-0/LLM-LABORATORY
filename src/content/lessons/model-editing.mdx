@@ -147,6 +147,89 @@ SiLU自体は汎用的な活性化関数で、PyTorchにも `torch.nn.SiLU()` �
 
 交換はメモリ上のモデルに対して有効です。SiLUとReLUの違いは重みTensorに記録されないため、state_dictだけではこの変更を再現できません。特定のLayerだけ変更した構造を保存・再利用する場合、読み込み後の同じ差し替え手順も必要です。
 
+## 自作クラスのforwardをモデルに組み込む
+
+活性化関数の交換に続き、Layer 27のMLPを `CustomMLP` に置き換えます。まず元と同じ計算を自分で書き、同じ入力のlogitsが一致することを確かめます。再現できた実装を基準にすると、その後の計算変更の影響を追えます。
+
+```python
+class CustomMLP(torch.nn.Module):
+    def __init__(self, original_mlp):
+        super().__init__()
+        self.gate_proj = original_mlp.gate_proj
+        self.up_proj = original_mlp.up_proj
+        self.down_proj = original_mlp.down_proj
+        self.act_fn = original_mlp.act_fn
+
+    def forward(self, x):
+        gate = self.gate_proj(x)
+        up = self.up_proj(x)
+        activated = self.act_fn(gate)
+        intermediate = activated * up
+        return self.down_proj(intermediate)
+```
+
+`class CustomMLP(torch.nn.Module)` の括弧は継承するクラスの指定です。`CustomMLP(original_mlp)` の括弧には、新しいインスタンスの初期化に使う引数を渡します。`self` は作成したCustomMLP自身、`original_mlp` は既存のMLPです。
+
+`super().__init__()` は、今回の単一継承ではnn.Moduleの初期化を呼び出し、子Moduleやパラメーターを管理する仕組みを準備します。その後の属性代入でLinearや活性化Moduleが登録され、parameters・state_dict・to・evalなどの機能が子Moduleまで届きます。
+
+<details>
+<summary>親クラスの初期化が呼ばれる条件</summary>
+
+| 子クラスの定義 | インスタンス作成時の初期化 |
+|---|---|
+| 独自の__init__がない | 継承した__init__を使う |
+| 独自の__init__がある | その処理を実行する |
+| 独自の__init__からsuper().__init__を呼ぶ | その位置で継承順に次の初期化を実行する |
+
+今回の `original_mlp` はCustomMLPの初期化で使う引数です。nn.Moduleの初期化には渡しません。子Moduleを代入する前に `super().__init__()` を呼びます。
+
+</details>
+
+### 重みを引き継ぐ意味
+
+`self.gate_proj = original_mlp.gate_proj` は同じLinearインスタンスを参照します。学習済みの重み、dtype、deviceをそのまま使えます。forwardではgateとupを計算し、gateにSiLUを適用してから要素積を取り、downへ渡します。形は [B,T,1024] → [B,T,3072] → [B,T,1024] です。
+
+Decoder Layer内部の `self.mlp(hidden_states)` が、置き換えたCustomMLPを呼び出します。nn.Moduleの呼び出し機構が自作forwardへ処理を渡すため、モデル全体を実行しても自分の計算が使われます。
+
+### 同じ入力で置換前後を照合する
+
+上のクラスと、評価モードのモデル・パディングなし1文のinputsを用意して実行します。[準備と行ごとの解説付きコード](../../recipes/custom-mlp/)からも確認できます。
+
+```python
+layer = model.model.layers[27]
+original_mlp = layer.mlp
+with torch.inference_mode():
+    baseline = model(**inputs, use_cache=False).logits[0, -1].float()
+try:
+    layer.mlp = CustomMLP(original_mlp).eval()
+    assert layer.mlp.gate_proj is original_mlp.gate_proj
+    with torch.inference_mode():
+        candidate = model(**inputs, use_cache=False).logits[0, -1].float()
+    print("最大絶対差:", (baseline - candidate).abs().max().item())
+    print("許容誤差内で一致:", torch.allclose(baseline, candidate))
+finally:
+    layer.mlp = original_mlp
+```
+
+提供された実験では、最大絶対差0.0、allcloseはTrueでした。比較したのは、その入力の末尾位置に対応する151936候補のスコアです。allclose自体は許容誤差内の一致を調べます。最大絶対差も併記すると、完全一致したのか、小さな差があったのかを判断できます。
+
+復元で戻るのはLayerのmlp参照先です。この実装は子Moduleと重みを共有するため、CustomMLP側で重みを更新した場合、その更新は元のMLPにも届きます。独立して重みを変更したい実験では、変更前の重みも保存して復元します。自作クラスを再利用するときは、重みとともにクラス定義と取り付け手順を管理します。
+
+### 全文を計算しても未来を参照しない
+
+入力のToken列は最初から分かっているため、1回のForwardで全位置を処理できます。Causal Maskは、各Queryが同じ位置と過去のKeyだけを参照できるよう制限します。
+
+| 入力内の位置 | 参照できる入力 | その位置のlogitsが予測するもの |
+|---|---|---|
+| T1 | T1 | T2 |
+| T2 | T1・T2 | T3 |
+| T3 | T1・T2・T3 | T4 |
+| T4 | T1〜T4 | 次のT5 |
+
+各層の中では複数位置をまとめて計算でき、層間は前の層の出力を順に受け渡します。`logits[0, -1]` は、全位置の処理後に末尾のスコアを選びます。入力長は `inputs["input_ids"].shape[1]` で確認します。添付例の質問文は前回と異なるため、26 Tokenという以前の値を固定して扱いません。
+
+この比較では次Tokenを選んで生成を継続する処理がなく、Cacheを再利用しないためuse_cache=Falseを指定します。生成では、まず既知のプロンプト全体を処理し、次に選んだTokenを次回の予測へ使います。[KV Cacheと自己回帰生成](../kv-cache/)へつながる区別です。
+
 ## Head・Norm・RoPEも変更対象になる
 
 重みの数値だけでなく、それを使う計算構造も研究対象です。Qwen3-0.6Bでは次の違いを分けて考えます。

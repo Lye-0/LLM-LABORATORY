@@ -39,6 +39,18 @@
   ],
   "recipes": [
     {
+      "group": "edit",
+      "id": "custom-mlp",
+      "title": "学習済みの重みを使って自作MLPへ置き換える",
+      "requires": [
+        "input"
+      ],
+      "lesson": "model-editing",
+      "note": "Qwen3-0.6BのLayer 27で元の計算を再現します。子Moduleと重みは元のMLPと共有します。末尾logitsの一致を確認し、実験後に元のMLPへ戻します。",
+      "code": "class CustomMLP(torch.nn.Module):\n    def __init__(self, original_mlp):\n        super().__init__()\n        self.gate_proj = original_mlp.gate_proj\n        self.up_proj = original_mlp.up_proj\n        self.down_proj = original_mlp.down_proj\n        self.act_fn = original_mlp.act_fn\n\n    def forward(self, x):\n        gate = self.gate_proj(x)\n        up = self.up_proj(x)\n        activated = self.act_fn(gate)\n        intermediate = activated * up\n        return self.down_proj(intermediate)\n\nlayer = model.model.layers[27]\noriginal_mlp = layer.mlp\nwith torch.inference_mode():\n    baseline = model(**inputs, use_cache=False).logits[0, -1].float()\ntry:\n    layer.mlp = CustomMLP(original_mlp).eval()\n    assert layer.mlp.gate_proj is original_mlp.gate_proj\n    with torch.inference_mode():\n        candidate = model(**inputs, use_cache=False).logits[0, -1].float()\n    print(\"最大絶対差:\", (baseline - candidate).abs().max().item())\n    print(\"許容誤差内で一致:\", torch.allclose(baseline, candidate))\nfinally:\n    layer.mlp = original_mlp",
+      "aliases": "CustomMLP 自作 クラス 継承 super forward Module 置換"
+    },
+    {
       "group": "prepare",
       "id": "load",
       "title": "Qwen3とTokenizerを読み込む",
