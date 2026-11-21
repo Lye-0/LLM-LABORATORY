@@ -1,4 +1,3 @@
-import { crossConnections } from '../../data/atlas/connections';
 import type { AtlasEdge } from '../../data/atlas';
 
 export function initAtlas() {
@@ -244,7 +243,7 @@ export function initAtlas() {
   }
   const canvas = root.querySelector<HTMLElement>('.atlas-canvas')!;
   const crossSvg = canvas.querySelector<SVGSVGElement>('.atlas-cross-edges')!;
-  const connections = crossConnections;
+  const connections: [string, string][] = JSON.parse(canvas.dataset.connections!);
   function drawConnections() {
     crossSvg.querySelectorAll('path[data-from]').forEach((p) => p.remove());
     const bounds = canvas.getBoundingClientRect();
@@ -256,13 +255,26 @@ export function initAtlas() {
         b = to.getBoundingClientRect();
       const direct =
         to.closest('.atlas-section')?.classList.contains('atlas-section--continuation') &&
-        ['embedding', 'next-layer', 'lm-head'].includes(fromId);
+        ['embedding', 'next-layer', 'lm-head', 'zero-grad'].includes(fromId);
       const narrow = matchMedia('(max-width:1000px)').matches;
       const x1 = a.left + (direct && narrow ? 12 : a.width / 2) - bounds.left,
         y1 = a.bottom - bounds.top;
       const x2 = b.left + (direct && narrow ? 12 : b.width / 2) - bounds.left,
         y2 = b.top - bounds.top;
-      const rail = 5 + (i % 3) * 6;
+      const held = fromId === 'labels' || fromId === 'batch' || fromId === 'load';
+      const loop = fromId === 'optimizer' || fromId === 'resume';
+      const sideExit = held || loop || fromId === 'initialize';
+      // Each long relationship has its own rail. Held labels travel on the
+      // right, update loops on the left; neither crosses a chapter heading.
+      const rail = held
+        ? bounds.width - ({ labels: 8, batch: 20, load: 32 }[fromId] ?? 8)
+        : loop
+          ? fromId === 'optimizer'
+            ? 8
+            : 24
+          : fromId === 'initialize'
+            ? 40
+            : 5 + (i % 3) * 6;
       const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       path.setAttribute(
         'd',
@@ -282,8 +294,17 @@ export function initAtlas() {
           y2,
       );
       if (direct) path.setAttribute('d', `M${x1},${y1} L${x2},${y2}`);
+      else if (sideExit) {
+        const sx = (held ? a.right : a.left) - bounds.left;
+        const tx = (held ? b.right : b.left) - bounds.left;
+        path.setAttribute(
+          'd',
+          `M${sx},${a.top + a.height / 2 - bounds.top} H${rail} V${b.top + b.height / 2 - bounds.top} H${tx}`,
+        );
+      }
+      if (loop) path.classList.add('atlas-cross-route--update');
       path.dataset.direct = String(Boolean(direct));
-      path.setAttribute('class', 'atlas-cross-route');
+      path.classList.add('atlas-cross-route');
       path.setAttribute('marker-end', 'url(#atlas-cross-arrow)');
       path.dataset.from = fromId;
       path.dataset.to = toId;

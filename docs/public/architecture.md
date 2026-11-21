@@ -34,11 +34,13 @@ Chat Template Builderはsystemと1件のuserを扱う限定例。Model Inspector
 
 ## 図でつなぐまとめ
 
-全体地図はWorldMapの静的HTMLで、準備・推論・学習・改造を同じ面に表示する。各処理の入力・出力・短い説明はFlowExplorerの初期HTMLにすべて出力し、閲覧のための切替を要求しない。`map-previews.ts`は地図用の短い表記、`maps.ts`は完全なコード・数値・条件の正本。sequenceは番号順の折返し経路、branchesは矢印のない並列一覧として表示する。ResizeObserverで幅に合う列数へ変更し、小画面とJavaScript無効時には縦へ並べる。
+地図は独立した `/maps/` と7種類の派生地図。`src/data/atlas/index.ts`が地点・章・関係の正本、`views.ts`が地図の目的に合わせた章構成と地点の表現を定義する。学習図では作成済みbatchからForwardへ直接接続し、推論用の文章入力を再実行する表示にしない。`AtlasPage`と`AtlasGraph`は実際に表示する章・地点から件数・教材リンク・詳細を生成する。旧 `maps.ts` は補足の既存コード例の供給元として残す。
 
-詳細ボタンは補足のnative dialogを開く。初期表示は閉じ、queryで明示された地点は読み込み後に開く。Escapeと閉じる操作で地図と元の操作部品へ戻す。長い条件は補足内のdetailsへ置き、図の寸法や読む順序は開閉で変更しない。地図ページの左ナビは「学ぶ」の教材ページと共通にし、図・教材・実行例の所属を同じ一覧で示す。
+章間の接続は `connections.ts`を正本とし、表示中の両端が存在する関係を、線と詳細内の前後リンクの両方へ使う。接続先を省く派生地図では別の地図へのリンクとして示す。`atlas-client.ts`は実寸からSVG経路を描き、連続する章は直線、保持するlabelsは右側、学習の反復は左側の別経路へ分ける。ResizeObserverで再描画し、共通部品の修正は全8地図の異なる章順序・画面幅で検証する。
 
-全ノードの説明は静的なdetailsにも出力し、JavaScriptが無効でも内容へ到達できる。ページは学ぶ内のナビと検索へ登録する。Qwenの構造値と学習済みEmbeddingの実測を、教育用小モデルの値から区別する。
+詳細ボタンは中央のnative dialogを開く。初期表示は閉じ、queryで明示された地点は読み込み後に開く。Escapeと閉じる操作で地図と元の操作部品へ戻す。入力・出力の後に主要な計算式を置き、展開と数値例は別々のdetailsへ置く。図の寸法や読む順序は開閉で変更しない。左ナビは全地図で共通にする。
+
+全ノードの説明は静的なdetailsにも出力し、JavaScriptが無効でも内容へ到達できる。地図の専用ナビとサイト検索へ登録する。Qwenの構造値と学習済みEmbeddingの実測を、教育用小モデルの値から区別する。
 
 小モデルの正本は `public/examples/tiny-language-model.py`。教材全文はraw importで同じファイルから表示する。実行結果は `tests/fixtures/tiny-language-model-reference.json` に条件とsource hashを残す。学習済みcheckpointは `.cache/` に置き、公開ビルドやGitへ含めない。
 

@@ -1,11 +1,11 @@
 ---
-import { nodeById, nodeUrl, sectionById, type AtlasMap, type AtlasSection } from '../../data/atlas';
+import { nodeUrl, type AtlasMap, type AtlasSection } from '../../data/atlas';
 import { withBase } from '../../lib/paths';
-import { crossConnections } from '../../data/atlas/connections';
 import { supplements } from '../../data/atlas/supplements';
 import AtlasLayerStack from './AtlasLayerStack.astro';
 import AtlasCalculation from './AtlasCalculation.astro';
 import { motionForNode, motionUrl } from '../../data/motion';
+import { mapConnections, mapNode, mapSections } from '../../data/atlas/views';
 interface Props {
   section: AtlasSection;
   map: AtlasMap;
@@ -14,25 +14,25 @@ interface Props {
   continues?: boolean;
 }
 const { section, map, number, continuation, continues = false } = Astro.props;
-const visible = new Set(
-  map.sections.flatMap((id) => sectionById[id].blocks.flatMap((b) => b.lanes.flat())),
-);
+const visible = new Set(mapSections(map).flatMap((s) => s.blocks.flatMap((b) => b.lanes.flat())));
 const relations = [
   ...section.edges,
-  ...crossConnections
+  ...mapConnections(map)
     .filter(([from, to]) => visible.has(from) && visible.has(to))
     .map(([from, to]) => ({ from, to, label: undefined })),
 ];
-const presentNode = (id: string) =>
-  id === 'prefill' && map.slug === 'training'
-    ? {
-        ...nodeById[id],
-        title: 'Forward：学習用batchの計算を開始',
-        code: 'forward（学習）',
-        meaning:
-          '学習用の入力列を、この先のEmbedding〜LM headで計算する。生成時の初回計算はprefillと呼ぶ。',
-      }
-    : nodeById[id];
+const presentNode = (id: string) => mapNode(id, map);
+const exits: Record<string, { target: string; label: string }> = {
+  context: { target: '/maps/inference/#n-text', label: '資料を加えた文章 → モデルの入力へ' },
+  'tool-result': {
+    target: '/maps/inference/#n-text',
+    label: '結果を加えた会話 → モデルの入力へ戻る',
+  },
+  reload: {
+    target: '/maps/runtime/#n-load',
+    label: '保存したコード・config・重み → 読み込みへ戻る',
+  },
+};
 ---
 
 <section
@@ -199,11 +199,42 @@ const presentNode = (id: string) =>
                         ))}
                       </p>
                     )}
+                    {mapConnections(map).some(([from, to]) => from === id || to === id) && (
+                      <nav class="atlas-node-connections" aria-label={`${n.title}の章をまたぐ接続`}>
+                        {mapConnections(map)
+                          .filter(([from]) => from === id)
+                          .map(([from, to]) => (
+                            <a href={`#n-${to}`}>
+                              {['optimizer', 'resume'].includes(from)
+                                ? '↶ 次のbatch・再開'
+                                : from === 'labels'
+                                  ? '保持して照合へ'
+                                  : '次へ'}
+                              ：{presentNode(to).title}
+                            </a>
+                          ))}
+                        {mapConnections(map)
+                          .filter(([, to]) => to === id)
+                          .map(([from]) => (
+                            <a href={`#n-${from}`}>入力元：{presentNode(from).title}</a>
+                          ))}
+                      </nav>
+                    )}
+                    {exits[id] && (
+                      <p class="atlas-node-connections">
+                        <a href={withBase(exits[id].target)}>{exits[id].label} ↗</a>
+                      </p>
+                    )}
                     <details class="atlas-detail">
                       <summary aria-label={`${n.title}の補足`}>補足・つながり</summary>
                       <div class="atlas-detail-body">
                         <h4>{n.title}</h4>
                         <p>{n.detail || n.meaning}</p>
+                        {exits[id] && (
+                          <p>
+                            <a href={withBase(exits[id].target)}>{exits[id].label} ↗</a>
+                          </p>
+                        )}
                         <p>
                           <code>{n.code}</code>
                         </p>
@@ -217,7 +248,9 @@ const presentNode = (id: string) =>
                             <dd>{n.output}</dd>
                           </div>
                         </dl>
-                        <AtlasCalculation id={id} />
+                        {!(
+                          map.slug === 'training' && ['k-cache', 'v-cache', 'prefill'].includes(id)
+                        ) && <AtlasCalculation id={id} />}
                         {['q-rope', 'k-rope', 'scores', 'position'].includes(id) && (
                           <p>
                             <a href={withBase('/labs/rope/')}>
@@ -253,23 +286,27 @@ const presentNode = (id: string) =>
                             </ul>
                           </>
                         )}
-                        {supplements[id] && (
-                          <>
-                            <h5>既存教材のコード例</h5>
-                            <pre><code>{supplements[id].code}</code></pre>
-                            <p>{supplements[id].explanation}</p>
-                            <p>{supplements[id].note}</p>
-                            <ul>
-                              {supplements[id].links
-                                .filter((link) => !link.url.includes('/learn/maps/'))
-                                .map((link) => (
-                                  <li>
-                                    <a href={withBase(link.url)}>{link.title}</a>
-                                  </li>
-                                ))}
-                            </ul>
-                          </>
-                        )}
+                        {supplements[id] &&
+                          !(
+                            map.slug === 'training' &&
+                            ['k-cache', 'v-cache', 'prefill'].includes(id)
+                          ) && (
+                            <>
+                              <h5>既存教材のコード例</h5>
+                              <pre><code>{supplements[id].code}</code></pre>
+                              <p>{supplements[id].explanation}</p>
+                              <p>{supplements[id].note}</p>
+                              <ul>
+                                {supplements[id].links
+                                  .filter((link) => !link.url.includes('/learn/maps/'))
+                                  .map((link) => (
+                                    <li>
+                                      <a href={withBase(link.url)}>{link.title}</a>
+                                    </li>
+                                  ))}
+                              </ul>
+                            </>
+                          )}
                         {n.lesson && (
                           <a href={withBase(`/learn/${n.lesson}/`)}>関連する教材を読む →</a>
                         )}

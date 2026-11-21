@@ -5,4 +5,10 @@ export const crossConnections: [string, string][] = [
   ['lm-head', 'last-logits'],
   ['lm-head', 'shift'],
   ['zero-grad', 'device'],
+  ['batch', 'device'],
+  ['labels', 'shift'],
+  ['optimizer', 'zero-grad'],
+  ['resume', 'zero-grad'],
+  ['load', 'torch'],
+  ['initialize', 'torch'],
 ];

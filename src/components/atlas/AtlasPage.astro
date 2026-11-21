@@ -7,11 +7,18 @@ import { getCollection } from 'astro:content';
 import { lessonLocations } from '../../data/atlas/supplements';
 import { nodeById, nodeUrl } from '../../data/atlas';
 import '../../styles/atlas.css';
+import { mapSections, mapConnections } from '../../data/atlas/views';
 interface Props {
   map: AtlasMap;
 }
 const { map } = Astro.props;
+const viewSections = mapSections(map);
 const transfers: Record<string, { previous: string; target: string; data: string }> = {
+  input: {
+    previous: 'training-input',
+    target: 'device',
+    data: '作成済みのbatch [B,T] → 同じIDとmaskでforward',
+  },
   decoder: {
     previous: 'input',
     target: 'layer-input',
@@ -34,12 +41,10 @@ const incoming = (id: string, i: number) => {
       }
     : undefined;
 };
-const count = map.sections.flatMap((s) =>
-  sectionById[s].blocks.flatMap((b) => b.lanes.flat()),
-).length;
+const count = viewSections.flatMap((s) => s.blocks.flatMap((b) => b.lanes.flat())).length;
 const lessons = (await getCollection('lessons')).filter((l) =>
-  map.sections.some((s) =>
-    sectionById[s].blocks.some((b) => b.lanes.some((lane) => lane.includes(lessonLocations[l.id]))),
+  viewSections.some((s) =>
+    s.blocks.some((b) => b.lanes.some((lane) => lane.includes(lessonLocations[l.id]))),
   ),
 );
 ---
@@ -82,7 +87,11 @@ const lessons = (await getCollection('lessons')).filter((l) =>
       </p>
     </noscript>
     <div class="atlas-workspace">
-      <div class="atlas-canvas" data-pagefind-body>
+      <div
+        class="atlas-canvas"
+        data-pagefind-body
+        data-connections={JSON.stringify(mapConnections(map))}
+      >
         <svg class="atlas-cross-edges" aria-hidden="true">
           <defs>
             <marker
@@ -106,7 +115,7 @@ const lessons = (await getCollection('lessons')).filter((l) =>
               </p>
             )}
             <AtlasGraph
-              section={sectionById[id]}
+              section={viewSections[i]}
               map={map}
               number={i + 1}
               continuation={incoming(id, i)}
@@ -124,7 +133,7 @@ const lessons = (await getCollection('lessons')).filter((l) =>
                 <li>
                   <a href={`#s-${id}`}>
                     <span>{String(i + 1).padStart(2, '0')}</span>
-                    {sectionById[id].title}
+                    {viewSections[i].title}
                   </a>
                 </li>
               ))}

@@ -692,7 +692,10 @@ export const nodes: AtlasNode[] = [
     'initialize / pretrained / adapter',
     '新規・継続学習・LoRAの選択',
     '更新対象のパラメータ',
-    '初期化、配布重み、LoRAのいずれかに合わせて設定する。',
+    '出発点を選び、requires_gradとOptimizerの更新対象を設定する。',
+    'process',
+    '新規初期化・配布済みモデル・LoRAなどに応じて学習対象を決めます。Optimizerは対象Parameterの実体を参照するので、Parameterを交換した場合は更新対象も確認します。学習率とOptimizerの内部状態はParameterのgradとは別に管理されます。',
+    'scale-training',
   ),
   node(
     'train-mode',
@@ -737,7 +740,7 @@ export const nodes: AtlasNode[] = [
   ),
   node(
     'grad',
-    'Gradient：重みごとの変化方向',
+    'Gradient：重みごとの損失の変化率',
     'parameter.grad',
     '逆伝播の結果',
     '各重みと同じshape',
@@ -751,6 +754,9 @@ export const nodes: AtlasNode[] = [
     '重み + grad + optimizer状態',
     '更新後の重み',
     '次のforwardは、この新しい数値を使う。',
+    'process',
+    'optimizer.step()が更新するのは、Optimizerへ登録したParameterです。SGDの基本形は現在のgradを使い、Adamは勾配と二乗の移動平均なども使います。parameter.gradはBackwardの蓄積先、optimizer.stateはParameterごとの履歴、param_groupsは更新対象と学習率などの設定です。zero_gradでgradを消してもAdamの履歴は残ります。評価・保存は必要な時点で行い、通常の次batchはzero_gradへ戻ります。',
+    'scale-training',
   ),
   node(
     'evaluate',
@@ -1144,11 +1150,12 @@ export const sections: AtlasSection[] = [
     [
       block([['dataset', 'split', 'train-tokenize', 'batch']]),
       block(
-        [['labels'], ['train-start', 'train-mode', 'zero-grad']],
-        '正解を保持する経路 ／ モデルを準備する経路',
+        [['train-start', 'train-mode'], ['labels']],
+        'モデルと更新対象を準備する経路 ／ 正解labelsを保持する別経路',
       ),
+      block([['zero-grad']], '各batchの更新はここから。labelsは後のLossまで保持'),
     ],
-    [edge('batch', 'labels'), edge('batch', 'train-start')],
+    [edge('batch', 'labels'), edge('train-mode', 'zero-grad')],
     [
       { node: 'device', label: '入力batch → 共通forwardの入口' },
       { node: 'shift', label: '正解labels → forward後の照合' },
@@ -1277,11 +1284,16 @@ export const sections: AtlasSection[] = [
     '学習：正解との差から重みを変える',
     'forwardの結果の使い道②。生成の候補選択は通らない。この図は勾配蓄積なしの1 batch分。',
     [
-      block([
-        ['shift', 'loss', 'backward', 'grad', 'optimizer', 'evaluate', 'checkpoint', 'resume'],
-      ]),
+      block([['shift', 'loss', 'backward', 'grad', 'optimizer']]),
+      block(
+        [['evaluate'], ['checkpoint', 'resume']],
+        '必要な時点で行う：検証 ／ 保存と再開（毎batchの必須工程ではない）',
+      ),
     ],
-    [],
+    [
+      edge('optimizer', 'evaluate', undefined, '検証する時点'),
+      edge('optimizer', 'checkpoint', undefined, '保存する時点'),
+    ],
     [
       { node: 'zero-grad', label: '更新ループ：次のbatchはzero_gradから' },
       { node: 'embedding', label: '更新先 θ：Embedding・各層・LM head等の学習対象' },
@@ -1450,7 +1462,15 @@ export const maps = [
     slug: 'data',
     title: 'データの姿を追う',
     description: '文字列・整数ID・Tensor・内部表現・スコア・勾配。容器と値の変化を追う。',
-    sections: ['input', 'containers', 'output', 'generation', 'training-input', 'learning'],
+    sections: [
+      'input',
+      'decoder',
+      'output',
+      'generation',
+      'training-input',
+      'learning',
+      'containers',
+    ],
   },
   {
     slug: 'runtime',
@@ -1468,6 +1488,8 @@ export const maps = [
 export type AtlasMap = (typeof maps)[number];
 export const mapUrl = (slug: string) => `/maps/${slug ? `${slug}/` : ''}`;
 export function nodeUrl(id: string, map: AtlasMap) {
+  if (map.slug === 'training' && ['text', 'template', 'tokenize', 'input-ids', 'input-mask'].includes(id))
+    return `/maps/inference/#n-${id}`;
   const present = map.sections.some((s) =>
     sectionById[s].blocks.some((b) => b.lanes.some((l) => l.includes(id))),
   );

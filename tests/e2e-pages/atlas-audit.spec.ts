@@ -105,5 +105,5 @@ test('28層の全体図と1層の拡大図をクリックせず読める', async
   }
   await page.goto('/LLM-LABORATORY/maps/data/');
   await page.locator('#n-hidden-tuple .atlas-stack-link').click();
-  await expect(page).toHaveURL(/maps\/structure\/#decoder-stack/);
+  await expect(page).toHaveURL(/maps\/data\/#decoder-stack/);
 });
