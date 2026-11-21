@@ -3,7 +3,7 @@ title: "MLP出力のscaleを変えて学習する"
 description: "固定倍率の改造から、Loss・勾配・Adamで1個のParameterを更新するまで。"
 stage: "modification"
 order: 27.5
-minutes: 25
+minutes: 35
 eyebrow: "LEARNABLE SCALE"
 prerequisites: ["model-editing", "autograd"]
 sources: ["module", "autograd", "qwen"]
@@ -239,3 +239,101 @@ finallyは元のMLPの参照とrequires_gradの設定を戻します。共有し
 復元後のmodelは元のMLPを使います。学習済みのscaleはstudent_mlpに残りますが、モデルへ適用し続けたい場合は再び取り付ける必要があります。保存する場合も、Parameterの値に加えて、クラス定義・対象Layer・取り付け方を管理します。固定値のscaleは通常の属性なのでstate_dictには入りません。
 
 同じ1文の末尾logitsを近づけただけでは、別の入力や生成全体の品質まで確認できません。学習に使わない複数の入力で、logits・生成・目的に合う評価指標を比較して次の実験へ進みます。
+
+## SGD・Adamと学習率を比較する
+
+学習率lrは、Optimizerが計算する更新量の大きさを調整します。学習率そのものが毎回の更新幅になるわけではありません。同じ勾配・同じlrでも、更新方法が違えば結果は変わります。
+
+Momentum・weight decayなしの基本形SGDでは `更新後 = 更新前 - lr × grad`です。最初のgrad=14.375なら、lr=0.005で `1 - 0.005 × 14.375 = 0.928125`、lr=0.05で `0.28125`になります。後者は1回で目標0.5を通り過ぎます。[SGDの仕様](https://docs.pytorch.org/docs/2.14/generated/torch.optim.SGD.html)
+
+### 同じ初期値と新しいOptimizerで比べる
+
+[4条件を比較するコード](../../recipes/compare-optimizers/)は、各条件でStudentのscaleを1.0から作り直し、Optimizerも作り直します。scaleだけ戻してAdamの履歴を使い回すと、同じ出発点の比較になりません。Teacher、入力、元の重み、60回という更新数はそろえ、更新後に最終Lossを再計算します。
+
+提供された実験の結果は次のとおりです。Layer 27・目標scale=0.5・末尾logitsのMSEという前の実験と同じ課題です。
+
+教材の比較コードも、前述の固定revision・CUDA・bfloat16環境で4条件を再実行し、下表の最終値を再現しました。
+
+| Optimizer | lr | 最初の更新後scale | 60回後scale | 更新後の最終Loss |
+|---|---|---|---|---|
+| SGD | 0.005 | 0.928125 | 0.501675 | 0.0 |
+| SGD | 0.05 | 0.281250 | 0.499023 | 0.003216124 |
+| Adam | 0.005 | 0.995000 | 0.738190 | 0.650952339 |
+| Adam | 0.05 | 0.950000 | 0.500226 | 0.0 |
+
+SGDの小さいlrは穏やかに目標付近へ進み、大きいlrは最初に行き過ぎました。Adamのlr=0.005は60回では目標から離れており、lr=0.05は一度行き過ぎた後に戻っています。この課題の結果から、Adamが常にSGDより優れるとも、小さいlrが常に良いとも判断できません。最適化の目的はLossを小さくすることで、勾配の数値そのものを小さくすることではありません。
+
+### scaleが0.5ではないのにLossが0になる
+
+Loss=0は、この入力で比較した有限精度のlogitsが一致したという結果です。scaleの厳密な一致、他の入力での一致、生成品質の改善までは示しません。bfloat16などの丸めによって、異なる倍率が同じ計算結果へ丸められる可能性があります。float32へ変換してからLossを取っても、モデル内部ですでに生じた丸めは取り戻せません。
+
+## Adamの更新式を内部状態から読む
+
+Adamは勾配の指数移動平均mと、勾配の二乗の指数移動平均vを保持します。vは2階微分や分散そのものではありません。ここではweight decayなし・AMSGradなし・maximize=Falseの標準Adamを扱います。[Adamの仕様と更新式](https://docs.pytorch.org/docs/2.14/generated/torch.optim.Adam.html)
+
+```text
+g = 今回の勾配、t = そのParameterの更新回数
+m_t = β1 × m_(t-1) + (1 - β1) × g
+v_t = β2 × v_(t-1) + (1 - β2) × g²
+m_hat = m_t / (1 - β1^t)
+v_hat = v_t / (1 - β2^t)
+更新後 = 更新前 - lr × m_hat / (sqrt(v_hat) + eps)
+```
+
+標準設定はbetas=(0.9, 0.999)、eps=1e-8です。0から始めた移動平均が初期に小さく見積もられる影響をm_hat・v_hatで補正します。epsは分母を安定させる小さな値です。
+
+最初のg=14.375では、m=1.4375、v≈0.206640625、補正後はm_hat=14.375、v_hat=206.640625です。このためlr=0.05の最初の更新幅は約−0.05になります。毎回lrだけ動くという規則ではなく、この初回の式の結果です。
+
+### 現在の勾配と更新方向が異なる理由
+
+| Step | 今回のgrad | 更新後m | 更新後scale |
+|---|---|---|---|
+| 12 | +0.157227 | +3.320720 | 0.486130 |
+| 13 | −0.257813 | +2.962867 | 0.459256 |
+| 22 | −1.882813 | +0.194453 | 0.349543 |
+| 23 | −1.953125 | −0.020305 | 0.349741 |
+
+提供ログの抜粋です。Step 13ではgradが負に変わってもmは正なので、まだscaleを減らします。Step 23でmが負になると増加へ転じます。この標準設定では、正の学習率・正の分母のもと、更新方向はmの符号で決まります。zero_gradしてもmは残るため、この動作は矛盾しません。
+
+## gradとOptimizerの履歴はどこにあるか
+
+| 保存先 | 内容 | 今回のループでzero_gradした後 |
+|---|---|---|
+| `student_mlp.scale` | 現在のParameter値 | 残る |
+| `student_mlp.scale.grad` | Backwardで蓄積した勾配 | Noneになる |
+| `optimizer.param_groups` | 更新対象とlr・betasなどの設定 | 残る |
+| `optimizer.state[p]` | pに対応するstep・m・v | 残る |
+
+通常のAdamでは、勾配があるParameterを最初にstepで処理するときに状態が初期化されます。毎回のループ番号と状態のstepが一致するのは、今回scaleに毎回勾配があり、更新しているためです。grad=Noneで処理されないParameterでは同じ数にならない場合があります。
+
+[内部状態と更新量を調べるコード](../../recipes/adam-state/)は、前のtrain-scale実行後に残るStudentとAdamを使います。実際のparam_groupsからlr・betas・epsを取得して更新量を再計算します。
+
+<details>
+<summary>Parameterを名前なしでどう区別するか</summary>
+
+`optimizer.state[p]`のキーは、`"layer27.scale"`という文字列でもscaleの数値でもなく、Parameterオブジェクト自体です。`Parameter containing: tensor(...)`は人間向けの内容表示で、名前の一覧ではありません。同じ値でも別のParameterなら別々の状態を持てます。
+
+```python
+a = torch.nn.Parameter(torch.tensor(1.0))
+b = torch.nn.Parameter(torch.tensor(1.0))
+states = {a: {"step": 1}, b: {"step": 3}}
+print(a.item() == b.item(), a is b)
+print(states[a], states[b])
+```
+
+```text
+True False
+{'step': 1} {'step': 3}
+```
+
+同じParameterへの別名pを使っても、参照先が同じなら同じ状態を取得できます。値の更新で新しいParameterへ交換していないので、更新後も対応は保たれます。新しいParameterを代入する場合、既存Optimizerは古い実体を参照したままなので更新対象も作り直します。
+
+stateの表示に出るdefaultdict(dict)は、未登録のキーを角括弧で参照すると空の辞書を作る機能です。Parameterの識別名を作る機能ではありません。観察だけなら `.get(p)`で不要なキーの作成を避けられます。保存用の `optimizer.state_dict()`ではParameterに対応する整数IDなどへ整理され、実行中のstate辞書とは表示構造が異なります。
+
+</details>
+
+### 手計算とPyTorchの更新を照合する
+
+Adamのstep直前のscale_beforeと、直後のm・v・stepを使えば、上の式からscale_manualを求められます。提供された60回目では、PyTorchのscale_after=0.500226200、再計算値=0.500226209、差は約9×10⁻⁹でした。Pythonの数値とfloat32 Parameterの演算精度の違いもあるので、厳密な等号ではなく誤差を確認します。
+
+この照合は、Optimizerから取得したm・vを使う更新式の再計算です。Adamの内部処理全体を独立に実装・検証したという意味ではありません。

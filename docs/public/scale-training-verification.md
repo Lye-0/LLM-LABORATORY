@@ -28,3 +28,13 @@ Parameterの登録・shape・dtype・device、固定scaleがstate_dictに入ら�
 型検査はエラー・警告0件、既存テスト55件成功。Pages用baseで264ページ・33教材を生成し、検索索引、内部リンク、公開ファイル境界を確認した。Edgeで教材の表示、コード詳細へのリンク、事前準備の表示、行ごとの解説の展開を確認した。
 
 新しい教材を追加したため、静的出力検査の期待教材数を33へ更新した。モデル実行は通常のサイトCIへ追加しない。push・公開は今回の作業に含めない。
+
+## 2026-11-22：Optimizerと学習率の追補
+
+新しい会話の末尾整理を取得し、ログイン済みEdgeで非Playwrightのスクロール・アクセシビリティ取得を使用した。比較実験020の導入から、Adamの式と状態、Parameterオブジェクトの区別、zero_gradと履歴の違いを確認し、既存の実験019の導入まで遡って重複を確認した。全会話の完全エクスポートとはしない。提供されたPythonコード1ファイルと比較結果・内部状態の2ログを照合した。
+
+scale-training教材にSGD・Adamと学習率の比較、移動平均・補正・更新式、param_groupsとstate、Parameterオブジェクトをキーにする辞書の説明を追加。compare-optimizersとadam-stateの2レシピへ準備と行ごとの解説を付けた。Adamを独立して自作する課題は追加していない。
+
+`verification/verify_optimizers.py`で公開レシピを直接実行。同じ固定revision・PyTorch 2.14.1+cu130・Transformers 5.20.2・CUDA・bfloat16で4条件の最終scale/Lossを提供ログどおり再現した。元の重みの更新versionとrequires_gradの復元も確認。Adamの履歴を持つ状態で追加の解析的Lossを1回計算し、内部状態からの更新量が実際の差と1e-7以内で一致すること、zero_grad後にgrad=Noneでmが残ることを確認した。
+
+型検査はエラー・警告0、55テスト成功。266ページ・33教材のビルド、検索索引、内部リンク検査が成功。今回の追補のブラウザーでの表示確認は未実施。

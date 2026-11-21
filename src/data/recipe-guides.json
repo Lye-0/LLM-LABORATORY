@@ -129,6 +129,11 @@
       "name": "ScaledMLP",
       "source": "scale-mlp",
       "description": "元のMLPを受け取り、固定値または学習可能なscaleを持たせるクラス。"
+    },
+    "scale_student": {
+      "name": "student_mlp・optimizer",
+      "source": "train-scale",
+      "description": "scaleだけを学習したStudentと標準Adam。学習コード終了後も両変数は残ります。"
     }
   },
   "guides": {
@@ -2022,6 +2027,232 @@
         {
           "lines": 1,
           "note": "各Parameterの元の設定を戻します。"
+        }
+      ]
+    },
+    "compare-optimizers": {
+      "needs": [
+        "model",
+        "inputs",
+        "torch",
+        "ScaledMLP"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "倍率を追加する層を取得します。"
+        },
+        {
+          "lines": 1,
+          "note": "元のMLPへの参照を保存します。"
+        },
+        {
+          "lines": 1,
+          "note": "追加前のParameter実体をリストにします。値の複製ではありません。"
+        },
+        {
+          "lines": 1,
+          "note": "各Parameterの変更前の真偽値を同じ順序で保存します。"
+        },
+        {
+          "lines": 1,
+          "note": "設定変更から復元までを囲みます。"
+        },
+        {
+          "lines": 1,
+          "note": "元のParameterを1個ずつpで参照します。"
+        },
+        {
+          "lines": 1,
+          "note": "元の重みに対する勾配の計算を無効にします。重みの値は変えません。"
+        },
+        {
+          "lines": 1,
+          "note": "固定倍率のTeacherを取り付けます。"
+        },
+        {
+          "lines": 1,
+          "note": "更新完了後の評価は勾配を記録しません。"
+        },
+        {
+          "lines": 1,
+          "note": "Teacherの末尾スコアを保存します。cloneは独立コピーで、このコードでは省略しても後続Forwardで上書きされません。"
+        },
+        {
+          "lines": 1,
+          "note": "SGDとAdamを2つの学習率で比較する4条件を定義します。"
+        },
+        {
+          "lines": 1,
+          "note": "SGDとAdamを2つの学習率で比較する4条件を定義します。"
+        },
+        {
+          "lines": 1,
+          "note": "各条件を取り出し、StudentとOptimizerを新しく作って同じ初期値から比較します。"
+        },
+        {
+          "lines": 1,
+          "note": "今回のOptimizer名と学習率を表示します。"
+        },
+        {
+          "lines": 1,
+          "note": "元の重みを凍結した後で、学習可能なscaleを新しく作ります。"
+        },
+        {
+          "lines": 1,
+          "note": "モデル内部の参照先をStudentへ交換します。"
+        },
+        {
+          "lines": 1,
+          "note": "選択したOptimizerを新しいscaleに結び付けます。"
+        },
+        {
+          "lines": 1,
+          "note": "要素ごとの二乗誤差を平均するModuleを作ります。"
+        },
+        {
+          "lines": 1,
+          "note": "同じ入力・目標で60回更新します。"
+        },
+        {
+          "lines": 1,
+          "note": "前回のscale.gradをNoneにします。scaleの値やAdamの内部状態は残ります。"
+        },
+        {
+          "lines": 1,
+          "note": "今回のForwardで使う更新前の倍率を記録します。"
+        },
+        {
+          "lines": 1,
+          "note": "現在の倍率で再計算します。ここをno_gradやinference_modeで囲みません。"
+        },
+        {
+          "lines": 1,
+          "note": "対応する候補間の平均二乗誤差を、計算グラフにつながったスカラーとして得ます。"
+        },
+        {
+          "lines": 1,
+          "note": "Lossをscaleで微分し、scale.gradへ蓄積します。倍率の値はまだ変えません。"
+        },
+        {
+          "lines": 1,
+          "note": "計算済みの勾配Tensorから1個の数値を読み取ります。"
+        },
+        {
+          "lines": 1,
+          "note": "勾配とAdamの内部状態から倍率を更新します。"
+        },
+        {
+          "lines": 1,
+          "note": "更新前の倍率・Loss・勾配と、更新後の倍率を区別して表示します。"
+        },
+        {
+          "lines": 1,
+          "note": "更新前の倍率・Loss・勾配と、更新後の倍率を区別して表示します。"
+        },
+        {
+          "lines": 1,
+          "note": "更新完了後の評価は勾配を記録しません。"
+        },
+        {
+          "lines": 1,
+          "note": "最終の倍率で新しくForwardします。"
+        },
+        {
+          "lines": 1,
+          "note": "同じ時点の倍率とLossを表示します。最後の更新前のLossと混同しません。"
+        },
+        {
+          "lines": 1,
+          "note": "同じ時点の倍率とLossを表示します。最後の更新前のLossと混同しません。"
+        },
+        {
+          "lines": 1,
+          "note": "例外があっても復元を実行します。"
+        },
+        {
+          "lines": 1,
+          "note": "元のMLPに戻します。student_mlp変数には学習した倍率が残ります。"
+        },
+        {
+          "lines": 1,
+          "note": "元のParameterと保存した設定値を順に組にします。"
+        },
+        {
+          "lines": 1,
+          "note": "各Parameterの元の設定を戻します。"
+        }
+      ]
+    },
+    "adam-state": {
+      "needs": [
+        "scale_student",
+        "torch"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "学習したscaleのParameter実体をpでも参照します。"
+        },
+        {
+          "lines": 1,
+          "note": "Adamがその実体に対応付けた更新後の内部状態です。"
+        },
+        {
+          "lines": 1,
+          "note": "今回の1グループの学習率・betas・epsを取得します。"
+        },
+        {
+          "lines": 1,
+          "note": "このParameterに勾配がありAdamで処理された回数です。"
+        },
+        {
+          "lines": 1,
+          "note": "更新後の勾配の指数移動平均を読みます。"
+        },
+        {
+          "lines": 1,
+          "note": "更新後の勾配の二乗の指数移動平均を読みます。"
+        },
+        {
+          "lines": 1,
+          "note": "実際にOptimizerへ設定した2つの減衰率を取り出します。"
+        },
+        {
+          "lines": 1,
+          "note": "0から開始した移動平均のバイアスを補正します。"
+        },
+        {
+          "lines": 1,
+          "note": "二乗の移動平均も補正します。"
+        },
+        {
+          "lines": 1,
+          "note": "標準Adamの更新量を再計算します。weight decayなし・AMSGradなし・maximize=Falseが前提です。"
+        },
+        {
+          "lines": 1,
+          "note": "最後のBackwardの勾配と、最後のstep後の状態を表示します。"
+        },
+        {
+          "lines": 1,
+          "note": "前のscaleに加える更新量です。更新後scaleからさらに引く処理は行いません。"
+        },
+        {
+          "lines": 1,
+          "note": "今回のOptimizerはscale1個なので、先頭キーが同じ実体か確認できます。"
+        },
+        {
+          "lines": 1,
+          "note": "zero_grad前の移動平均を独立コピーします。"
+        },
+        {
+          "lines": 1,
+          "note": "Parameter側の勾配を消します。このコードにはこの副作用があります。"
+        },
+        {
+          "lines": 1,
+          "note": "gradはNone、mの維持はTrueになります。"
         }
       ]
     }

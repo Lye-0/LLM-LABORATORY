@@ -822,6 +822,33 @@
       "aliases": "scale 学習 Teacher Student MSELoss Adam zero_grad backward requires_grad Parameter",
       "note": "評価モードのQwen3-0.6Bとパディングなし1文用。Teacherのscale=0.5による末尾logitsへ近づけます。StudentのForwardは勾配を記録し、30回更新後にMLPと元の勾配設定を復元します。Loss・gradは更新前、afterは更新後の値です。",
       "code": "layer = model.model.layers[27]\noriginal_mlp = layer.mlp\nbase_parameters = list(model.parameters())\noriginal_grad_flags = [p.requires_grad for p in base_parameters]\ntry:\n    for p in base_parameters:\n        p.requires_grad_(False)\n    layer.mlp = ScaledMLP(original_mlp, scale=0.5).eval()\n    with torch.no_grad():\n        target_logits = model(**inputs, use_cache=False).logits[0, -1].float().clone()\n    student_mlp = ScaledMLP(original_mlp, scale=1.0, learnable=True).eval()\n    layer.mlp = student_mlp\n    optimizer = torch.optim.Adam([student_mlp.scale], lr=0.05)\n    loss_fn = torch.nn.MSELoss()\n    for step in range(1, 31):\n        optimizer.zero_grad(set_to_none=True)\n        before = student_mlp.scale.item()\n        student_logits = model(**inputs, use_cache=False).logits[0, -1].float()\n        loss = loss_fn(student_logits, target_logits)\n        loss.backward()\n        gradient = student_mlp.scale.grad.item()\n        optimizer.step()\n        print(step, \"before:\", before, \"loss:\", loss.item(),\n              \"grad:\", gradient, \"after:\", student_mlp.scale.item())\n    with torch.no_grad():\n        final_logits = model(**inputs, use_cache=False).logits[0, -1].float()\n        print(\"最終scale・Loss:\", student_mlp.scale.item(),\n              loss_fn(final_logits, target_logits).item())\nfinally:\n    layer.mlp = original_mlp\n    for p, flag in zip(base_parameters, original_grad_flags):\n        p.requires_grad_(flag)"
+    },
+    {
+      "id": "compare-optimizers",
+      "title": "SGD・Adamと学習率を同じ初期値で比較する",
+      "code": "layer = model.model.layers[27]\noriginal_mlp = layer.mlp\nbase_parameters = list(model.parameters())\noriginal_grad_flags = [p.requires_grad for p in base_parameters]\ntry:\n    for p in base_parameters:\n        p.requires_grad_(False)\n    layer.mlp = ScaledMLP(original_mlp, scale=0.5).eval()\n    with torch.no_grad():\n        target_logits = model(**inputs, use_cache=False).logits[0, -1].float().clone()\n    experiments = [(torch.optim.SGD, 0.005), (torch.optim.SGD, 0.05),\n                   (torch.optim.Adam, 0.005), (torch.optim.Adam, 0.05)]\n    for optimizer_class, lr in experiments:\n        print(optimizer_class.__name__, \"lr:\", lr)\n        student_mlp = ScaledMLP(original_mlp, scale=1.0, learnable=True).eval()\n        layer.mlp = student_mlp\n        optimizer = optimizer_class([student_mlp.scale], lr=lr)\n        loss_fn = torch.nn.MSELoss()\n        for step in range(1, 61):\n            optimizer.zero_grad(set_to_none=True)\n            before = student_mlp.scale.item()\n            student_logits = model(**inputs, use_cache=False).logits[0, -1].float()\n            loss = loss_fn(student_logits, target_logits)\n            loss.backward()\n            gradient = student_mlp.scale.grad.item()\n            optimizer.step()\n            print(step, \"before:\", before, \"loss:\", loss.item(),\n                  \"grad:\", gradient, \"after:\", student_mlp.scale.item())\n        with torch.no_grad():\n            final_logits = model(**inputs, use_cache=False).logits[0, -1].float()\n            print(\"最終scale・Loss:\", student_mlp.scale.item(),\n                  loss_fn(final_logits, target_logits).item())\nfinally:\n    layer.mlp = original_mlp\n    for p, flag in zip(base_parameters, original_grad_flags):\n        p.requires_grad_(flag)",
+      "requires": [
+        "load",
+        "input",
+        "scale-mlp"
+      ],
+      "group": "train",
+      "lesson": "scale-training",
+      "note": "Qwen3-0.6B・評価モード・パディングなし1文用。元の重みを凍結し、各条件でscale=1.0と新しいOptimizerから60回学習します。最終Lossは更新後に再計算し、最後にMLPと勾配設定を復元します。",
+      "aliases": "SGD Adam 学習率 learning rate 比較 scale lr"
+    },
+    {
+      "id": "adam-state",
+      "title": "Adamの内部状態と更新量を確認する",
+      "code": "p = student_mlp.scale\nstate = optimizer.state[p]\ngroup = optimizer.param_groups[0]\nt = int(state[\"step\"].item())\nm = state[\"exp_avg\"].item()\nv = state[\"exp_avg_sq\"].item()\nbeta1, beta2 = group[\"betas\"]\nm_hat = m / (1 - beta1 ** t)\nv_hat = v / (1 - beta2 ** t)\ndelta = -group[\"lr\"] * m_hat / (v_hat ** 0.5 + group[\"eps\"])\nprint(\"grad・m・v・step:\", p.grad.item(), m, v, t)\nprint(\"式の更新量:\", delta)\nprint(\"同じ実体:\", next(iter(optimizer.state)) is p)\nsaved_m = state[\"exp_avg\"].clone()\noptimizer.zero_grad(set_to_none=True)\nprint(\"grad:\", p.grad, \"mは維持:\", torch.equal(saved_m, state[\"exp_avg\"]))",
+      "requires": [
+        "train-scale",
+        "load"
+      ],
+      "group": "train",
+      "lesson": "scale-training",
+      "note": "train-scaleの実行後に使います。モデルのMLPが復元済みでも、StudentとOptimizerは残っています。最後の更新のm・vから更新量を求め、zero_gradが履歴を消さないことを確認します。",
+      "aliases": "Adam state exp_avg exp_avg_sq param_groups モーメント バイアス補正 defaultdict"
     }
   ]
 }
