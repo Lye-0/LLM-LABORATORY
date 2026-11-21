@@ -782,6 +782,46 @@
       "note": "Qwen3で、最終Decoder Layerの入力・出力・最終正規化後の3地点を比較します。",
       "code": "last_input = hidden_states[-2].float()\nlast_output = before_norm.float()\nnormalized = hidden_states[-1].float()\nprint((last_output - last_input).abs().mean().item())\nprint((normalized - last_output).abs().mean().item())",
       "aliases": "final norm hidden state 最終正規化"
+    },
+    {
+      "id": "scale-mlp",
+      "title": "固定値・学習可能なscaleを持つMLPを定義する",
+      "group": "edit",
+      "requires": [
+        "load"
+      ],
+      "lesson": "scale-training",
+      "aliases": "CustomMLP scale 倍率 スケール Parameter 学習可能 登録",
+      "note": "Qwen3のgate・up・down・活性化を共有し、MLP分岐の全Token・全成分を同じ倍率で変えます。learnable=Trueなら0次元のfloat32 Parameterとして登録します。この定義だけではモデルは変更されません。",
+      "code": "class ScaledMLP(torch.nn.Module):\n    def __init__(self, original_mlp, scale=1.0, learnable=False):\n        super().__init__()\n        self.gate_proj = original_mlp.gate_proj\n        self.up_proj = original_mlp.up_proj\n        self.down_proj = original_mlp.down_proj\n        self.act_fn = original_mlp.act_fn\n        if learnable:\n            device = original_mlp.down_proj.weight.device\n            self.scale = torch.nn.Parameter(\n                torch.tensor(scale, dtype=torch.float32, device=device)\n            )\n        else:\n            self.scale = float(scale)\n    def forward(self, x):\n        gate = self.gate_proj(x)\n        up = self.up_proj(x)\n        intermediate = self.act_fn(gate) * up\n        output = self.down_proj(intermediate)\n        return output * self.scale"
+    },
+    {
+      "id": "compare-scale",
+      "title": "MLP出力の倍率を変えてlogitsを比較する",
+      "group": "edit",
+      "requires": [
+        "load",
+        "input",
+        "scale-mlp"
+      ],
+      "lesson": "scale-training",
+      "aliases": "固定 scale スケール 倍率 0.5 MLP 比較 argmax",
+      "note": "評価モードのQwen3-0.6Bとパディングなし1文を使います。Layer 27のMLP出力だけを0.5倍し、同じ入力の末尾logitsを比較してから復元します。次Tokenが同じでもスコアは変わり得ます。",
+      "code": "layer = model.model.layers[27]\noriginal_mlp = layer.mlp\nwith torch.no_grad():\n    baseline = model(**inputs, use_cache=False).logits[0, -1].float()\ntry:\n    layer.mlp = ScaledMLP(original_mlp, scale=0.5).eval()\n    with torch.no_grad():\n        candidate = model(**inputs, use_cache=False).logits[0, -1].float()\n    diff = (baseline - candidate).abs()\n    print(\"最大差・平均差:\", diff.max().item(), diff.mean().item())\n    print(\"次Token ID:\", baseline.argmax().item(), candidate.argmax().item())\nfinally:\n    layer.mlp = original_mlp"
+    },
+    {
+      "id": "train-scale",
+      "title": "元の重みを固定してMLPのscaleだけを学習する",
+      "group": "train",
+      "requires": [
+        "load",
+        "input",
+        "scale-mlp"
+      ],
+      "lesson": "scale-training",
+      "aliases": "scale 学習 Teacher Student MSELoss Adam zero_grad backward requires_grad Parameter",
+      "note": "評価モードのQwen3-0.6Bとパディングなし1文用。Teacherのscale=0.5による末尾logitsへ近づけます。StudentのForwardは勾配を記録し、30回更新後にMLPと元の勾配設定を復元します。Loss・gradは更新前、afterは更新後の値です。",
+      "code": "layer = model.model.layers[27]\noriginal_mlp = layer.mlp\nbase_parameters = list(model.parameters())\noriginal_grad_flags = [p.requires_grad for p in base_parameters]\ntry:\n    for p in base_parameters:\n        p.requires_grad_(False)\n    layer.mlp = ScaledMLP(original_mlp, scale=0.5).eval()\n    with torch.no_grad():\n        target_logits = model(**inputs, use_cache=False).logits[0, -1].float().clone()\n    student_mlp = ScaledMLP(original_mlp, scale=1.0, learnable=True).eval()\n    layer.mlp = student_mlp\n    optimizer = torch.optim.Adam([student_mlp.scale], lr=0.05)\n    loss_fn = torch.nn.MSELoss()\n    for step in range(1, 31):\n        optimizer.zero_grad(set_to_none=True)\n        before = student_mlp.scale.item()\n        student_logits = model(**inputs, use_cache=False).logits[0, -1].float()\n        loss = loss_fn(student_logits, target_logits)\n        loss.backward()\n        gradient = student_mlp.scale.grad.item()\n        optimizer.step()\n        print(step, \"before:\", before, \"loss:\", loss.item(),\n              \"grad:\", gradient, \"after:\", student_mlp.scale.item())\n    with torch.no_grad():\n        final_logits = model(**inputs, use_cache=False).logits[0, -1].float()\n        print(\"最終scale・Loss:\", student_mlp.scale.item(),\n              loss_fn(final_logits, target_logits).item())\nfinally:\n    layer.mlp = original_mlp\n    for p, flag in zip(base_parameters, original_grad_flags):\n        p.requires_grad_(flag)"
     }
   ]
 }

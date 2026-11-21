@@ -124,6 +124,11 @@
       "name": "adapter_model",
       "description": "ベースモデルにLoRAを取り付けた、保存対象のモデル。",
       "source": "lora"
+    },
+    "ScaledMLP": {
+      "name": "ScaledMLP",
+      "source": "scale-mlp",
+      "description": "元のMLPを受け取り、固定値または学習可能なscaleを持たせるクラス。"
     }
   },
   "guides": {
@@ -1746,6 +1751,277 @@
         {
           "lines": 1,
           "note": "勾配の大きさをノルムで表示します。0なら勾配Tensorはありますが値の大きさは0です。"
+        }
+      ]
+    },
+    "scale-mlp": {
+      "needs": [
+        "torch"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "nn.Moduleの管理機能を継承したクラスです。既存のCustomMLPと区別できる名前にしています。"
+        },
+        {
+          "lines": 1,
+          "note": "元のMLP、初期倍率、学習可能にするかを受け取ります。"
+        },
+        {
+          "lines": 1,
+          "note": "子ModuleやParameterを登録する土台を初期化します。"
+        },
+        {
+          "lines": 1,
+          "note": "元のgate射影を共有します。重みのコピーではありません。"
+        },
+        {
+          "lines": 1,
+          "note": "元のup射影を共有します。"
+        },
+        {
+          "lines": 1,
+          "note": "元のdown射影を共有します。"
+        },
+        {
+          "lines": 1,
+          "note": "元の活性化関数を使います。"
+        },
+        {
+          "lines": 1,
+          "note": "学習する倍率を作る場合の分岐です。"
+        },
+        {
+          "lines": 1,
+          "note": "倍率をMLP出力と同じデバイスに作ります。"
+        },
+        {
+          "lines": 3,
+          "note": "1個の値を持つ0次元TensorをParameterとして登録します。デフォルトでrequires_grad=Trueになります。"
+        },
+        {
+          "lines": 1,
+          "note": "固定値の場合の分岐です。"
+        },
+        {
+          "lines": 1,
+          "note": "通常のPython数値として保存します。parametersやstate_dictには入りません。"
+        },
+        {
+          "lines": 1,
+          "note": "MLPへ入力されたTensorの計算を定義します。"
+        },
+        {
+          "lines": 1,
+          "note": "gate用の線形変換です。"
+        },
+        {
+          "lines": 1,
+          "note": "up用の線形変換です。"
+        },
+        {
+          "lines": 1,
+          "note": "gateを活性化し、upと要素ごとに掛けます。"
+        },
+        {
+          "lines": 1,
+          "note": "隠れ次元の幅に戻します。"
+        },
+        {
+          "lines": 1,
+          "note": "元Tensorを書き換えず、倍率を掛けた結果を返します。学習時はこの演算からscaleへの勾配を計算します。"
+        }
+      ]
+    },
+    "compare-scale": {
+      "needs": [
+        "model",
+        "inputs",
+        "torch",
+        "ScaledMLP"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "0始まりのLayer 27を対象にします。"
+        },
+        {
+          "lines": 1,
+          "note": "復元先のMLPへの参照を保持します。"
+        },
+        {
+          "lines": 1,
+          "note": "比較用のForwardでは勾配の記録を省きます。"
+        },
+        {
+          "lines": 1,
+          "note": "通常モデルの末尾位置の全スコアをfloat32で取り出します。"
+        },
+        {
+          "lines": 1,
+          "note": "置換後に例外が起きてもfinallyで戻せるようにします。"
+        },
+        {
+          "lines": 1,
+          "note": "固定倍率のMLPへ交換し、評価モードにします。"
+        },
+        {
+          "lines": 1,
+          "note": "改造側も同じ勾配設定で比較します。"
+        },
+        {
+          "lines": 1,
+          "note": "同じ入力から改造後の末尾スコアを求めます。"
+        },
+        {
+          "lines": 1,
+          "note": "各候補のスコアの絶対差です。確率差ではありません。"
+        },
+        {
+          "lines": 1,
+          "note": "最大の変化と候補全体の平均を表示します。"
+        },
+        {
+          "lines": 1,
+          "note": "両方の最大スコアのIDを表示します。"
+        },
+        {
+          "lines": 1,
+          "note": "正常終了・例外のどちらでも実行する復元処理です。"
+        },
+        {
+          "lines": 1,
+          "note": "Layerが呼び出すMLPを元へ戻します。"
+        }
+      ]
+    },
+    "train-scale": {
+      "needs": [
+        "model",
+        "inputs",
+        "torch",
+        "ScaledMLP"
+      ],
+      "steps": [
+        {
+          "lines": 1,
+          "note": "倍率を追加する層を取得します。"
+        },
+        {
+          "lines": 1,
+          "note": "元のMLPへの参照を保存します。"
+        },
+        {
+          "lines": 1,
+          "note": "追加前のParameter実体をリストにします。値の複製ではありません。"
+        },
+        {
+          "lines": 1,
+          "note": "各Parameterの変更前の真偽値を同じ順序で保存します。"
+        },
+        {
+          "lines": 1,
+          "note": "設定変更から復元までを囲みます。"
+        },
+        {
+          "lines": 1,
+          "note": "元のParameterを1個ずつpで参照します。"
+        },
+        {
+          "lines": 1,
+          "note": "元の重みに対する勾配の計算を無効にします。重みの値は変えません。"
+        },
+        {
+          "lines": 1,
+          "note": "固定倍率のTeacherを取り付けます。"
+        },
+        {
+          "lines": 1,
+          "note": "目標の作成では計算グラフを記録しません。"
+        },
+        {
+          "lines": 1,
+          "note": "Teacherの末尾スコアを保存します。cloneは独立コピーで、このコードでは省略しても後続Forwardで上書きされません。"
+        },
+        {
+          "lines": 1,
+          "note": "元の重みを凍結した後で、学習可能なscaleを新しく作ります。"
+        },
+        {
+          "lines": 1,
+          "note": "モデル内部の参照先をStudentへ交換します。"
+        },
+        {
+          "lines": 1,
+          "note": "更新対象をscale1個に限定します。作成だけでは更新しません。"
+        },
+        {
+          "lines": 1,
+          "note": "要素ごとの二乗誤差を平均するModuleを作ります。"
+        },
+        {
+          "lines": 1,
+          "note": "同じ入力と目標で30回更新します。stepは表示用の整数です。"
+        },
+        {
+          "lines": 1,
+          "note": "前回のscale.gradをNoneにします。scaleの値やAdamの内部状態は残ります。"
+        },
+        {
+          "lines": 1,
+          "note": "今回のForwardで使う更新前の倍率を記録します。"
+        },
+        {
+          "lines": 1,
+          "note": "現在の倍率で再計算します。ここをno_gradやinference_modeで囲みません。"
+        },
+        {
+          "lines": 1,
+          "note": "対応する候補間の平均二乗誤差を、計算グラフにつながったスカラーとして得ます。"
+        },
+        {
+          "lines": 1,
+          "note": "Lossをscaleで微分し、scale.gradへ蓄積します。倍率の値はまだ変えません。"
+        },
+        {
+          "lines": 1,
+          "note": "計算済みの勾配Tensorから1個の数値を読み取ります。"
+        },
+        {
+          "lines": 1,
+          "note": "勾配とAdamの内部状態から倍率を更新します。"
+        },
+        {
+          "lines": 2,
+          "note": "更新前の倍率・Loss・勾配と、更新後の倍率を区別して表示します。"
+        },
+        {
+          "lines": 1,
+          "note": "更新完了後の評価は勾配を記録しません。"
+        },
+        {
+          "lines": 1,
+          "note": "最終の倍率で新しくForwardします。"
+        },
+        {
+          "lines": 2,
+          "note": "同じ時点の倍率とLossを表示します。最後の更新前のLossと混同しません。"
+        },
+        {
+          "lines": 1,
+          "note": "例外があっても復元を実行します。"
+        },
+        {
+          "lines": 1,
+          "note": "元のMLPに戻します。student_mlp変数には学習した倍率が残ります。"
+        },
+        {
+          "lines": 1,
+          "note": "元のParameterと保存した設定値を順に組にします。"
+        },
+        {
+          "lines": 1,
+          "note": "各Parameterの元の設定を戻します。"
         }
       ]
     }

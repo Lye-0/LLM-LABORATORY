@@ -55,3 +55,7 @@ grad_fnの表示名は版による場合があります。数式ではdL/dw=2(wx
 ## detachとコピー
 
 detachは勾配のつながりを切ったTensorを返しますが、元のデータを共有します。独立した数値コピーが必要ならcloneとの組合せを考えます。保存用の値をうっかり変更して元のTensorへ影響させないよう、共有を把握します。
+
+## 実モデルの1個のParameterへつなげる
+
+[MLP出力のscaleを変えて学習する](../scale-training/)では、Qwen3の重みを固定し、自分で追加した倍率だけを学習します。Parameterへの登録、requires_grad、Optimizerの更新対象を区別し、Lossと勾配の保存先、勾配蓄積、AdamでLossが一時的に増える理由をコードと実測ログで確認できます。

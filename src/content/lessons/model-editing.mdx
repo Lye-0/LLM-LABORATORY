@@ -187,6 +187,17 @@ class CustomMLP(torch.nn.Module):
 
 ### 重みを引き継ぐ意味
 
+nn.Moduleは、子Module・Parameter・bufferの登録、呼び出し、保存やデバイス移動の共通機能を提供します。Qwen3固有の計算順序はTransformersのQwen3用クラスに書かれています。AutoModelForCausalLMはモデルに対応するクラスを選んで、学習済み重みを読み込む入口です。
+
+| 操作 | 何が起きるか |
+|---|---|
+| `class CustomMLP(torch.nn.Module)` | 共通機能を継承し、自作部品のクラスを定義する |
+| `CustomMLP(original_mlp)` | 元のMLPを引数にして、新しい部品の実物を作る |
+| `layer.mlp = custom_mlp` | そのLayerが呼び出すMLPの参照先を交換する |
+| `model(**inputs)` | モデル全体を実行し、その途中で自作MLPのforwardを呼ぶ |
+
+クラス定義だけでは既存モデルは変わりません。自作forwardが担当するのはMLPの処理で、モデル全体やDecoder Layerのforwardは引き続きそれぞれの役割を実行します。
+
 `self.gate_proj = original_mlp.gate_proj` は同じLinearインスタンスを参照します。学習済みの重み、dtype、deviceをそのまま使えます。forwardではgateとupを計算し、gateにSiLUを適用してから要素積を取り、downへ渡します。形は [B,T,1024] → [B,T,3072] → [B,T,1024] です。
 
 Decoder Layer内部の `self.mlp(hidden_states)` が、置き換えたCustomMLPを呼び出します。nn.Moduleの呼び出し機構が自作forwardへ処理を渡すため、モデル全体を実行しても自分の計算が使われます。
@@ -231,6 +242,8 @@ finally:
 この比較では次Tokenを選んで生成を継続する処理がなく、Cacheを再利用しないためuse_cache=Falseを指定します。生成では、まず既知のプロンプト全体を処理し、次に選んだTokenを次回の予測へ使います。[KV Cacheと自己回帰生成](../kv-cache/)へつながる区別です。
 
 ## Head・Norm・RoPEも変更対象になる
+
+自作MLPの計算が元と一致したら、[MLP出力のscaleを変えて学習する](../scale-training/)へ進めます。固定倍率による比較から、追加した1個のParameterだけを更新する実験まで扱います。
 
 重みの数値だけでなく、それを使う計算構造も研究対象です。Qwen3-0.6Bでは次の違いを分けて考えます。
 

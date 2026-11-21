@@ -1,0 +1,241 @@
+---
+title: "MLP出力のscaleを変えて学習する"
+description: "固定倍率の改造から、Loss・勾配・Adamで1個のParameterを更新するまで。"
+stage: "modification"
+order: 27.5
+minutes: 25
+eyebrow: "LEARNABLE SCALE"
+prerequisites: ["model-editing", "autograd"]
+sources: ["module", "autograd", "qwen"]
+tags: ["scale", "Parameter", "MSELoss", "Adam", "Teacher", "Student", "勾配", "改造"]
+question: "scale.gradが負なら、AdamはそのStepで必ずscaleを増やしますか？"
+answer: "必ずではありません。現在の勾配はその地点でのLossの傾きですが、Adamは過去の勾配の移動平均なども使って更新量を決めます。"
+---
+import { Code } from 'astro:components';
+import catalog from '../../data/recipes.json';
+
+## 自作した部品に、調整できる値を一つ加える
+
+前の教材では、学習済みのgate・up・downを使って元のMLPを再現しました。ここではその出力に倍率scaleを掛けます。まず人が0.5に設定し、次に同じ倍率を学習で調整します。
+
+対象はQwen3-0.6BのLayer 27です。MLPの全Token位置・全成分に同じ1個のscaleを掛けます。これは量子化のscaleとは用途が異なります。
+
+| 段階 | 元の重み | scale | 確かめること |
+|---|---|---|---|
+| 元の計算を再現 | 共有して再利用 | 1.0 | 元モデルのlogitsとの一致 |
+| 固定倍率で改造 | 数値を変更しない | Pythonの数値0.5 | logits・次Token・生成文の変化 |
+| 倍率を学習 | 凍結して再利用 | Parameter、初期値1.0 | 目標logitsとの誤差から更新できるか |
+
+## 固定scaleはどこへ掛かるか
+
+MLP分岐へ入る直前の残差をhとすると、計算の位置は次のようになります。NormはMLPへ渡す前の正規化です。
+
+```text
+h ────────────────────────────────┐
+└→ Norm → gate・up → 活性化と要素積 → down → × scale → 加算
+                                                   ↓
+                              h + scale × MLP(Norm(h))
+```
+
+scale=0.5ならMLP分岐の寄与を半分にします。残差h、Layer全体の出力、最終logitsを一律に半分にする処理ではありません。scale=0でも残差経路は残り、scale=1なら元の計算を再現します。
+
+### 固定値とParameterを選べるクラス
+
+PyTorchをimportしてから定義します。元の自作クラスと区別するため、教材ではScaledMLPという名前にしています。
+
+```python
+import torch
+```
+
+<Code code={catalog.recipes.find(r => r.id === 'scale-mlp').code} lang="python" theme="github-dark" />
+
+`learnable=False`ではscaleは通常の数値です。`True`ではMLP出力と同じdeviceにfloat32の0次元Parameterを作ります。shapeは `torch.Size([])`、要素数は1です。最後の乗算は新しいTensorを返し、元のoutputをin-placeで変更しません。
+
+<details>
+<summary>クラス定義の各部分を詳しく読む</summary>
+
+`super().__init__()`が登録の仕組みを準備し、gate・up・down・act_fnの代入で既存の子Moduleを共有します。新しいLinearを初期化していないため、元の学習済み重みを使います。
+
+`self.scale = torch.nn.Parameter(...)`で新しいParameterが登録されます。対して `self.scale = float(scale)`は通常の属性なので、parametersやstate_dictには含まれません。
+
+forwardは、gateとupを別々に計算し、活性化したgateとupの要素積をdownへ渡し、結果にscaleを掛けます。計算の順序を定義するのはこのforwardです。nn.ModuleがMLPの式を自動で作るわけではありません。
+
+float32で保持するのはscale自身です。このコードの0次元scaleと多次元の浮動小数点outputの乗算では、output側のdtypeが維持されます。モデル全体をfloat32へ変える処理ではなく、低精度演算の丸めがなくなるわけでもありません。scaleをベクトルへ拡張するときはdtypeの昇格も再確認します。
+
+[定義コードを行ごとに読む](../../recipes/scale-mlp/)
+
+</details>
+
+### 同じ次Tokenでもlogitsは変わる
+
+[モデルの準備](../../recipes/load/)と[チャット入力の準備](../../recipes/chat/)を済ませ、評価モード・パディングなし1文のmodelとinputs、上のScaledMLPを使います。比較の実装は[固定倍率でlogitsを比較する](../../recipes/compare-scale/)にあります。
+
+提供された固定scale実験では、質問「雨が降る仕組みを説明してください」をチャット形式にし、thinkingを無効にして比較しました。Layer 27のscaleを1.0から0.5にすると、次の結果になりました。
+
+| 比較項目 | 提供された実測 |
+|---|---|
+| 末尾logitsの最大絶対差 | 5.265625 |
+| 末尾logitsの平均絶対差 | 約1.531482 |
+| 最大スコアの次Token | 両方とも「雨」 |
+| 続けて生成した文 | 途中から異なる文になった |
+
+最大値を持つIDが同じでも、スコア全体の値は変わります。以降の位置で別のTokenを選ぶと、その後は入力列も異なります。生成文の変化は改造が計算へ影響した証拠ですが、品質の改善を示すものではありません。提供文には通常側・改造側とも内容上の誤りがありました。
+
+この表は提供ログの記録です。教材のコードでも、固定revision `c1899de289a04d12100db370d81485cdf75e47ca`、PyTorch 2.14.1+cu130、Transformers 5.20.2、CUDA・bfloat16で、logitsの差と次Token IDの一致を再確認しました。入力は24 Tokenでした。環境を変えたときの数値の完全一致を約束するものではありません。
+
+## 登録・勾配・更新対象を分ける
+
+倍率の学習では、元のQwen3のParameterを凍結した後に、学習可能なscaleを追加します。
+
+| 仕組み | 役割 | これだけで値が更新されるか |
+|---|---|---|
+| Module属性へのnn.Parameterの代入 | モデルのParameterとして登録する | 更新されない |
+| requires_grad=True | 通常の勾配モードで、そのTensorにつながる計算を記録する | 更新されない |
+| loss.backward() | Lossから逆向きに勾配を計算・蓄積する | 更新されない |
+| Adamに渡すParameterリスト | Optimizerが更新する対象を指定する | 作成時には更新されない |
+| optimizer.step() | 勾配とOptimizerの状態を使って値を更新する | ここで更新する |
+
+普通の浮動小数点Tensorもrequires_grad=Trueなら微分できます。Parameterはモデルへの登録のための仕組みで、微分を行うのはAutogradです。[PyTorchのParameter仕様](https://docs.pytorch.org/docs/stable/generated/torch.nn.parameter.Parameter.html)もこの登録の違いを説明しています。
+
+## Lossと勾配を、小さい式で確認する
+
+予測を `2 * scale`、目標を1とします。理想のscaleは0.5です。この説明用の例は、Qwen3の計算をそのまま縮めた数式ではありません。
+
+```python
+scale = torch.nn.Parameter(torch.tensor(1.0))
+loss_fn = torch.nn.MSELoss()
+optimizer = torch.optim.SGD([scale], lr=0.1)
+optimizer.zero_grad(set_to_none=True)
+prediction = 2 * scale
+loss = loss_fn(prediction, torch.tensor(1.0))
+print("Backward前:", scale.grad)
+loss.backward()
+print("Loss・勾配:", loss.item(), scale.grad.item())
+optimizer.step()
+print("更新後:", round(scale.item(), 3))
+```
+
+```text
+Backward前: None
+Loss・勾配: 1.0 4.0
+更新後: 0.6
+```
+
+Lossは `(2s - 1)²`、導関数は `4(2s - 1)`です。導関数はsによって変わる式ですが、s=1で評価した勾配は4という数値になります。基本形のSGDは `1 - 0.1 × 4 = 0.6`と更新します。勾配は局所的な傾きで、0だから必ず最小とは限りません。
+
+<details>
+<summary>loss_fn・loss・scale.gradはそれぞれ何か</summary>
+
+`MSELoss()`は誤差の計算方法を持つModuleを作ります。`loss_fn(prediction, target)`で呼び出して初めて誤差を計算します。デフォルトでは対応要素の差を二乗し、全要素で平均します。[MSELossの仕様](https://docs.pytorch.org/docs/stable/generated/torch.nn.MSELoss.html)
+
+`loss`は計算結果のスカラーTensorです。記録された演算につながっているので、`loss.backward()`が各演算の微分を連鎖律でつなぎ、scaleに対するLossの変化率を求められます。
+
+`scale.grad`はleafであるscaleに蓄積された勾配Tensorです。`loss.grad`を読む処理とは異なります。`.item()`は1要素Tensorの数値をPythonの数値として取り出すだけで、新しく微分しません。Lossの計算に使う前に `.item()`で数値化すると、そこからの勾配のつながりを失います。
+
+MSEは必須のLossではありません。今回はlogitsの値を近づける目的で選びます。正解Token IDを教える通常の次Token学習では、[Cross Entropy](../loss/)など目的に合ったLossを使います。
+
+</details>
+
+### なぜ毎回zero_gradするのか
+
+```python
+scale = torch.nn.Parameter(torch.tensor(1.0))
+for _ in range(2):
+    loss = (2 * scale - 1) ** 2
+    loss.backward()
+    print(scale.grad.item())
+```
+
+```text
+4.0
+8.0
+```
+
+ここではscaleを更新せず、毎回新しくForwardしてBackwardしています。勾配4が前の4へ加算されるため2回目は8です。複数の小さいバッチの勾配をまとめて更新する用途に使えますが、今回の実験では各更新の勾配だけを使うため、ループの最初に初期化します。
+
+`optimizer.zero_grad(set_to_none=True)`は対象ParameterのgradをNoneにします。Parameterの値も、Adamが保持する勾配の移動平均も初期化しません。
+
+## Qwen3のscaleだけを学習する
+
+Teacherは固定scale=0.5で目標logitsを一度作ります。Studentはscale=1.0から始め、その目標へ近づけます。2台のモデルを同時に保持せず、同じモデルのMLPを順に交換します。
+
+入力は先ほどと同じ1文です。比較する `.logits[0, -1]`は末尾位置の全出力候補で、Qwen3-0.6Bでは151936要素です。Tokenizerの語彙数とは区別します。正解の文章を教師データとして与える実験ではなく、Teacherのスコアを目標にする実験です。
+
+<Code code={catalog.recipes.find(r => r.id === 'train-scale').code} lang="python" theme="github-dark" />
+
+[事前準備と行ごとの解説](../../recipes/train-scale/)では、必要な変数とコードの各行を確認できます。
+
+### 凍結しても、scaleまで勾配は流れる
+
+元のParameterをFalseにしてから新しいscaleを作るため、元の重みは凍結、scaleだけTrueになります。Optimizerにもscaleだけを渡します。固定した下流の重みを使った演算も、scaleに対する勾配を求めるために記録されます。
+
+model.eval()はDropoutなどの振る舞いを切り替える設定で、勾配記録を止める命令ではありません。この実験では評価モードを保ったままscaleを学習できます。Teacherはno_gradで目標を作り、StudentのForwardは通常の勾配モードで実行します。Studentをno_grad・inference_modeで囲んだり、logitsをdetachしたりすると、scaleへの経路が切れます。
+
+<details>
+<summary>参照・設定値・Tensorのコピーを区別する</summary>
+
+`list(model.parameters())`はParameter本体への参照を並べたリストです。重みの数値のバックアップではありません。元の重みはOptimizerの対象外なので、この実験では数値を複製する必要がありません。
+
+`[p.requires_grad for p in base_parameters]`は各ParameterからTrue/Falseを取り出すリスト内包表記です。普通のfor文なら次の意味です。
+
+```python
+original_grad_flags = []
+for p in base_parameters:
+    original_grad_flags.append(p.requires_grad)
+```
+
+ここでpは整数の番号ではなくParameterそのものです。`p.requires_grad_(False)`はその実体の設定を変更します。一方、保存したbool値は後からpの属性を変えても変わりません。`zip`で実体と以前の設定値を順に組み、復元します。
+
+Teacherのtarget_logitsはForwardの計算結果です。後でMLPを交換しても計算済みのTensorがStudentの値へ変わるわけではありません。このコードではcloneを省いても動きます。cloneは独立したデータコピーを作り、no_gradは演算の記録を止めるもので、役割が異なります。
+
+</details>
+
+### Parameterが追加されたか確認する
+
+次のコードはStudentを取り付けた後、復元前に実行します。
+
+```python
+for name, p in model.named_parameters():
+    if name.startswith("model.layers.27.mlp."):
+        print(name, p.shape, p.requires_grad)
+```
+
+```text
+model.layers.27.mlp.scale torch.Size([]) True
+model.layers.27.mlp.gate_proj.weight torch.Size([3072, 1024]) False
+model.layers.27.mlp.up_proj.weight torch.Size([3072, 1024]) False
+model.layers.27.mlp.down_proj.weight torch.Size([1024, 3072]) False
+```
+
+`parameters()`は実体だけ、`named_parameters()`は名前と実体を返します。`len(list(model.parameters()))`はTensorオブジェクト数です。数値の総数を数えるときは `sum(p.numel() for p in model.parameters())`を使います。
+
+## 実測ログを更新前後に分けて読む
+
+提供された学習ログはAdam、lr=0.05、30回更新です。各StepのLoss・gradはForward時点、scaleはその直後の更新結果でした。更新前のscaleを前行から補って並べます。
+
+| Step | 更新前scale | Loss | grad | 更新後scale |
+|---|---|---|---|---|
+| 1 | 1.000000 | 3.062759 | +14.375000 | 0.950000 |
+| 11 | 0.549488 | 0.018048 | +0.773438 | 0.516201 |
+| 12 | 0.516201 | 0.001515 | +0.157227 | 0.486130 |
+| 13 | 0.486130 | 0.003031 | −0.257812 | 0.459256 |
+| 23 | 0.349543 | 0.154982 | −1.953125 | 0.349741 |
+| 30 | 0.384424 | 0.081802 | −1.468750 | 0.394052 |
+
+scaleは目標0.5付近を通り過ぎ、最終値は約0.394052でした。追加Parameterが勾配で更新できたことは確認できますが、「30回で0.5に収束した」とは読みません。Step 30のLoss=0.081802も最終scale=0.394052の評価値ではありません。そのため教材のコードでは更新後のForwardを最後に追加しています。
+
+上記の検証環境で教材コードを実行した結果、最終scaleは `0.394052118062973`、その値で再計算したLossは `0.07870113104581833`でした。更新前のLossと、更新後に再評価したLossを別々に記録できます。
+
+### 勾配が負なのに、なぜscaleが減ったか
+
+Step 13のgradは負ですが、scaleはさらに減っています。Adamは現在の勾配に加えて、過去の勾配とその二乗の移動平均を使います。それまで蓄積した正方向の勾配の影響が残り、すぐに更新方向が反転するとは限りません。[Adamの更新式](https://docs.pytorch.org/docs/stable/generated/torch.optim.Adam.html)
+
+したがってAdamの更新を `scale - lr * grad`だけで説明できません。これは先ほどの基本形SGDの式です。Lossは毎回単調に下がるとは限らず、学習率・更新回数・数値精度も合わせて調べます。学習率を下げる比較では、StudentとOptimizerを新しく作り、同じ初期値から試すと条件がそろいます。
+
+## 復元と、学習できた範囲
+
+finallyは元のMLPの参照とrequires_gradの設定を戻します。共有した重み自体を書き換えた場合まで元に戻す仕組みではありません。ここでは元の重みを凍結し、Optimizerをscaleに限定しているため、元の重みの数値は更新しません。
+
+復元後のmodelは元のMLPを使います。学習済みのscaleはstudent_mlpに残りますが、モデルへ適用し続けたい場合は再び取り付ける必要があります。保存する場合も、Parameterの値に加えて、クラス定義・対象Layer・取り付け方を管理します。固定値のscaleは通常の属性なのでstate_dictには入りません。
+
+同じ1文の末尾logitsを近づけただけでは、別の入力や生成全体の品質まで確認できません。学習に使わない複数の入力で、logits・生成・目的に合う評価指標を比較して次の実験へ進みます。
